@@ -9,12 +9,16 @@ import {
   Gavel,
   BookOpen,
   Settings,
+  DollarSign,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
   { label: "Processos", icon: Scale, path: "/processos" },
   { label: "Clientes", icon: Users, path: "/clientes" },
+  { label: "Financeiro", icon: DollarSign, path: "/financeiro" },
   { label: "Agenda", icon: CalendarDays, path: "/agenda" },
   { label: "Documentos", icon: FileText, path: "/documentos" },
   { label: "Busca Processual", icon: Search, path: "/busca" },
@@ -24,6 +28,7 @@ const navItems = [
 
 export const AppSidebar = () => {
   const location = useLocation();
+  const { signOut, user } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border z-50">
@@ -63,10 +68,15 @@ export const AppSidebar = () => {
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
-        <Link to="/configuracoes" className="nav-item">
-          <Settings className="w-4 h-4 shrink-0" />
-          Configurações
-        </Link>
+        {user && (
+          <div className="px-3 mb-3">
+            <p className="text-xs text-sidebar-foreground/60 truncate">{user.email}</p>
+          </div>
+        )}
+        <button onClick={signOut} className="nav-item w-full text-left">
+          <LogOut className="w-4 h-4 shrink-0" />
+          Sair
+        </button>
         <div className="mt-4 px-3">
           <p className="text-[10px] text-sidebar-foreground/40 uppercase tracking-wider">
             Sistema Jurídico v1.0
