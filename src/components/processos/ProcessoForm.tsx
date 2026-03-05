@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,10 @@ interface ProcessoFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  editData?: any;
 }
 
-export const ProcessoForm = ({ open, onOpenChange, onSuccess }: ProcessoFormProps) => {
+export const ProcessoForm = ({ open, onOpenChange, onSuccess, editData }: ProcessoFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -27,6 +28,22 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess }: ProcessoFormProp
     vara: "", advogado: "", descricao: "",
   });
 
+  useEffect(() => {
+    if (editData) {
+      setForm({
+        numero: editData.numero || "",
+        cliente_nome: editData.cliente_nome || "",
+        area: editData.area || "Cível",
+        status: editData.status || "Em andamento",
+        vara: editData.vara || "",
+        advogado: editData.advogado || "",
+        descricao: editData.descricao || "",
+      });
+    } else {
+      setForm({ numero: "", cliente_nome: "", area: "Cível", status: "Em andamento", vara: "", advogado: "", descricao: "" });
+    }
+  }, [editData, open]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.numero.trim() || !form.cliente_nome.trim()) {
@@ -34,16 +51,26 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess }: ProcessoFormProp
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("processos").insert({
-      ...form, user_id: user!.id,
-    });
-    if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+
+    if (editData) {
+      const { error } = await supabase.from("processos").update(form).eq("id", editData.id);
+      if (error) {
+        toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Processo atualizado!" });
+        onOpenChange(false);
+        onSuccess();
+      }
     } else {
-      toast({ title: "Processo cadastrado com sucesso!" });
-      setForm({ numero: "", cliente_nome: "", area: "Cível", status: "Em andamento", vara: "", advogado: "", descricao: "" });
-      onOpenChange(false);
-      onSuccess();
+      const { error } = await supabase.from("processos").insert({ ...form, user_id: user!.id });
+      if (error) {
+        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Processo cadastrado com sucesso!" });
+        setForm({ numero: "", cliente_nome: "", area: "Cível", status: "Em andamento", vara: "", advogado: "", descricao: "" });
+        onOpenChange(false);
+        onSuccess();
+      }
     }
     setLoading(false);
   };
@@ -52,7 +79,7 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess }: ProcessoFormProp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo Processo</DialogTitle>
+          <DialogTitle>{editData ? "Editar Processo" : "Novo Processo"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -97,7 +124,7 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess }: ProcessoFormProp
           </div>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Salvando..." : "Cadastrar"}</Button>
+            <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editData ? "Salvar" : "Cadastrar"}</Button>
           </div>
         </form>
       </DialogContent>

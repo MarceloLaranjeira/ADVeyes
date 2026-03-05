@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -12,15 +12,31 @@ interface ClienteFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  editData?: any;
 }
 
-export const ClienteForm = ({ open, onOpenChange, onSuccess }: ClienteFormProps) => {
+export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: ClienteFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "",
   });
+
+  useEffect(() => {
+    if (editData) {
+      setForm({
+        nome: editData.nome || "",
+        cpf: editData.cpf || "",
+        telefone: editData.telefone || "",
+        email: editData.email || "",
+        endereco: editData.endereco || "",
+        observacoes: editData.observacoes || "",
+      });
+    } else {
+      setForm({ nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "" });
+    }
+  }, [editData, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,16 +45,26 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess }: ClienteFormProps)
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("clientes").insert({
-      ...form, user_id: user!.id,
-    });
-    if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+
+    if (editData) {
+      const { error } = await supabase.from("clientes").update(form).eq("id", editData.id);
+      if (error) {
+        toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Cliente atualizado!" });
+        onOpenChange(false);
+        onSuccess();
+      }
     } else {
-      toast({ title: "Cliente cadastrado com sucesso!" });
-      setForm({ nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "" });
-      onOpenChange(false);
-      onSuccess();
+      const { error } = await supabase.from("clientes").insert({ ...form, user_id: user!.id });
+      if (error) {
+        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Cliente cadastrado com sucesso!" });
+        setForm({ nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "" });
+        onOpenChange(false);
+        onSuccess();
+      }
     }
     setLoading(false);
   };
@@ -47,7 +73,7 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess }: ClienteFormProps)
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo Cliente</DialogTitle>
+          <DialogTitle>{editData ? "Editar Cliente" : "Novo Cliente"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -80,7 +106,7 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess }: ClienteFormProps)
           </div>
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Salvando..." : "Cadastrar"}</Button>
+            <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editData ? "Salvar" : "Cadastrar"}</Button>
           </div>
         </form>
       </DialogContent>
