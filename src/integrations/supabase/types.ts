@@ -53,6 +53,97 @@ export type Database = {
         }
         Relationships: []
       }
+      documentos: {
+        Row: {
+          arquivo_path: string
+          created_at: string
+          id: string
+          nome: string
+          processo_id: string | null
+          processo_numero: string | null
+          tamanho: number | null
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          arquivo_path: string
+          created_at?: string
+          id?: string
+          nome: string
+          processo_id?: string | null
+          processo_numero?: string | null
+          tamanho?: number | null
+          tipo?: string
+          user_id: string
+        }
+        Update: {
+          arquivo_path?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          processo_id?: string | null
+          processo_numero?: string | null
+          tamanho?: number | null
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      eventos: {
+        Row: {
+          created_at: string
+          data_fim: string | null
+          data_inicio: string
+          descricao: string | null
+          id: string
+          local: string | null
+          processo_id: string | null
+          tipo: string
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_fim?: string | null
+          data_inicio: string
+          descricao?: string | null
+          id?: string
+          local?: string | null
+          processo_id?: string | null
+          tipo?: string
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data_fim?: string | null
+          data_inicio?: string
+          descricao?: string | null
+          id?: string
+          local?: string | null
+          processo_id?: string | null
+          tipo?: string
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eventos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro: {
         Row: {
           cliente_id: string | null

@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AreaBadge } from "@/components/common/AreaBadge";
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { ProcessoForm } from "@/components/processos/ProcessoForm";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+
+const areas = ["Todas", "Penal", "Cível", "Família", "Execução Penal", "Recurso", "Trabalhista"];
+const statuses = ["Todos", "Em andamento", "Aguardando audiência", "Sentença proferida", "Recurso interposto", "Arquivado"];
 
 const Processos = () => {
   const { toast } = useToast();
@@ -16,6 +20,10 @@ const Processos = () => {
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [filterArea, setFilterArea] = useState("Todas");
+  const [filterStatus, setFilterStatus] = useState("Todos");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const fetchProcessos = async () => {
     const { data } = await supabase.from("processos").select("*").order("created_at", { ascending: false });
@@ -36,11 +44,15 @@ const Processos = () => {
     setDeleteId(null);
   };
 
-  const filtered = processos.filter((p) =>
-    p.numero.toLowerCase().includes(search.toLowerCase()) ||
-    (p.cliente_nome || "").toLowerCase().includes(search.toLowerCase()) ||
-    p.area.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = processos.filter((p) => {
+    const matchSearch = p.numero.toLowerCase().includes(search.toLowerCase()) ||
+      (p.cliente_nome || "").toLowerCase().includes(search.toLowerCase());
+    const matchArea = filterArea === "Todas" || p.area === filterArea;
+    const matchStatus = filterStatus === "Todos" || p.status === filterStatus;
+    const matchDateFrom = !filterDateFrom || new Date(p.created_at) >= new Date(filterDateFrom);
+    const matchDateTo = !filterDateTo || new Date(p.created_at) <= new Date(filterDateTo + "T23:59:59");
+    return matchSearch && matchArea && matchStatus && matchDateFrom && matchDateTo;
+  });
 
   return (
     <AppLayout>
@@ -55,11 +67,21 @@ const Processos = () => {
           </Button>
         </div>
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-wrap items-end gap-3 mb-6">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar por número, cliente ou área..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Buscar por número ou cliente..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <Select value={filterArea} onValueChange={setFilterArea}>
+            <SelectTrigger className="w-[160px]"><Filter className="w-3.5 h-3.5 mr-1.5" /><SelectValue /></SelectTrigger>
+            <SelectContent>{areas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input type="date" className="w-[150px]" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} placeholder="De" />
+          <Input type="date" className="w-[150px]" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} placeholder="Até" />
         </div>
 
         <div className="bg-card rounded-lg border overflow-hidden">
