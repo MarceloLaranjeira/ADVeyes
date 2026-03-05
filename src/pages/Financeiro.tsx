@@ -8,9 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { DollarSign, TrendingUp, TrendingDown, Clock, Plus } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Clock, Plus, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+
+const tipos = ["Todos", "honorario", "despesa", "custas"];
+const statusList = ["Todos", "pendente", "pago", "atrasado"];
 
 const Financeiro = () => {
   const { user } = useAuth();
@@ -18,6 +21,10 @@ const Financeiro = () => {
   const [registros, setRegistros] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [filterTipo, setFilterTipo] = useState("Todos");
+  const [filterStatus, setFilterStatus] = useState("Todos");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [form, setForm] = useState({
     tipo: "honorario", descricao: "", valor: "", data_vencimento: "", status: "pendente",
   });
@@ -29,31 +36,31 @@ const Financeiro = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const totalRecebido = registros.filter(r => r.status === "pago").reduce((s, r) => s + Number(r.valor), 0);
-  const totalPendente = registros.filter(r => r.status === "pendente").reduce((s, r) => s + Number(r.valor), 0);
-  const totalAtrasado = registros.filter(r => r.status === "atrasado").reduce((s, r) => s + Number(r.valor), 0);
+  const filtered = registros.filter((r) => {
+    const matchTipo = filterTipo === "Todos" || r.tipo === filterTipo;
+    const matchStatus = filterStatus === "Todos" || r.status === filterStatus;
+    const matchDateFrom = !filterDateFrom || new Date(r.created_at) >= new Date(filterDateFrom);
+    const matchDateTo = !filterDateTo || new Date(r.created_at) <= new Date(filterDateTo + "T23:59:59");
+    return matchTipo && matchStatus && matchDateFrom && matchDateTo;
+  });
+
+  const totalRecebido = filtered.filter(r => r.status === "pago").reduce((s, r) => s + Number(r.valor), 0);
+  const totalPendente = filtered.filter(r => r.status === "pendente").reduce((s, r) => s + Number(r.valor), 0);
+  const totalAtrasado = filtered.filter(r => r.status === "atrasado").reduce((s, r) => s + Number(r.valor), 0);
 
   const chartData = useMemo(() => {
     const months: Record<string, { mes: string; receitas: number; despesas: number }> = {};
     const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    
-    registros.forEach((r) => {
+    filtered.forEach((r) => {
       const date = new Date(r.created_at);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       const label = `${monthNames[date.getMonth()]}/${date.getFullYear()}`;
       if (!months[key]) months[key] = { mes: label, receitas: 0, despesas: 0 };
-      if (r.tipo === "honorario") {
-        months[key].receitas += Number(r.valor);
-      } else {
-        months[key].despesas += Number(r.valor);
-      }
+      if (r.tipo === "honorario") months[key].receitas += Number(r.valor);
+      else months[key].despesas += Number(r.valor);
     });
-
-    return Object.entries(months)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([, v]) => v);
-  }, [registros]);
+    return Object.entries(months).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([, v]) => v);
+  }, [filtered]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,51 +99,47 @@ const Financeiro = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total Geral</p>
-                <p className="text-xl font-bold">{formatCurrency(totalRecebido + totalPendente + totalAtrasado)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[hsl(var(--success))]/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[hsl(var(--success))]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Recebido</p>
-                <p className="text-xl font-bold text-[hsl(var(--success))]">{formatCurrency(totalRecebido)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[hsl(var(--warning))]/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-[hsl(var(--warning))]" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Pendente</p>
-                <p className="text-xl font-bold text-[hsl(var(--warning))]">{formatCurrency(totalPendente)}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                <TrendingDown className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Atrasado</p>
-                <p className="text-xl font-bold text-destructive">{formatCurrency(totalAtrasado)}</p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <Card><CardContent className="p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><DollarSign className="w-5 h-5 text-primary" /></div>
+            <div><p className="text-xs text-muted-foreground">Total Geral</p><p className="text-xl font-bold">{formatCurrency(totalRecebido + totalPendente + totalAtrasado)}</p></div>
+          </CardContent></Card>
+          <Card><CardContent className="p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-[hsl(var(--success))]/10 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-[hsl(var(--success))]" /></div>
+            <div><p className="text-xs text-muted-foreground">Recebido</p><p className="text-xl font-bold text-[hsl(var(--success))]">{formatCurrency(totalRecebido)}</p></div>
+          </CardContent></Card>
+          <Card><CardContent className="p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-[hsl(var(--warning))]/10 flex items-center justify-center"><Clock className="w-5 h-5 text-[hsl(var(--warning))]" /></div>
+            <div><p className="text-xs text-muted-foreground">Pendente</p><p className="text-xl font-bold text-[hsl(var(--warning))]">{formatCurrency(totalPendente)}</p></div>
+          </CardContent></Card>
+          <Card><CardContent className="p-5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center"><TrendingDown className="w-5 h-5 text-destructive" /></div>
+            <div><p className="text-xs text-muted-foreground">Atrasado</p><p className="text-xl font-bold text-destructive">{formatCurrency(totalAtrasado)}</p></div>
+          </CardContent></Card>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-3 mb-6">
+          <Select value={filterTipo} onValueChange={setFilterTipo}>
+            <SelectTrigger className="w-[160px]"><Filter className="w-3.5 h-3.5 mr-1.5" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todos os tipos</SelectItem>
+              <SelectItem value="honorario">Honorário</SelectItem>
+              <SelectItem value="despesa">Despesa</SelectItem>
+              <SelectItem value="custas">Custas</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todos os status</SelectItem>
+              <SelectItem value="pendente">Pendente</SelectItem>
+              <SelectItem value="pago">Pago</SelectItem>
+              <SelectItem value="atrasado">Atrasado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input type="date" className="w-[150px]" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} />
+          <Input type="date" className="w-[150px]" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} />
         </div>
 
         {/* Chart */}
@@ -174,10 +177,10 @@ const Financeiro = () => {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {registros.length === 0 && (
-                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhum lançamento registrado</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhum lançamento encontrado</td></tr>
               )}
-              {registros.map((r) => (
+              {filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                   <td className="p-4 text-sm capitalize">{r.tipo}</td>
                   <td className="p-4 text-sm">{r.descricao}</td>
