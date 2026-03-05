@@ -272,6 +272,39 @@ export type Database = {
         }
         Relationships: []
       }
+      tarefas: {
+        Row: {
+          created_at: string
+          data_limite: string | null
+          descricao: string | null
+          id: string
+          prioridade: string
+          status: string
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_limite?: string | null
+          descricao?: string | null
+          id?: string
+          prioridade?: string
+          status?: string
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data_limite?: string | null
+          descricao?: string | null
+          id?: string
+          prioridade?: string
+          status?: string
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
