@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Processos from "./pages/Processos";
 import Clientes from "./pages/Clientes";
@@ -10,6 +12,8 @@ import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
 import BuscaJurisprudencia from "./pages/BuscaJurisprudencia";
 import Audiencias from "./pages/Audiencias";
+import Financeiro from "./pages/Financeiro";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,17 +24,21 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/processos" element={<Processos />} />
-          <Route path="/clientes" element={<Clientes />} />
-          <Route path="/agenda" element={<Agenda />} />
-          <Route path="/documentos" element={<Documentos />} />
-          <Route path="/busca" element={<BuscaJurisprudencia />} />
-          <Route path="/jurisprudencia" element={<BuscaJurisprudencia />} />
-          <Route path="/audiencias" element={<Audiencias />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
+            <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
+            <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
+            <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
+            <Route path="/busca" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
+            <Route path="/jurisprudencia" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
+            <Route path="/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
+            <Route path="/financeiro" element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
