@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, Clock, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const Financeiro = () => {
   const { user } = useAuth();
@@ -31,6 +32,28 @@ const Financeiro = () => {
   const totalRecebido = registros.filter(r => r.status === "pago").reduce((s, r) => s + Number(r.valor), 0);
   const totalPendente = registros.filter(r => r.status === "pendente").reduce((s, r) => s + Number(r.valor), 0);
   const totalAtrasado = registros.filter(r => r.status === "atrasado").reduce((s, r) => s + Number(r.valor), 0);
+
+  const chartData = useMemo(() => {
+    const months: Record<string, { mes: string; receitas: number; despesas: number }> = {};
+    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    registros.forEach((r) => {
+      const date = new Date(r.created_at);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      const label = `${monthNames[date.getMonth()]}/${date.getFullYear()}`;
+      if (!months[key]) months[key] = { mes: label, receitas: 0, despesas: 0 };
+      if (r.tipo === "honorario") {
+        months[key].receitas += Number(r.valor);
+      } else {
+        months[key].despesas += Number(r.valor);
+      }
+    });
+
+    return Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([, v]) => v);
+  }, [registros]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +138,28 @@ const Financeiro = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Chart */}
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold font-serif mb-4">Evolução Mensal</h3>
+            {chartData.length === 0 ? (
+              <p className="text-muted-foreground text-sm text-center py-8">Nenhum dado para exibir no gráfico</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Legend />
+                  <Bar dataKey="receitas" name="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="despesas" name="Despesas" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Table */}
         <div className="bg-card rounded-lg border overflow-hidden">
