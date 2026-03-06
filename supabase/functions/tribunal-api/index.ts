@@ -150,16 +150,11 @@ async function queryDataJud(endpoint: string, numero_processo: string) {
     },
     body: JSON.stringify({
       query: {
-        bool: {
-          should: [
-            { match: { numeroProcesso: clean } },
-            { term: { numeroProcesso: { value: clean, case_insensitive: true } } },
-          ],
-          minimum_should_match: 1,
+        match: {
+          numeroProcesso: clean,
         },
       },
       size: 10,
-      sort: [{ dataHoraUltimaAtualizacao: { order: "desc" } }],
     }),
   });
 }
@@ -247,7 +242,7 @@ serve(async (req) => {
               tribunal: s.tribunal || realKey.toUpperCase(),
               orgaoJulgador: s.orgaoJulgador?.nome || "",
               dataAjuizamento: s.dataAjuizamento,
-              movimentos: (s.movimentos || []).slice(0, 10).map((m: any) => ({
+              movimentos: (s.movimentos || []).map((m: any) => ({
                 nome: m.nome, data: m.dataHora,
                 complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
               })),

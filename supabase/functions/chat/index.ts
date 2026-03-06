@@ -5,6 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Models in order of preference (fallback on failure)
+const MODELS = [
+  "google/gemini-2.0-flash-exp",
+  "google/gemini-2.0-flash",
+  "google/gemini-1.5-flash",
+  "google/gemini-1.5-flash-8b",
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -14,51 +22,69 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const systemPrompts: Record<string, string> = {
-      resumo: "Você é um assistente jurídico especializado em resumir peças processuais (petições, sentenças, acórdãos) em linguagem clara e acessível. Mantenha a precisão técnica mas use termos compreensíveis. Estruture o resumo com: Partes, Objeto, Fundamentos Principais, Decisão/Pedido.",
-      analise: "Você é um assistente jurídico especializado em analisar documentos e contratos. Identifique cláusulas importantes, riscos, prazos e obrigações. Destaque pontos de atenção.",
-      peticao: "Você é um assistente jurídico especializado em gerar rascunhos de peças processuais. Siga a estrutura formal: Endereçamento, Qualificação das Partes, Fatos, Fundamentos Jurídicos, Pedidos. Use linguagem formal e técnica apropriada ao Direito brasileiro.",
-      assistente: "Você é um assistente jurídico brasileiro especializado em Direito Penal, Cível, Família e Execução Penal, com foco na legislação e jurisprudência do estado do Amazonas (TJAM). Responda de forma clara, citando artigos de lei e jurisprudência quando relevante.",
+      resumo: `Você é JARVIS, assistente jurídico especializado em resumir peças processuais (petições, sentenças, acórdãos) em linguagem clara e acessível. Mantenha a precisão técnica. Estruture o resumo com: Partes, Objeto, Fundamentos Principais, Decisão/Pedido.`,
+      analise: `Você é JARVIS, assistente jurídico especializado em analisar documentos e contratos. Identifique cláusulas importantes, riscos, prazos e obrigações. Destaque pontos de atenção com linguagem objetiva.`,
+      peticao: `Você é JARVIS, assistente jurídico especializado em gerar rascunhos de peças processuais. Siga a estrutura formal: Endereçamento, Qualificação das Partes, Fatos, Fundamentos Jurídicos, Pedidos. Use linguagem formal e técnica do Direito brasileiro.`,
+      assistente: `Você é JARVIS, assistente jurídico de inteligência artificial desenvolvido para o escritório Albertino e Advogados Associados. Você é especializado em Direito brasileiro, com foco no estado do Amazonas (TJAM), mas com conhecimento abrangente de toda a legislação e jurisprudência nacional. Responda de forma clara, direta e técnica, citando artigos de lei, súmulas e jurisprudência quando relevante. Seja como o JARVIS — inteligente, preciso e proativo.`,
     };
 
     const systemContent = systemPrompts[mode] || systemPrompts.assistente;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemContent },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    // Try models in sequence
+    let lastError = "";
+    for (const model of MODELS) {
+      try {
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: systemContent },
+              ...messages,
+            ],
+            stream: true,
+            max_tokens: 4096,
+          }),
+        });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns instantes." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        if (response.ok) {
+          return new Response(response.body, {
+            headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+          });
+        }
+
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em instantes." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao seu workspace." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const errText = await response.text();
+        lastError = `${model}: ${response.status} - ${errText.slice(0, 100)}`;
+        console.error("AI gateway error:", lastError);
+        // Continue to next model
+      } catch (fetchErr) {
+        lastError = `${model}: ${fetchErr}`;
+        console.error("Fetch error:", lastError);
+        // Continue to next model
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos ao seu workspace." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "Erro no serviço de IA" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    // All models failed
+    return new Response(JSON.stringify({ error: `Serviço de IA indisponível no momento. ${lastError}` }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
   } catch (e) {
     console.error("chat error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {

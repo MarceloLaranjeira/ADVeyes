@@ -140,6 +140,7 @@ function detectTribunalFromCNJ(numero: string): string | null {
 
 /** Realiza a consulta DataJud num endpoint específico */
 async function queryDataJud(endpoint: string, numero: string) {
+  // Remove all non-numeric characters for matching
   const clean = numero.replace(/[.\-\/\s]/g, "");
   const response = await fetch(endpoint, {
     method: "POST",
@@ -149,16 +150,11 @@ async function queryDataJud(endpoint: string, numero: string) {
     },
     body: JSON.stringify({
       query: {
-        bool: {
-          should: [
-            { match: { numeroProcesso: clean } },
-            { term: { numeroProcesso: { value: clean, case_insensitive: true } } },
-          ],
-          minimum_should_match: 1,
+        match: {
+          numeroProcesso: clean,
         },
       },
       size: 10,
-      sort: [{ dataHoraUltimaAtualizacao: { order: "desc" } }],
     }),
   });
   return response;
@@ -178,7 +174,7 @@ function mapHits(hits: any[], sistema: string) {
       orgaoJulgador: s.orgaoJulgador?.nome || "",
       dataAjuizamento: s.dataAjuizamento || null,
       ultimaAtualizacao: s.dataHoraUltimaAtualizacao || null,
-      movimentos: (s.movimentos || []).slice(0, 8).map((m: any) => ({
+      movimentos: (s.movimentos || []).map((m: any) => ({
         nome: m.nome,
         data: m.dataHora,
         complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
