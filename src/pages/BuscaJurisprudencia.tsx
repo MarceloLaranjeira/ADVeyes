@@ -110,6 +110,10 @@ const BuscaJurisprudencia = () => {
   const [resultados, setResultados] = useState<any[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("geral");
+  const [searchProgress, setSearchProgress] = useState({ active: false, current: 0, total: 0, label: "" });
+
+  const SEEU_COUNT = 35;
+  const PROJUDI_COUNT = 27;
 
   const buscar = async (tribunalOverride?: string) => {
     const t = tribunalOverride || tribunal;
@@ -117,21 +121,58 @@ const BuscaJurisprudencia = () => {
     setLoading(true);
     setResultados([]);
     setTotal(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("busca-processual", {
-        body: { numero: numero.trim(), tribunal: t },
-      });
-      if (error) throw error;
-      if (data?.error) toast({ title: "Aviso", description: data.error, variant: "destructive" });
-      else {
-        setResultados(data.processos || []);
-        setTotal(data.total || 0);
-        if (tribunalOverride) setTribunal(tribunalOverride);
-        if ((data.processos || []).length === 0)
-          toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${t.toUpperCase()}` });
+
+    const isMulti = t === "seeu" || t === "projudi";
+    const totalTribunais = t === "seeu" ? SEEU_COUNT : t === "projudi" ? PROJUDI_COUNT : 1;
+    const label = t === "seeu" ? "SEEU" : t === "projudi" ? "Projudi" : "";
+
+    if (isMulti) {
+      setSearchProgress({ active: true, current: 0, total: totalTribunais, label });
+      // Simulate progress since the edge function handles batching server-side
+      const interval = setInterval(() => {
+        setSearchProgress((prev) => {
+          if (prev.current >= prev.total - 1) { clearInterval(interval); return prev; }
+          return { ...prev, current: prev.current + 1 };
+        });
+      }, 300);
+
+      try {
+        const { data, error } = await supabase.functions.invoke("busca-processual", {
+          body: { numero: numero.trim(), tribunal: t },
+        });
+        clearInterval(interval);
+        setSearchProgress({ active: false, current: totalTribunais, total: totalTribunais, label });
+        if (error) throw error;
+        if (data?.error) toast({ title: "Aviso", description: data.error, variant: "destructive" });
+        else {
+          setResultados(data.processos || []);
+          setTotal(data.total || 0);
+          if (tribunalOverride) setTribunal(tribunalOverride);
+          if ((data.processos || []).length === 0)
+            toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${totalTribunais} tribunais (${label})` });
+        }
+      } catch (e: any) {
+        clearInterval(interval);
+        setSearchProgress({ active: false, current: 0, total: 0, label: "" });
+        toast({ title: "Erro na consulta", description: e.message, variant: "destructive" });
       }
-    } catch (e: any) {
-      toast({ title: "Erro na consulta", description: e.message, variant: "destructive" });
+    } else {
+      try {
+        const { data, error } = await supabase.functions.invoke("busca-processual", {
+          body: { numero: numero.trim(), tribunal: t },
+        });
+        if (error) throw error;
+        if (data?.error) toast({ title: "Aviso", description: data.error, variant: "destructive" });
+        else {
+          setResultados(data.processos || []);
+          setTotal(data.total || 0);
+          if (tribunalOverride) setTribunal(tribunalOverride);
+          if ((data.processos || []).length === 0)
+            toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${t.toUpperCase()}` });
+        }
+      } catch (e: any) {
+        toast({ title: "Erro na consulta", description: e.message, variant: "destructive" });
+      }
     }
     setLoading(false);
   };
@@ -366,12 +407,44 @@ const BuscaJurisprudencia = () => {
           ))}
         </div>
 
+        {/* Multi-tribunal progress indicator */}
+        {searchProgress.active && (
+          <Card className="mb-6 border-primary/30 bg-primary/5">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">
+                    Consultando tribunais via {searchProgress.label}...
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {searchProgress.current} de {searchProgress.total} tribunais consultados
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-primary">
+                  {Math.round((searchProgress.current / searchProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${(searchProgress.current / searchProgress.total) * 100}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Results */}
         {total !== null && (
           <div className="flex items-center gap-2 mb-4">
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{total}</span> resultado(s) encontrado(s) em{" "}
-              <span className="font-semibold text-foreground">{getTribunalLabel(tribunal)}</span>
+              <span className="font-semibold text-foreground">
+                {(tribunal === "seeu" || tribunal === "projudi")
+                  ? `${tribunal === "seeu" ? SEEU_COUNT : PROJUDI_COUNT} tribunais (${getTribunalLabel(tribunal)})`
+                  : getTribunalLabel(tribunal)}
+              </span>
             </p>
             {total === 0 && <AlertCircle className="w-4 h-4 text-muted-foreground" />}
           </div>
