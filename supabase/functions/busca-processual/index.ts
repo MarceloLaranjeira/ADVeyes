@@ -138,26 +138,77 @@ function detectTribunalFromCNJ(numero: string): string | null {
   return null;
 }
 
-/** Realiza a consulta DataJud num endpoint específico */
-async function queryDataJud(endpoint: string, numero: string) {
-  // Remove all non-numeric characters for matching
-  const clean = numero.replace(/[.\-\/\s]/g, "");
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
-    },
-    body: JSON.stringify({
-      query: {
-        match: {
-          numeroProcesso: clean,
-        },
-      },
-      size: 10,
-    }),
-  });
-  return response;
+const DATAJUD_KEY = "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+
+/**
+ * Normaliza número CNJ para o formato canônico: NNNNNNN-DD.AAAA.J.TT.OOOO
+ * DataJud armazena o número COM pontuação — buscas sem pontuação não funcionam.
+ */
+function normalizeCNJ(numero: string): string {
+  const digits = numero.replace(/\D/g, "");
+  // CNJ padrão tem 20 dígitos: 7+2+4+1+2+4
+  if (digits.length === 20) {
+    return `${digits.slice(0, 7)}-${digits.slice(7, 9)}.${digits.slice(9, 13)}.${digits.slice(13, 14)}.${digits.slice(14, 16)}.${digits.slice(16)}`;
+  }
+  return numero.trim();
+}
+
+/** Realiza a consulta DataJud com múltiplas estratégias de busca */
+async function queryDataJud(endpoint: string, numero: string): Promise<{ data?: any; error?: string; status?: number }> {
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": DATAJUD_KEY,
+  };
+
+  // Estratégia 1: número CNJ formatado (como DataJud armazena)
+  const formatted = normalizeCNJ(numero);
+  // Estratégia 2: número como o usuário digitou (trimado)
+  const original = numero.trim();
+  // Estratégia 3: somente dígitos
+  const stripped = numero.replace(/\D/g, "");
+
+  // Remove duplicatas mantendo a ordem
+  const candidates = [...new Set([formatted, original, stripped])].filter(Boolean);
+
+  let lastError = "";
+  let lastStatus = 0;
+
+  for (const candidate of candidates) {
+    let resp: Response;
+    try {
+      resp = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: { match: { numeroProcesso: candidate } },
+          size: 10,
+        }),
+      });
+    } catch (err) {
+      lastError = String(err);
+      continue;
+    }
+
+    if (!resp.ok) {
+      lastStatus = resp.status;
+      try { lastError = await resp.text(); } catch { lastError = `HTTP ${resp.status}`; }
+      // Não tentar próxima estratégia em erros de autenticação/quota
+      if (resp.status === 401 || resp.status === 402 || resp.status === 429) break;
+      continue;
+    }
+
+    const data = await resp.json();
+    // Retorna imediatamente se encontrou resultados
+    if ((data.hits?.hits?.length ?? 0) > 0) return { data };
+    // Guarda resultado vazio como fallback para retornar no fim
+    lastError = "";
+    lastStatus = 0;
+    // Continua tentando as próximas estratégias antes de retornar vazio
+    if (candidate === candidates[candidates.length - 1]) return { data };
+  }
+
+  if (lastError) return { error: lastError, status: lastStatus };
+  return { data: { hits: { hits: [], total: { value: 0 } } } };
 }
 
 /** Mapeia hits do DataJud para o formato do sistema */
@@ -203,14 +254,13 @@ serve(async (req) => {
       const endpoint = detected ? DATAJUD_ENDPOINTS[detected] : null;
 
       if (endpoint) {
-        const resp = await queryDataJud(endpoint, numero);
-        if (resp.ok) {
-          const data = await resp.json();
-          const processos = mapHits(data.hits?.hits, detected!);
+        const result = await queryDataJud(endpoint, numero);
+        if (result.data) {
+          const processos = mapHits(result.data.hits?.hits, detected!);
           const portalUrl = SEEU_PORTALS[detected!] || SEEU_PORTALS.nacional;
           return new Response(JSON.stringify({
             processos,
-            total: data.hits?.total?.value || 0,
+            total: result.data.hits?.total?.value || 0,
             info: `SEEU: processo do ${detected!.toUpperCase()} encontrado via DataJud/CNJ.`,
             portal_seeu: portalUrl,
             tribunal_detectado: detected,
@@ -218,7 +268,6 @@ serve(async (req) => {
         }
       }
 
-      // Sem detecção: retornar portais disponíveis
       return new Response(JSON.stringify({
         processos: [],
         total: 0,
@@ -234,14 +283,13 @@ serve(async (req) => {
       const endpoint = detected ? DATAJUD_ENDPOINTS[detected] : null;
 
       if (endpoint) {
-        const resp = await queryDataJud(endpoint, numero);
-        if (resp.ok) {
-          const data = await resp.json();
-          const processos = mapHits(data.hits?.hits, detected!);
+        const result = await queryDataJud(endpoint, numero);
+        if (result.data) {
+          const processos = mapHits(result.data.hits?.hits, detected!);
           const portalUrl = PROJUDI_PORTALS[detected!] || PROJUDI_TRTS[detected!] || null;
           return new Response(JSON.stringify({
             processos,
-            total: data.hits?.total?.value || 0,
+            total: result.data.hits?.total?.value || 0,
             info: `Projudi: processo do ${detected!.toUpperCase()} encontrado via DataJud/CNJ.`,
             portal_projudi: portalUrl,
             tribunal_detectado: detected,
@@ -249,7 +297,6 @@ serve(async (req) => {
         }
       }
 
-      // Sem detecção: retornar portais disponíveis
       return new Response(JSON.stringify({
         processos: [],
         total: 0,
@@ -259,13 +306,9 @@ serve(async (req) => {
     }
 
     // === TRIBUNAIS NORMAIS ===
-    let resolvedKey = inputKey;
-
     // Auto-detectar tribunal pelo número CNJ se informado
     const autoDetected = detectTribunalFromCNJ(numero);
-    if (autoDetected && !DATAJUD_ENDPOINTS[inputKey]) {
-      resolvedKey = autoDetected;
-    }
+    let resolvedKey = DATAJUD_ENDPOINTS[inputKey] ? inputKey : (autoDetected || inputKey);
 
     const endpoint = DATAJUD_ENDPOINTS[resolvedKey];
     if (!endpoint) {
@@ -277,32 +320,34 @@ serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const response = await queryDataJud(endpoint, numero);
+    const { data, error: djError, status: djStatus } = await queryDataJud(endpoint, numero);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("DataJud error:", response.status, errorText);
+    if (djError) {
+      console.error("DataJud error:", djStatus, djError);
       return new Response(JSON.stringify({
-        error: response.status === 401
+        error: djStatus === 401
           ? `Chave de acesso DataJud inválida ou expirada para ${resolvedKey.toUpperCase()}.`
-          : response.status === 404
+          : djStatus === 402
+          ? `Créditos/quota DataJud esgotados.`
+          : djStatus === 429
+          ? `Limite de requisições DataJud excedido. Tente em instantes.`
+          : djStatus === 404
           ? `Endpoint ${resolvedKey.toUpperCase()} não disponível no DataJud no momento.`
-          : `Erro ao consultar DataJud (${response.status})`,
+          : `Erro ao consultar DataJud (${djStatus}): ${djError.slice(0, 200)}`,
         processos: [],
         total: 0,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const data = await response.json();
     const processos = mapHits(data.hits?.hits, resolvedKey);
 
-    const result: any = { processos, total: data.hits?.total?.value || 0 };
+    const finalResult: any = { processos, total: data.hits?.total?.value || 0 };
     if (autoDetected && autoDetected !== inputKey) {
-      result.tribunal_detectado = autoDetected;
-      result.info = `Número CNJ detectado: consulta realizada no ${autoDetected.toUpperCase()}`;
+      finalResult.tribunal_detectado = autoDetected;
+      finalResult.info = `Número CNJ detectado: consulta realizada no ${autoDetected.toUpperCase()}`;
     }
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify(finalResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

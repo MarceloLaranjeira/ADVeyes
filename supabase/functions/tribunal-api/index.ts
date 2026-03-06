@@ -140,23 +140,51 @@ function detectTribunalFromCNJ(numero: string): string | null {
   return null;
 }
 
-async function queryDataJud(endpoint: string, numero_processo: string) {
-  const clean = numero_processo.replace(/[.\-\/\s]/g, "");
-  return fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
-    },
-    body: JSON.stringify({
-      query: {
-        match: {
-          numeroProcesso: clean,
-        },
-      },
-      size: 10,
-    }),
-  });
+const DATAJUD_KEY = "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+
+function normalizeCNJ(numero: string): string {
+  const digits = numero.replace(/\D/g, "");
+  if (digits.length === 20) {
+    return `${digits.slice(0,7)}-${digits.slice(7,9)}.${digits.slice(9,13)}.${digits.slice(13,14)}.${digits.slice(14,16)}.${digits.slice(16)}`;
+  }
+  return numero.trim();
+}
+
+async function queryDataJud(endpoint: string, numero_processo: string): Promise<{ data?: any; error?: string; status?: number }> {
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": DATAJUD_KEY,
+  };
+  const candidates = [...new Set([normalizeCNJ(numero_processo), numero_processo.trim(), numero_processo.replace(/\D/g, "")])].filter(Boolean);
+
+  let lastError = "";
+  let lastStatus = 0;
+
+  for (const candidate of candidates) {
+    let resp: Response;
+    try {
+      resp = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query: { match: { numeroProcesso: candidate } }, size: 10 }),
+      });
+    } catch (err) {
+      lastError = String(err);
+      continue;
+    }
+    if (!resp.ok) {
+      lastStatus = resp.status;
+      try { lastError = await resp.text(); } catch { lastError = `HTTP ${resp.status}`; }
+      if (resp.status === 401 || resp.status === 402 || resp.status === 429) break;
+      continue;
+    }
+    const data = await resp.json();
+    if ((data.hits?.hits?.length ?? 0) > 0) return { data };
+    if (candidate === candidates[candidates.length - 1]) return { data };
+  }
+
+  if (lastError) return { error: lastError, status: lastStatus };
+  return { data: { hits: { hits: [], total: { value: 0 } } } };
 }
 
 serve(async (req) => {
@@ -223,13 +251,11 @@ serve(async (req) => {
           );
         }
 
-        const resp = await queryDataJud(endpoint, numero_processo);
-        if (!resp.ok) {
-          const errText = await resp.text();
-          throw new Error(`DataJud ${realKey.toUpperCase()}: ${resp.status} - ${errText.slice(0, 200)}`);
+        const { data, error: djError, status: djStatus } = await queryDataJud(endpoint, numero_processo);
+        if (djError) {
+          throw new Error(`DataJud ${realKey.toUpperCase()}: ${djStatus} - ${djError.slice(0, 200)}`);
         }
 
-        const data = await resp.json();
         result = {
           sistema: tribunalKey === "seeu" ? "SEEU" : tribunalKey === "projudi" ? "Projudi" : realKey.toUpperCase(),
           tribunal_consultado: realKey.toUpperCase(),
@@ -322,9 +348,8 @@ serve(async (req) => {
         for (const mon of (monitored || [])) {
           const ep = DATAJUD_ENDPOINTS[mon.tribunal] || DATAJUD_ENDPOINTS.tjam;
           try {
-            const resp = await queryDataJud(ep, mon.numero_processo);
-            if (resp.ok) {
-              const data = await resp.json();
+            const { data } = await queryDataJud(ep, mon.numero_processo);
+            if (data) {
               const hit = data.hits?.hits?.[0]?._source;
               if (hit) {
                 const lastMov = hit.movimentos?.[0]?.nome || "";
