@@ -257,6 +257,86 @@ export type Database = {
           },
         ]
       }
+      notificacoes: {
+        Row: {
+          created_at: string
+          id: string
+          lida: boolean
+          mensagem: string
+          processo_numero: string | null
+          tipo: string
+          titulo: string
+          tribunal: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem: string
+          processo_numero?: string | null
+          tipo?: string
+          titulo: string
+          tribunal?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lida?: boolean
+          mensagem?: string
+          processo_numero?: string | null
+          tipo?: string
+          titulo?: string
+          tribunal?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      processo_monitoramento: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          numero_processo: string
+          processo_id: string | null
+          tribunal: string
+          ultima_verificacao: string | null
+          ultimo_movimento: string | null
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          numero_processo: string
+          processo_id?: string | null
+          tribunal: string
+          ultima_verificacao?: string | null
+          ultimo_movimento?: string | null
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          numero_processo?: string
+          processo_id?: string | null
+          tribunal?: string
+          ultima_verificacao?: string | null
+          ultimo_movimento?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processo_monitoramento_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processos: {
         Row: {
           advogado: string | null
@@ -357,6 +437,57 @@ export type Database = {
           prioridade?: string
           status?: string
           titulo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tribunal_credenciais: {
+        Row: {
+          ativo: boolean
+          cpf: string | null
+          created_at: string
+          expira_em: string | null
+          id: string
+          nome_tribunal: string
+          numero_oab: string | null
+          seccional_oab: string | null
+          tipo_autenticacao: string
+          token_acesso: string | null
+          token_refresh: string | null
+          tribunal: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          cpf?: string | null
+          created_at?: string
+          expira_em?: string | null
+          id?: string
+          nome_tribunal: string
+          numero_oab?: string | null
+          seccional_oab?: string | null
+          tipo_autenticacao?: string
+          token_acesso?: string | null
+          token_refresh?: string | null
+          tribunal: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ativo?: boolean
+          cpf?: string | null
+          created_at?: string
+          expira_em?: string | null
+          id?: string
+          nome_tribunal?: string
+          numero_oab?: string | null
+          seccional_oab?: string | null
+          tipo_autenticacao?: string
+          token_acesso?: string | null
+          token_refresh?: string | null
+          tribunal?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
