@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { DollarSign, TrendingUp, TrendingDown, Clock, Plus, Filter } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Clock, Plus, Filter, Download } from "lucide-react";
+import { exportFinanceiroPDF } from "@/lib/pdf-export";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -94,9 +95,10 @@ const Financeiro = () => {
             <h1 className="text-3xl font-bold font-serif">Financeiro</h1>
             <p className="text-muted-foreground text-sm mt-1">Controle de honorários e pagamentos</p>
           </div>
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Novo Lançamento
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => exportFinanceiroPDF(filtered, { recebido: totalRecebido, pendente: totalPendente, atrasado: totalAtrasado })} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
+            <Button onClick={() => setShowForm(true)} className="gap-2"><Plus className="w-4 h-4" /> Novo Lançamento</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">

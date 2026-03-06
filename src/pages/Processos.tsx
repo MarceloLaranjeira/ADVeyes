@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AreaBadge } from "@/components/common/AreaBadge";
-import { Search, Plus, Pencil, Trash2, Filter } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Filter, Download } from "lucide-react";
+import { exportProcessosPDF } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -62,9 +63,10 @@ const Processos = () => {
             <h1 className="text-3xl font-bold font-serif">Processos</h1>
             <p className="text-muted-foreground text-sm mt-1">Gerenciamento de todos os processos do escritório</p>
           </div>
-          <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> Novo Processo
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => exportProcessosPDF(filtered)} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
+            <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2"><Plus className="w-4 h-4" /> Novo Processo</Button>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 mb-6">
