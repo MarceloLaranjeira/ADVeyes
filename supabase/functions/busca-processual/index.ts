@@ -130,15 +130,14 @@ serve(async (req) => {
     if (isMultiSearch) {
       // All tribunals in parallel (with individual timeouts)
       const results = await Promise.all(tribunaisToSearch.map(fetchTribunal));
-        for (const r of results) {
-          if (r.error === "auth") { authError = true; continue; }
-          if (!r.data) continue;
-          const hits = r.data.hits?.hits || [];
-          totalHits += r.data.hits?.total?.value || 0;
-          for (const hit of hits) {
-            const s = hit._source;
-            allProcessos.push(parseProcesso(s, r.tribunal, key));
-          }
+      for (const r of results) {
+        if (r.error === "auth") { authError = true; continue; }
+        if (!r.data) continue;
+        const hits = r.data.hits?.hits || [];
+        totalHits += r.data.hits?.total?.value || 0;
+        for (const hit of hits) {
+          const s = hit._source;
+          allProcessos.push(parseProcesso(s, r.tribunal, key));
         }
       }
     } else {
