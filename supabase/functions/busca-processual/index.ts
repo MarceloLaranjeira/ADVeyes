@@ -96,8 +96,9 @@ serve(async (req) => {
     // SEEU and Projudi don't have dedicated DataJud endpoints.
     // Their data is indexed under the respective tribunal endpoints.
     // When user selects SEEU/Projudi, search across multiple relevant tribunals.
-    const SEEU_TRIBUNAIS = ["tjam", "tjba", "tjsp", "tjrj", "tjmg", "tjpr", "tjrs", "tjsc", "tjpe", "tjce", "tjpa", "tjgo", "tjdft"];
-    const PROJUDI_TRIBUNAIS = ["tjam", "tjpr", "tjgo", "tjrn", "tjmt", "tjal", "tjba", "tjms", "tjpi", "tjse", "tjto", "tjac", "tjap", "tjrr", "tjro"];
+    const ALL_TJS = ["tjac","tjal","tjam","tjap","tjba","tjce","tjdft","tjes","tjgo","tjma","tjmg","tjms","tjmt","tjpa","tjpb","tjpe","tjpi","tjpr","tjrj","tjrn","tjro","tjrr","tjrs","tjsc","tjse","tjsp","tjto"];
+    const SEEU_TRIBUNAIS = [...ALL_TJS, "stj", "stf", "trf1", "trf2", "trf3", "trf4", "trf5", "trf6"];
+    const PROJUDI_TRIBUNAIS = [...ALL_TJS];
 
     const isMultiSearch = key === "seeu" || key === "projudi";
     const tribunaisToSearch = isMultiSearch
