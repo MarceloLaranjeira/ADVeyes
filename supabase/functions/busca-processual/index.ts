@@ -124,11 +124,15 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("DataJud error:", response.status, errorText);
+      const userMsg = response.status === 401 
+        ? `O endpoint "${key.toUpperCase()}" não está disponível na API pública do DataJud ou a chave de acesso expirou. Tente outro tribunal.`
+        : `Erro ao consultar DataJud (${response.status})`;
       return new Response(JSON.stringify({ 
-        error: `Erro ao consultar DataJud (${response.status})`,
-        details: errorText 
+        error: userMsg,
+        processos: [],
+        total: 0,
       }), {
-        status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
