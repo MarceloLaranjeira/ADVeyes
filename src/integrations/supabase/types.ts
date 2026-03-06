@@ -257,6 +257,53 @@ export type Database = {
           },
         ]
       }
+      honorario_parcelas: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          descricao: string | null
+          id: string
+          numero_parcela: number
+          processo_id: string
+          status: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          descricao?: string | null
+          id?: string
+          numero_parcela?: number
+          processo_id: string
+          status?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          descricao?: string | null
+          id?: string
+          numero_parcela?: number
+          processo_id?: string
+          status?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "honorario_parcelas_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificacoes: {
         Row: {
           created_at: string
@@ -292,6 +339,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      portal_acessos: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          email: string | null
+          id: string
+          token: string
+          ultimo_acesso: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          token?: string
+          ultimo_acesso?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          token?: string
+          ultimo_acesso?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_acessos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       processo_monitoramento: {
         Row: {
