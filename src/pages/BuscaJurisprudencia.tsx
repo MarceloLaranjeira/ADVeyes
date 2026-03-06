@@ -68,6 +68,33 @@ const tribunalGroups = [
     label: "TRTs — Trabalhista",
     items: Array.from({ length: 24 }, (_, i) => ({ id: `trt${i + 1}`, nome: `TRT${i + 1} — ${i + 1}ª Região` })),
   },
+  {
+    label: "TREs — Eleitoral",
+    items: [
+      { id: "tre-ac", nome: "TRE-AC — Acre" }, { id: "tre-al", nome: "TRE-AL — Alagoas" },
+      { id: "tre-am", nome: "TRE-AM — Amazonas" }, { id: "tre-ap", nome: "TRE-AP — Amapá" },
+      { id: "tre-ba", nome: "TRE-BA — Bahia" }, { id: "tre-ce", nome: "TRE-CE — Ceará" },
+      { id: "tre-dft", nome: "TRE-DFT — DF" }, { id: "tre-es", nome: "TRE-ES — Espírito Santo" },
+      { id: "tre-go", nome: "TRE-GO — Goiás" }, { id: "tre-ma", nome: "TRE-MA — Maranhão" },
+      { id: "tre-mg", nome: "TRE-MG — Minas Gerais" }, { id: "tre-ms", nome: "TRE-MS — Mato Grosso do Sul" },
+      { id: "tre-mt", nome: "TRE-MT — Mato Grosso" }, { id: "tre-pa", nome: "TRE-PA — Pará" },
+      { id: "tre-pb", nome: "TRE-PB — Paraíba" }, { id: "tre-pe", nome: "TRE-PE — Pernambuco" },
+      { id: "tre-pi", nome: "TRE-PI — Piauí" }, { id: "tre-pr", nome: "TRE-PR — Paraná" },
+      { id: "tre-rj", nome: "TRE-RJ — Rio de Janeiro" }, { id: "tre-rn", nome: "TRE-RN — Rio Grande do Norte" },
+      { id: "tre-ro", nome: "TRE-RO — Rondônia" }, { id: "tre-rr", nome: "TRE-RR — Roraima" },
+      { id: "tre-rs", nome: "TRE-RS — Rio Grande do Sul" }, { id: "tre-sc", nome: "TRE-SC — Santa Catarina" },
+      { id: "tre-se", nome: "TRE-SE — Sergipe" }, { id: "tre-sp", nome: "TRE-SP — São Paulo" },
+      { id: "tre-to", nome: "TRE-TO — Tocantins" },
+    ],
+  },
+  {
+    label: "TJMs — Militar Estadual",
+    items: [
+      { id: "tjmmg", nome: "TJMMG — Minas Gerais" },
+      { id: "tjmrs", nome: "TJMRS — Rio Grande do Sul" },
+      { id: "tjmsp", nome: "TJMSP — São Paulo" },
+    ],
+  },
 ];
 
 const sistemasEspeciais = [
@@ -112,7 +139,7 @@ const BuscaJurisprudencia = () => {
   const [activeTab, setActiveTab] = useState("geral");
   const [searchProgress, setSearchProgress] = useState({ active: false, current: 0, total: 0, label: "" });
 
-  const SEEU_COUNT = 35;
+  const SEEU_COUNT = 38;
   const PROJUDI_COUNT = 27;
 
   const buscar = async (tribunalOverride?: string) => {
