@@ -88,8 +88,8 @@ serve(async (req) => {
     const { numero, tribunal, sistema } = await req.json();
 
     if (!numero || !numero.trim()) {
-      return new Response(JSON.stringify({ error: "Número do processo é obrigatório" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Número do processo é obrigatório", processos: [], total: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -98,8 +98,8 @@ serve(async (req) => {
     const endpoint = DATAJUD_ENDPOINTS[key];
 
     if (!endpoint) {
-      return new Response(JSON.stringify({ error: `Tribunal/sistema "${key}" não encontrado. Tribunais disponíveis: ${Object.keys(DATAJUD_ENDPOINTS).join(", ")}` }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: `Tribunal/sistema "${key}" não encontrado.`, processos: [], total: 0 }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -163,8 +163,8 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("busca-processual error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido", processos: [], total: 0 }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
