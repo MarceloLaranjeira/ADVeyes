@@ -308,8 +308,9 @@ serve(async (req) => {
       case "consultar_seeu":
       case "consultar_projudi": {
         // SEEU/Projudi data is indexed under respective tribunal endpoints
-        const SEEU_TRIBUNAIS = ["tjam", "tjba", "tjsp", "tjrj", "tjmg", "tjpr", "tjrs", "tjsc", "tjpe", "tjce"];
-        const PROJUDI_TRIBUNAIS = ["tjam", "tjpr", "tjgo", "tjrn", "tjmt", "tjal", "tjba", "tjms"];
+        const ALL_TJS = ["tjac","tjal","tjam","tjap","tjba","tjce","tjdft","tjes","tjgo","tjma","tjmg","tjms","tjmt","tjpa","tjpb","tjpe","tjpi","tjpr","tjrj","tjrn","tjro","tjrr","tjrs","tjsc","tjse","tjsp","tjto"];
+        const SEEU_TRIBUNAIS = [...ALL_TJS, "stj", "stf", "trf1", "trf2", "trf3", "trf4", "trf5", "trf6"];
+        const PROJUDI_TRIBUNAIS = [...ALL_TJS];
         const tribunais = action === "consultar_seeu" ? SEEU_TRIBUNAIS : PROJUDI_TRIBUNAIS;
         const sistemaName = action === "consultar_seeu" ? "SEEU" : "Projudi";
         
