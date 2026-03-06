@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Search, ExternalLink, Loader2, FileText, Calendar, Eye, Bell, Send } from "lucide-react";
+import { Search, ExternalLink, Loader2, FileText, Calendar, Bell, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,12 +8,91 @@ import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-const tribunais = [
-  { id: "tjam", nome: "TJAM", desc: "Tribunal de Justiça do Amazonas" },
-  { id: "stj", nome: "STJ", desc: "Superior Tribunal de Justiça" },
-  { id: "stf", nome: "STF", desc: "Supremo Tribunal Federal" },
-  { id: "trf1", nome: "TRF1", desc: "Tribunal Regional Federal 1ª Região" },
-  { id: "tst", nome: "TST", desc: "Tribunal Superior do Trabalho" },
+const tribunalGroups = [
+  {
+    label: "Tribunais Superiores",
+    items: [
+      { id: "stf", nome: "STF" },
+      { id: "stj", nome: "STJ" },
+      { id: "tst", nome: "TST" },
+      { id: "stm", nome: "STM" },
+      { id: "tse", nome: "TSE" },
+    ],
+  },
+  {
+    label: "TRFs",
+    items: [
+      { id: "trf1", nome: "TRF1" },
+      { id: "trf2", nome: "TRF2" },
+      { id: "trf3", nome: "TRF3" },
+      { id: "trf4", nome: "TRF4" },
+      { id: "trf5", nome: "TRF5" },
+      { id: "trf6", nome: "TRF6" },
+    ],
+  },
+  {
+    label: "Justiça Estadual (Norte)",
+    items: [
+      { id: "tjac", nome: "TJAC" },
+      { id: "tjam", nome: "TJAM" },
+      { id: "tjap", nome: "TJAP" },
+      { id: "tjpa", nome: "TJPA" },
+      { id: "tjro", nome: "TJRO" },
+      { id: "tjrr", nome: "TJRR" },
+      { id: "tjto", nome: "TJTO" },
+    ],
+  },
+  {
+    label: "Justiça Estadual (Nordeste)",
+    items: [
+      { id: "tjal", nome: "TJAL" },
+      { id: "tjba", nome: "TJBA" },
+      { id: "tjce", nome: "TJCE" },
+      { id: "tjma", nome: "TJMA" },
+      { id: "tjpb", nome: "TJPB" },
+      { id: "tjpe", nome: "TJPE" },
+      { id: "tjpi", nome: "TJPI" },
+      { id: "tjrn", nome: "TJRN" },
+      { id: "tjse", nome: "TJSE" },
+    ],
+  },
+  {
+    label: "Justiça Estadual (Centro-Oeste/Sudeste/Sul)",
+    items: [
+      { id: "tjdft", nome: "TJDFT" },
+      { id: "tjgo", nome: "TJGO" },
+      { id: "tjms", nome: "TJMS" },
+      { id: "tjmt", nome: "TJMT" },
+      { id: "tjes", nome: "TJES" },
+      { id: "tjmg", nome: "TJMG" },
+      { id: "tjrj", nome: "TJRJ" },
+      { id: "tjsp", nome: "TJSP" },
+      { id: "tjpr", nome: "TJPR" },
+      { id: "tjrs", nome: "TJRS" },
+      { id: "tjsc", nome: "TJSC" },
+    ],
+  },
+  {
+    label: "TRTs",
+    items: Array.from({ length: 24 }, (_, i) => ({ id: `trt${i + 1}`, nome: `TRT${i + 1}` })),
+  },
+  {
+    label: "Sistemas Especiais",
+    items: [
+      { id: "seeu", nome: "SEEU" },
+      { id: "projudi", nome: "Projudi" },
+    ],
+  },
+];
+
+const quickFilters = [
+  { id: "tjam", nome: "TJAM" },
+  { id: "stj", nome: "STJ" },
+  { id: "stf", nome: "STF" },
+  { id: "trf1", nome: "TRF1" },
+  { id: "tst", nome: "TST" },
+  { id: "seeu", nome: "SEEU" },
+  { id: "projudi", nome: "Projudi" },
 ];
 
 const BuscaJurisprudencia = () => {
@@ -54,7 +133,7 @@ const BuscaJurisprudencia = () => {
       });
       if (error) throw error;
       setMonitorando((prev) => [...prev, numProcesso]);
-      toast({ title: "Processo monitorado!", description: `Você será notificado de novas movimentações.` });
+      toast({ title: "Processo monitorado!", description: "Você será notificado de novas movimentações." });
     } catch (e: any) {
       toast({ title: "Erro ao monitorar", description: e.message, variant: "destructive" });
     }
@@ -72,12 +151,20 @@ const BuscaJurisprudencia = () => {
     }
   };
 
+  const getTribunalLabel = (id: string) => {
+    for (const g of tribunalGroups) {
+      const found = g.items.find((t) => t.id === id);
+      if (found) return found.nome;
+    }
+    return id.toUpperCase();
+  };
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="mb-8">
           <h1 className="text-3xl font-bold font-serif">Busca Processual</h1>
-          <p className="text-muted-foreground text-sm mt-1">Consulte processos via API DataJud (CNJ) e integre com tribunais</p>
+          <p className="text-muted-foreground text-sm mt-1">Consulte processos via DataJud (CNJ) — todos os tribunais, SEEU e Projudi</p>
         </div>
 
         <Card className="mb-8">
@@ -85,8 +172,17 @@ const BuscaJurisprudencia = () => {
             <h3 className="font-serif text-lg font-semibold mb-4">Consulta por Número</h3>
             <div className="flex gap-3 flex-wrap">
               <Select value={tribunal} onValueChange={setTribunal}>
-                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                <SelectContent>{tribunais.map(t => <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-[400px]">
+                  {tribunalGroups.map((g) => (
+                    <div key={g.label}>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{g.label}</div>
+                      {g.items.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                      ))}
+                    </div>
+                  ))}
+                </SelectContent>
               </Select>
               <div className="relative flex-1 min-w-[250px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -96,8 +192,8 @@ const BuscaJurisprudencia = () => {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Pesquisar"}
               </Button>
             </div>
-            <div className="flex gap-2 mt-3">
-              {tribunais.map(t => (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {quickFilters.map((t) => (
                 <button key={t.id} onClick={() => setTribunal(t.id)}
                   className={`px-3 py-1 text-xs rounded-full border transition-colors ${tribunal === t.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                 >{t.nome}</button>
@@ -106,7 +202,7 @@ const BuscaJurisprudencia = () => {
           </CardContent>
         </Card>
 
-        {total !== null && <p className="text-sm text-muted-foreground mb-4">{total} resultado(s) encontrado(s)</p>}
+        {total !== null && <p className="text-sm text-muted-foreground mb-4">{total} resultado(s) encontrado(s) em {getTribunalLabel(tribunal)}</p>}
 
         <div className="space-y-4">
           {resultados.map((p, i) => (
@@ -115,7 +211,7 @@ const BuscaJurisprudencia = () => {
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded">{p.tribunal || tribunal.toUpperCase()}</span>
+                      <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded">{p.tribunal || getTribunalLabel(tribunal)}</span>
                       <span className="text-sm font-mono font-semibold">{p.numero}</span>
                       {p.grau && <span className="text-xs text-muted-foreground">Grau: {p.grau}</span>}
                     </div>
@@ -165,10 +261,14 @@ const BuscaJurisprudencia = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { nome: "PJe TJAM", url: "https://pje.tjam.jus.br" },
+                { nome: "SEEU", url: "https://seeu.pje.jus.br" },
+                { nome: "Projudi TJAM", url: "https://projudi.tjam.jus.br" },
                 { nome: "STJ", url: "https://www.stj.jus.br" },
                 { nome: "STF", url: "https://www.stf.jus.br" },
                 { nome: "DataJud CNJ", url: "https://datajud.cnj.jus.br" },
-              ].map(s => (
+                { nome: "TST", url: "https://www.tst.jus.br" },
+                { nome: "TRF1", url: "https://www.trf1.jus.br" },
+              ].map((s) => (
                 <a key={s.nome} href={s.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors text-sm">
                   {s.nome} <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                 </a>
