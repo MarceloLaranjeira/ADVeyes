@@ -80,7 +80,7 @@ const Index = () => {
         {/* Header */}
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold font-serif text-foreground">Dashboard</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight text-foreground">Dashboard</h1>
             <p className="text-muted-foreground text-sm mt-1.5">
               Sistema de Gestão — <span className="font-medium text-foreground/70">Albertino e Advogados Associados</span>
             </p>
