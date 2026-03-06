@@ -12,8 +12,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['Playfair Display', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['Merriweather', 'Georgia', 'serif'],
+        sans: ['Source Sans 3', 'system-ui', 'sans-serif'],
         rajdhani: ['Rajdhani', 'sans-serif'],
       },
       colors: {
