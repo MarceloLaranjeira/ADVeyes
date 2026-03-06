@@ -7,7 +7,6 @@ import { Scale, FileText, Gavel, LogOut, FolderOpen } from "lucide-react";
 
 const PortalDashboard = () => {
   const navigate = useNavigate();
-  const clienteId = sessionStorage.getItem("portal_cliente_id");
   const [cliente, setCliente] = useState<any>(null);
   const [processos, setProcessos] = useState<any[]>([]);
   const [audiencias, setAudiencias] = useState<any[]>([]);
@@ -15,17 +14,36 @@ const PortalDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!clienteId) {
+    const token = sessionStorage.getItem("portal_token");
+    if (!token) {
       navigate("/portal");
       return;
     }
-    fetchData();
-  }, [clienteId]);
+    fetchData(token);
+  }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (token: string) => {
+    // Re-validate token server-side on every load
+    const { data: access, error: accessError } = await supabase
+      .from("portal_acessos")
+      .select("cliente_id")
+      .eq("token", token)
+      .eq("ativo", true)
+      .maybeSingle();
+
+    if (accessError || !access) {
+      sessionStorage.removeItem("portal_token");
+      sessionStorage.removeItem("portal_cliente_id");
+      navigate("/portal");
+      return;
+    }
+
+    const clienteId = access.cliente_id;
+    sessionStorage.setItem("portal_cliente_id", clienteId);
+
     const [cliRes, procRes] = await Promise.all([
-      supabase.from("clientes").select("*").eq("id", clienteId!).single(),
-      supabase.from("processos").select("*").eq("cliente_id", clienteId!).order("updated_at", { ascending: false }),
+      supabase.from("clientes").select("*").eq("id", clienteId).single(),
+      supabase.from("processos").select("*").eq("cliente_id", clienteId).order("updated_at", { ascending: false }),
     ]);
 
     setCliente(cliRes.data);
