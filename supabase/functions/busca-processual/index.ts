@@ -98,12 +98,16 @@ serve(async (req) => {
 
     const fetchTribunal = async (t: string) => {
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout per tribunal
         const ep = getEndpoint(t);
         const resp = await fetch(ep, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `APIKey ${apiKey}` },
           body: searchBody,
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         if (!resp.ok) {
           if (resp.status === 401) {
             const errorText = await resp.text();
@@ -114,7 +118,7 @@ serve(async (req) => {
         }
         return { tribunal: t, error: null, data: await resp.json() };
       } catch (e) {
-        console.error(`Error fetching ${t}:`, e);
+        // Timeout or network error — skip silently
         return { tribunal: t, error: "network", data: null };
       }
     };
@@ -124,19 +128,16 @@ serve(async (req) => {
     let authError = false;
 
     if (isMultiSearch) {
-      // Parallel batches of 5
-      for (let i = 0; i < tribunaisToSearch.length; i += 5) {
-        const batch = tribunaisToSearch.slice(i, i + 5);
-        const results = await Promise.all(batch.map(fetchTribunal));
-        for (const r of results) {
-          if (r.error === "auth") { authError = true; continue; }
-          if (!r.data) continue;
-          const hits = r.data.hits?.hits || [];
-          totalHits += r.data.hits?.total?.value || 0;
-          for (const hit of hits) {
-            const s = hit._source;
-            allProcessos.push(parseProcesso(s, r.tribunal, key));
-          }
+      // All tribunals in parallel (with individual timeouts)
+      const results = await Promise.all(tribunaisToSearch.map(fetchTribunal));
+      for (const r of results) {
+        if (r.error === "auth") { authError = true; continue; }
+        if (!r.data) continue;
+        const hits = r.data.hits?.hits || [];
+        totalHits += r.data.hits?.total?.value || 0;
+        for (const hit of hits) {
+          const s = hit._source;
+          allProcessos.push(parseProcesso(s, r.tribunal, key));
         }
       }
     } else {
