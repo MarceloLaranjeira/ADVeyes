@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      audiencias: {
+        Row: {
+          cliente_nome: string | null
+          created_at: string
+          data_hora: string
+          id: string
+          juiz: string | null
+          local: string | null
+          observacoes: string | null
+          processo_id: string | null
+          processo_numero: string | null
+          status: string
+          tipo: string
+          user_id: string
+          vara: string | null
+        }
+        Insert: {
+          cliente_nome?: string | null
+          created_at?: string
+          data_hora: string
+          id?: string
+          juiz?: string | null
+          local?: string | null
+          observacoes?: string | null
+          processo_id?: string | null
+          processo_numero?: string | null
+          status?: string
+          tipo?: string
+          user_id: string
+          vara?: string | null
+        }
+        Update: {
+          cliente_nome?: string | null
+          created_at?: string
+          data_hora?: string
+          id?: string
+          juiz?: string | null
+          local?: string | null
+          observacoes?: string | null
+          processo_id?: string | null
+          processo_numero?: string | null
+          status?: string
+          tipo?: string
+          user_id?: string
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audiencias_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           cpf: string | null
