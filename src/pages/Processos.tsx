@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AreaBadge } from "@/components/common/AreaBadge";
-import { Search, Plus, Pencil, Trash2, Filter, Download } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Filter, Download, DollarSign } from "lucide-react";
 import { exportProcessosPDF } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { ProcessoForm } from "@/components/processos/ProcessoForm";
+import { HonorarioParcelas } from "@/components/processos/HonorarioParcelas";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,6 +23,7 @@ const Processos = () => {
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [honorarioProcesso, setHonorarioProcesso] = useState<any>(null);
   const [filterArea, setFilterArea] = useState("Todas");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -113,6 +116,9 @@ const Processos = () => {
                   <td className="p-4 text-sm text-muted-foreground">{p.advogado || "—"}</td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setHonorarioProcesso(p)} title="Honorários">
+                        <DollarSign className="w-4 h-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditData(p); setShowForm(true); }}>
                         <Pencil className="w-4 h-4" />
                       </Button>
@@ -141,6 +147,19 @@ const Processos = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {/* Honorários Dialog */}
+        <Dialog open={!!honorarioProcesso} onOpenChange={(open) => !open && setHonorarioProcesso(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle>Honorários — {honorarioProcesso?.numero}</DialogTitle></DialogHeader>
+            {honorarioProcesso && (
+              <HonorarioParcelas
+                processoId={honorarioProcesso.id}
+                processoNumero={honorarioProcesso.numero}
+                clienteNome={honorarioProcesso.cliente_nome}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
