@@ -217,7 +217,7 @@ const BuscaJurisprudencia = () => {
     } else {
       try {
         const { data, error } = await supabase.functions.invoke("busca-processual", {
-          body: { numero: numero.trim(), tribunal: t },
+          body: { numero: numero.trim(), tribunal: t, filtros: buildFiltros() },
         });
         if (error) throw error;
         if (data?.error) toast({ title: "Aviso", description: data.error, variant: "destructive" });
