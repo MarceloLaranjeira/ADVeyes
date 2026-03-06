@@ -387,6 +387,14 @@ const BuscaJurisprudencia = () => {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 Pesquisar
               </Button>
+              <Button
+                variant={showFilters ? "secondary" : "outline"}
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className={cn("w-4 h-4", hasActiveFilters && "text-primary")} />
+              </Button>
             </div>
 
             {/* Quick filters */}
@@ -421,6 +429,82 @@ const BuscaJurisprudencia = () => {
                 Projudi
               </button>
             </div>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+              <div className="mt-4 pt-4 border-t space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Filter className="w-3.5 h-3.5" />
+                    Filtros Avançados
+                  </h4>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={clearFilters}>
+                      <X className="w-3 h-3" /> Limpar filtros
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Classe Processual</label>
+                    <Input
+                      placeholder="Ex: Ação Civil Pública"
+                      value={filtroClasse}
+                      onChange={(e) => setFiltroClasse(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Assunto</label>
+                    <Input
+                      placeholder="Ex: Dano Moral"
+                      value={filtroAssunto}
+                      onChange={(e) => setFiltroAssunto(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Órgão Julgador</label>
+                    <Input
+                      placeholder="Ex: 1ª Vara Cível"
+                      value={filtroOrgao}
+                      onChange={(e) => setFiltroOrgao(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Início</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full h-9 justify-start text-left text-sm font-normal", !filtroDataInicio && "text-muted-foreground")}>
+                            <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                            {filtroDataInicio ? format(filtroDataInicio, "dd/MM/yyyy") : "De"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent mode="single" selected={filtroDataInicio} onSelect={setFiltroDataInicio} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Data Fim</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full h-9 justify-start text-left text-sm font-normal", !filtroDataFim && "text-muted-foreground")}>
+                            <Calendar className="w-3.5 h-3.5 mr-1.5" />
+                            {filtroDataFim ? format(filtroDataFim, "dd/MM/yyyy") : "Até"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent mode="single" selected={filtroDataFim} onSelect={setFiltroDataFim} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
