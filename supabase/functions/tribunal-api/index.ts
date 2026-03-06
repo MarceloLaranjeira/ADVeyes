@@ -70,8 +70,6 @@ const DATAJUD_ENDPOINTS: Record<string, string> = {
   trt22: "https://api-publica.datajud.cnj.jus.br/api_publica_trt22/_search",
   trt23: "https://api-publica.datajud.cnj.jus.br/api_publica_trt23/_search",
   trt24: "https://api-publica.datajud.cnj.jus.br/api_publica_trt24/_search",
-  seeu: "https://api-publica.datajud.cnj.jus.br/api_publica_seeu/_search",
-  projudi: "https://api-publica.datajud.cnj.jus.br/api_publica_projudi/_search",
 };
 
 // PJe MNI endpoints
@@ -307,69 +305,50 @@ serve(async (req) => {
         break;
       }
 
-      case "consultar_seeu": {
-        // SEEU - query via DataJud
-        const ep = DATAJUD_ENDPOINTS.seeu;
-        const resp = await fetch(ep, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
-          },
-          body: JSON.stringify({
-            query: { match: { numeroProcesso: numero_processo.replace(/[.\-\/]/g, "") } },
-            size: 10,
-          }),
-        });
-        if (!resp.ok) throw new Error(`SEEU DataJud: ${resp.status}`);
-        const data = await resp.json();
-        result = {
-          sistema: "SEEU",
-          processos: (data.hits?.hits || []).map((hit: any) => {
-            const s = hit._source;
-            return {
-              numero: s.numeroProcesso,
-              classe: s.classe?.nome || s.classeProcessual,
-              tribunal: s.tribunal,
-              orgaoJulgador: s.orgaoJulgador?.nome || "",
-              movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({ nome: m.nome, data: m.dataHora })),
-            };
-          }),
-          total: data.hits?.total?.value || 0,
-        };
-        break;
-      }
-
+      case "consultar_seeu":
       case "consultar_projudi": {
-        // Projudi - query via DataJud
-        const ep = DATAJUD_ENDPOINTS.projudi;
-        const resp = await fetch(ep, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
-          },
-          body: JSON.stringify({
-            query: { match: { numeroProcesso: numero_processo.replace(/[.\-\/]/g, "") } },
-            size: 10,
-          }),
-        });
-        if (!resp.ok) throw new Error(`Projudi DataJud: ${resp.status}`);
-        const data = await resp.json();
-        result = {
-          sistema: "Projudi",
-          processos: (data.hits?.hits || []).map((hit: any) => {
-            const s = hit._source;
-            return {
-              numero: s.numeroProcesso,
-              classe: s.classe?.nome || s.classeProcessual,
-              tribunal: s.tribunal,
-              orgaoJulgador: s.orgaoJulgador?.nome || "",
-              movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({ nome: m.nome, data: m.dataHora })),
-            };
-          }),
-          total: data.hits?.total?.value || 0,
-        };
+        // SEEU/Projudi data is indexed under respective tribunal endpoints
+        const SEEU_TRIBUNAIS = ["tjam", "tjba", "tjsp", "tjrj", "tjmg", "tjpr", "tjrs", "tjsc", "tjpe", "tjce"];
+        const PROJUDI_TRIBUNAIS = ["tjam", "tjpr", "tjgo", "tjrn", "tjmt", "tjal", "tjba", "tjms"];
+        const tribunais = action === "consultar_seeu" ? SEEU_TRIBUNAIS : PROJUDI_TRIBUNAIS;
+        const sistemaName = action === "consultar_seeu" ? "SEEU" : "Projudi";
+        
+        const allProcs: any[] = [];
+        let totalCount = 0;
+        
+        for (let i = 0; i < tribunais.length; i += 5) {
+          const batch = tribunais.slice(i, i + 5);
+          const results = await Promise.allSettled(
+            batch.map(async (t) => {
+              const ep = DATAJUD_ENDPOINTS[t];
+              if (!ep) return null;
+              const resp = await fetch(ep, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}` },
+                body: JSON.stringify({ query: { match: { numeroProcesso: numero_processo.replace(/[.\-\/]/g, "") } }, size: 5 }),
+              });
+              if (!resp.ok) return null;
+              return { tribunal: t, data: await resp.json() };
+            })
+          );
+          for (const r of results) {
+            if (r.status === "fulfilled" && r.value?.data) {
+              totalCount += r.value.data.hits?.total?.value || 0;
+              for (const hit of (r.value.data.hits?.hits || [])) {
+                const s = hit._source;
+                allProcs.push({
+                  numero: s.numeroProcesso,
+                  classe: s.classe?.nome || s.classeProcessual,
+                  tribunal: s.tribunal || r.value!.tribunal.toUpperCase(),
+                  orgaoJulgador: s.orgaoJulgador?.nome || "",
+                  movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({ nome: m.nome, data: m.dataHora })),
+                });
+              }
+            }
+          }
+        }
+        
+        result = { sistema: sistemaName, processos: allProcs, total: totalCount };
         break;
       }
 

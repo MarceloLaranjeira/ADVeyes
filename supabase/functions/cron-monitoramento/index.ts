@@ -27,19 +27,19 @@ serve(async (req) => {
       });
     }
 
-    const tribunalEndpoints: Record<string, string> = {
-      tjam: "https://api-publica.datajud.cnj.jus.br/api_publica_tjam/_search",
-      stj: "https://api-publica.datajud.cnj.jus.br/api_publica_stj/_search",
-      stf: "https://api-publica.datajud.cnj.jus.br/api_publica_stf/_search",
-      trf1: "https://api-publica.datajud.cnj.jus.br/api_publica_trf1/_search",
-      tst: "https://api-publica.datajud.cnj.jus.br/api_publica_tst/_search",
+    // Build endpoint dynamically for any tribunal
+    const getEndpoint = (t: string) => {
+      const key = t.toLowerCase();
+      // SEEU/Projudi don't have dedicated endpoints - fall back to tjam
+      if (key === "seeu" || key === "projudi") return "https://api-publica.datajud.cnj.jus.br/api_publica_tjam/_search";
+      return `https://api-publica.datajud.cnj.jus.br/api_publica_${key}/_search`;
     };
 
     let totalUpdates = 0;
 
     for (const mon of monitored) {
       try {
-        const endpoint = tribunalEndpoints[mon.tribunal] || tribunalEndpoints.tjam;
+        const endpoint = getEndpoint(mon.tribunal);
         const resp = await fetch(endpoint, {
           method: "POST",
           headers: {
