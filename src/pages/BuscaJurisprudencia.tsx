@@ -350,7 +350,7 @@ const BuscaJurisprudencia = () => {
     <AppLayout>
       <div className="animate-fade-in">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold font-serif">Busca Processual</h1>
+          <h1 className="text-4xl font-bold font-serif tracking-tight">Busca Processual</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Consulte processos via <span className="font-semibold text-foreground">DataJud / CNJ</span> — todos os tribunais, SEEU e Projudi
           </p>

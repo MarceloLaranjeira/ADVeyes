@@ -108,7 +108,7 @@ const Tarefas = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Tarefas</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Tarefas</h1>
             <p className="text-muted-foreground text-sm mt-1">Gestão de tarefas e atividades do escritório</p>
           </div>
           <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">

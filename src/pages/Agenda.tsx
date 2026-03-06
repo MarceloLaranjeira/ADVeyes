@@ -109,7 +109,7 @@ const Agenda = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Agenda</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Agenda</h1>
             <p className="text-muted-foreground text-sm mt-1">Compromissos e prazos do escritório</p>
           </div>
           <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">

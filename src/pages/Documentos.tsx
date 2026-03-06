@@ -120,7 +120,7 @@ const Documentos = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Documentos</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Documentos</h1>
             <p className="text-muted-foreground text-sm mt-1">Gestão de documentos e peças processuais</p>
           </div>
           <Button onClick={() => setShowForm(true)} className="gap-2">
