@@ -116,7 +116,7 @@ serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+        "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
       },
       body: JSON.stringify(body),
     });
