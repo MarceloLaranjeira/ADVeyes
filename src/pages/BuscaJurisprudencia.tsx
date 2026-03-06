@@ -196,7 +196,7 @@ const BuscaJurisprudencia = () => {
 
       try {
         const { data, error } = await supabase.functions.invoke("busca-processual", {
-          body: { numero: numero.trim(), tribunal: t },
+          body: { numero: numero.trim(), tribunal: t, filtros: buildFiltros() },
         });
         clearInterval(interval);
         setSearchProgress({ active: false, current: totalTribunais, total: totalTribunais, label });
