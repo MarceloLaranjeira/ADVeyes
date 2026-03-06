@@ -17,26 +17,23 @@ const PortalLogin = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("portal_acessos")
-      .select("id, cliente_id, ativo")
-      .eq("token", token.trim())
-      .eq("ativo", true)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase.functions.invoke("portal-data", {
+        body: { token: token.trim(), action: "validate" },
+      });
 
-    if (error || !data) {
-      toast({ title: "Token inválido", description: "Verifique o token de acesso fornecido pelo seu advogado.", variant: "destructive" });
-      setLoading(false);
-      return;
+      if (error || !data?.valid) {
+        toast({ title: "Token inválido", description: "Verifique o token de acesso fornecido pelo seu advogado.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
+      sessionStorage.setItem("portal_token", token.trim());
+      sessionStorage.setItem("portal_cliente_id", data.cliente_id);
+      navigate("/portal/dashboard");
+    } catch {
+      toast({ title: "Erro", description: "Não foi possível validar o token. Tente novamente.", variant: "destructive" });
     }
-
-    // Update last access
-    await supabase.from("portal_acessos").update({ ultimo_acesso: new Date().toISOString() }).eq("id", data.id);
-
-    // Store token in sessionStorage
-    sessionStorage.setItem("portal_token", token.trim());
-    sessionStorage.setItem("portal_cliente_id", data.cliente_id);
-    navigate("/portal/dashboard");
     setLoading(false);
   };
 
