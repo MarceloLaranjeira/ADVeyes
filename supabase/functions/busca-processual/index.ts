@@ -116,7 +116,7 @@ serve(async (req) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "APIKey cDZHYzlZa0JadVREZDR4cUY0c0VRQkF3SUlJa2RaS3I=",
+        "Authorization": "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
       },
       body: JSON.stringify(body),
     });
