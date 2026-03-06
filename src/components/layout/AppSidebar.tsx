@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Scale, Users, CalendarDays, FileText,
   Search, Gavel, BookOpen, DollarSign, LogOut, Bell, ListTodo,
-  Bot, BarChart3, UserCircle, Settings, ChevronDown, Zap, Shield,
+  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
@@ -76,22 +76,19 @@ export const AppSidebar = () => {
         </div>
       </div>
 
-      {/* JARVIS AI Button — Destaque */}
+      {/* Horus AI Button */}
       <div className="px-3 pt-3">
         <Link
           to="/ia-juridica"
-          className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 group ${
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             location.pathname === "/ia-juridica"
-              ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg shadow-sidebar-primary/20"
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
               : "bg-sidebar-primary/10 text-sidebar-primary hover:bg-sidebar-primary/20 border border-sidebar-primary/20"
           }`}
         >
-          <div className="relative">
-            <Bot className="w-4 h-4 shrink-0" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-400 border border-sidebar-background" />
-          </div>
-          <span className="flex-1">JARVIS — IA</span>
-          <Zap className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+          <Bot className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Horus — IA</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
         </Link>
       </div>
 
@@ -158,7 +155,7 @@ export const AppSidebar = () => {
         </button>
         <div className="mt-3 px-3">
           <p className="text-[9px] text-sidebar-foreground/25 uppercase tracking-wider">
-            Sistema Jurídico v3.0 · JARVIS
+            Sistema Jurídico v3.0 · Horus IA
           </p>
         </div>
       </div>
