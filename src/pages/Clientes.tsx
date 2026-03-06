@@ -45,7 +45,7 @@ const Clientes = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Clientes</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Clientes</h1>
             <p className="text-muted-foreground text-sm mt-1">Cadastro e gestão de clientes</p>
           </div>
           <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
