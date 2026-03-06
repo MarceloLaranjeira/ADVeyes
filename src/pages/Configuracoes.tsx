@@ -15,12 +15,52 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 const tribunaisDisponiveis = [
-  { id: "tjam", nome: "TJAM - Tribunal de Justiça do Amazonas" },
-  { id: "trf1", nome: "TRF1 - Tribunal Regional Federal da 1ª Região" },
-  { id: "stj", nome: "STJ - Superior Tribunal de Justiça" },
+  // Superiores
   { id: "stf", nome: "STF - Supremo Tribunal Federal" },
+  { id: "stj", nome: "STJ - Superior Tribunal de Justiça" },
   { id: "tst", nome: "TST - Tribunal Superior do Trabalho" },
-  { id: "trt11", nome: "TRT11 - Tribunal Regional do Trabalho da 11ª Região" },
+  { id: "stm", nome: "STM - Superior Tribunal Militar" },
+  { id: "tse", nome: "TSE - Tribunal Superior Eleitoral" },
+  // TRFs
+  { id: "trf1", nome: "TRF1 - Tribunal Regional Federal da 1ª Região" },
+  { id: "trf2", nome: "TRF2 - Tribunal Regional Federal da 2ª Região" },
+  { id: "trf3", nome: "TRF3 - Tribunal Regional Federal da 3ª Região" },
+  { id: "trf4", nome: "TRF4 - Tribunal Regional Federal da 4ª Região" },
+  { id: "trf5", nome: "TRF5 - Tribunal Regional Federal da 5ª Região" },
+  { id: "trf6", nome: "TRF6 - Tribunal Regional Federal da 6ª Região" },
+  // Estaduais
+  { id: "tjac", nome: "TJAC - Tribunal de Justiça do Acre" },
+  { id: "tjal", nome: "TJAL - Tribunal de Justiça de Alagoas" },
+  { id: "tjam", nome: "TJAM - Tribunal de Justiça do Amazonas" },
+  { id: "tjap", nome: "TJAP - Tribunal de Justiça do Amapá" },
+  { id: "tjba", nome: "TJBA - Tribunal de Justiça da Bahia" },
+  { id: "tjce", nome: "TJCE - Tribunal de Justiça do Ceará" },
+  { id: "tjdft", nome: "TJDFT - Tribunal de Justiça do DF e Territórios" },
+  { id: "tjes", nome: "TJES - Tribunal de Justiça do Espírito Santo" },
+  { id: "tjgo", nome: "TJGO - Tribunal de Justiça de Goiás" },
+  { id: "tjma", nome: "TJMA - Tribunal de Justiça do Maranhão" },
+  { id: "tjmg", nome: "TJMG - Tribunal de Justiça de Minas Gerais" },
+  { id: "tjms", nome: "TJMS - Tribunal de Justiça de Mato Grosso do Sul" },
+  { id: "tjmt", nome: "TJMT - Tribunal de Justiça de Mato Grosso" },
+  { id: "tjpa", nome: "TJPA - Tribunal de Justiça do Pará" },
+  { id: "tjpb", nome: "TJPB - Tribunal de Justiça da Paraíba" },
+  { id: "tjpe", nome: "TJPE - Tribunal de Justiça de Pernambuco" },
+  { id: "tjpi", nome: "TJPI - Tribunal de Justiça do Piauí" },
+  { id: "tjpr", nome: "TJPR - Tribunal de Justiça do Paraná" },
+  { id: "tjrj", nome: "TJRJ - Tribunal de Justiça do Rio de Janeiro" },
+  { id: "tjrn", nome: "TJRN - Tribunal de Justiça do Rio Grande do Norte" },
+  { id: "tjro", nome: "TJRO - Tribunal de Justiça de Rondônia" },
+  { id: "tjrr", nome: "TJRR - Tribunal de Justiça de Roraima" },
+  { id: "tjrs", nome: "TJRS - Tribunal de Justiça do Rio Grande do Sul" },
+  { id: "tjsc", nome: "TJSC - Tribunal de Justiça de Santa Catarina" },
+  { id: "tjse", nome: "TJSE - Tribunal de Justiça de Sergipe" },
+  { id: "tjsp", nome: "TJSP - Tribunal de Justiça de São Paulo" },
+  { id: "tjto", nome: "TJTO - Tribunal de Justiça do Tocantins" },
+  // TRTs
+  ...Array.from({ length: 24 }, (_, i) => ({ id: `trt${i + 1}`, nome: `TRT${i + 1} - Tribunal Regional do Trabalho da ${i + 1}ª Região` })),
+  // Sistemas especiais
+  { id: "seeu", nome: "SEEU - Sistema Eletrônico de Execução Unificado" },
+  { id: "projudi", nome: "Projudi - Processo Judicial Digital" },
 ];
 
 const emptyForm = { tribunal: "", token_acesso: "", numero_oab: "", seccional_oab: "", cpf: "" };
@@ -122,7 +162,7 @@ const Configuracoes = () => {
                 <Button size="sm" onClick={openNewCred} className="gap-1"><Plus className="w-3.5 h-3.5" /> Adicionar</Button>
               </div>
               <p className="text-xs text-muted-foreground mb-4">
-                Configure seus tokens de acesso e dados da OAB para integração com os sistemas dos tribunais (PJe, MNI, APIs públicas).
+                Configure seus tokens de acesso e dados da OAB para integração com todos os tribunais, PJe, SEEU e Projudi.
               </p>
 
               {credenciais.length === 0 ? (
@@ -182,12 +222,14 @@ const Configuracoes = () => {
               <div className="flex flex-wrap gap-2">
                 <span className="text-xs bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] px-2.5 py-1 rounded-full font-medium">✓ API DataJud (CNJ)</span>
                 <span className="text-xs bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] px-2.5 py-1 rounded-full font-medium">✓ Lovable AI</span>
+                <span className="text-xs bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] px-2.5 py-1 rounded-full font-medium">✓ SEEU</span>
+                <span className="text-xs bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] px-2.5 py-1 rounded-full font-medium">✓ Projudi</span>
                 <span className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">PJe / MNI</span>
                 <span className="text-xs bg-muted px-2.5 py-1 rounded-full font-medium">Google Calendar</span>
                 <span className="text-xs bg-muted px-2.5 py-1 rounded-full font-medium">WhatsApp</span>
               </div>
               <p className="mt-3 text-xs text-muted-foreground italic">
-                As integrações PJe/MNI requerem credenciais válidas configuradas acima. O peticionamento eletrônico via PJe requer certificado digital A1/A3.
+                As integrações PJe/MNI requerem credenciais válidas. O peticionamento eletrônico via PJe requer certificado digital A1/A3. O SEEU e Projudi são acessados via API DataJud.
               </p>
             </CardContent>
           </Card>
@@ -199,10 +241,12 @@ const Configuracoes = () => {
             <DialogHeader><DialogTitle>{editCred ? "Editar Credencial" : "Nova Credencial de Tribunal"}</DialogTitle></DialogHeader>
             <form onSubmit={handleCredSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label>Tribunal *</Label>
+                <Label>Tribunal / Sistema *</Label>
                 <Select value={credForm.tribunal} onValueChange={(v) => setCredForm({ ...credForm, tribunal: v })} disabled={!!editCred}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tribunal" /></SelectTrigger>
-                  <SelectContent>{tribunaisDisponiveis.map(t => <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>)}</SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Selecione o tribunal ou sistema" /></SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {tribunaisDisponiveis.map(t => <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -213,7 +257,7 @@ const Configuracoes = () => {
               <div className="space-y-2">
                 <Label>Token de Acesso / API Key</Label>
                 <Input type="password" value={credForm.token_acesso} onChange={(e) => setCredForm({ ...credForm, token_acesso: e.target.value })} placeholder="Cole aqui o token do tribunal" />
-                <p className="text-xs text-muted-foreground">Token JWT ou API Key fornecido pelo sistema do tribunal.</p>
+                <p className="text-xs text-muted-foreground">Token JWT ou API Key fornecido pelo sistema do tribunal, SEEU ou Projudi.</p>
               </div>
               <div className="flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setShowCredForm(false)}>Cancelar</Button>
