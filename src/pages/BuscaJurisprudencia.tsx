@@ -2,13 +2,18 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Search, ExternalLink, Loader2, FileText, Calendar, Bell,
-  Send, Shield, Zap, AlertCircle, ChevronDown, Globe,
+  Send, Shield, Zap, AlertCircle, ChevronDown, Globe, Filter, X,
 } from "lucide-react";
+import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
