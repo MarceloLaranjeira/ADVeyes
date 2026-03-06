@@ -58,8 +58,11 @@ serve(async (req) => {
       });
     }
 
-    const key = (tribunal || "tjam").toLowerCase();
+    let key = (tribunal || "tjam").toLowerCase();
     const cleanNum = numero.trim().replace(/[.\-\/]/g, "");
+
+    // PROJUDI TJAM maps directly to tjam (single tribunal, no multi-search)
+    if (key === "projudi-tjam") key = "tjam";
 
     const isMultiSearch = key === "seeu" || key === "projudi";
     const tribunaisToSearch = isMultiSearch

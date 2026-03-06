@@ -104,6 +104,17 @@ const tribunalGroups = [
 
 const sistemasEspeciais = [
   {
+    id: "projudi-tjam",
+    nome: "PROJUDI TJAM",
+    fullName: "Projudi — Tribunal de Justiça do Amazonas",
+    desc: "Consulta direta no TJAM via DataJud/CNJ",
+    color: "text-emerald-400",
+    borderColor: "border-emerald-500/30",
+    bgColor: "bg-emerald-500/8",
+    badgeClass: "tribunal-badge-projudi",
+    icon: Zap,
+  },
+  {
     id: "seeu",
     nome: "SEEU",
     fullName: "Sistema Eletrônico de Execução Unificado",
@@ -128,9 +139,9 @@ const sistemasEspeciais = [
 ];
 
 const quickFilters = [
-  { id: "tjam", nome: "TJAM" }, { id: "stj", nome: "STJ" }, { id: "stf", nome: "STF" },
-  { id: "trf1", nome: "TRF1" }, { id: "tst", nome: "TST" }, { id: "tjsp", nome: "TJSP" },
-  { id: "tjrj", nome: "TJRJ" }, { id: "tjmg", nome: "TJMG" },
+  { id: "projudi-tjam", nome: "PROJUDI TJAM" }, { id: "tjam", nome: "TJAM" }, { id: "stj", nome: "STJ" },
+  { id: "stf", nome: "STF" }, { id: "trf1", nome: "TRF1" }, { id: "tst", nome: "TST" },
+  { id: "tjsp", nome: "TJSP" }, { id: "tjrj", nome: "TJRJ" }, { id: "tjmg", nome: "TJMG" },
 ];
 
 const BuscaJurisprudencia = () => {
