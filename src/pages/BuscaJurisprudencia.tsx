@@ -143,9 +143,35 @@ const BuscaJurisprudencia = () => {
   const [total, setTotal] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("geral");
   const [searchProgress, setSearchProgress] = useState({ active: false, current: 0, total: 0, label: "" });
+  const [showFilters, setShowFilters] = useState(false);
+  const [filtroClasse, setFiltroClasse] = useState("");
+  const [filtroAssunto, setFiltroAssunto] = useState("");
+  const [filtroOrgao, setFiltroOrgao] = useState("");
+  const [filtroDataInicio, setFiltroDataInicio] = useState<Date>();
+  const [filtroDataFim, setFiltroDataFim] = useState<Date>();
 
   const SEEU_COUNT = 38;
   const PROJUDI_COUNT = 27;
+
+  const hasActiveFilters = filtroClasse || filtroAssunto || filtroOrgao || filtroDataInicio || filtroDataFim;
+
+  const clearFilters = () => {
+    setFiltroClasse("");
+    setFiltroAssunto("");
+    setFiltroOrgao("");
+    setFiltroDataInicio(undefined);
+    setFiltroDataFim(undefined);
+  };
+
+  const buildFiltros = () => {
+    const f: any = {};
+    if (filtroClasse.trim()) f.classe = filtroClasse.trim();
+    if (filtroAssunto.trim()) f.assunto = filtroAssunto.trim();
+    if (filtroOrgao.trim()) f.orgaoJulgador = filtroOrgao.trim();
+    if (filtroDataInicio) f.dataInicio = format(filtroDataInicio, "yyyyMMdd");
+    if (filtroDataFim) f.dataFim = format(filtroDataFim, "yyyyMMdd");
+    return Object.keys(f).length > 0 ? f : undefined;
+  };
 
   const buscar = async (tribunalOverride?: string) => {
     const t = tribunalOverride || tribunal;
