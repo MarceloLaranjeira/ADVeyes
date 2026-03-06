@@ -209,10 +209,13 @@ function parseProcesso(s: any, tribunalKey: string, sistema: string) {
     ultimaAtualizacao: s.dataHoraUltimaAtualizacao,
     formato: s.formato?.nome || "",
     nivelSigilo: s.nivelSigilo,
-    movimentos: (s.movimentos || []).slice(0, 20).map((m: any) => ({
-      nome: m.nome,
-      data: m.dataHora,
-      complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
-    })),
+    movimentos: (s.movimentos || [])
+      .sort((a: any, b: any) => new Date(b.dataHora || 0).getTime() - new Date(a.dataHora || 0).getTime())
+      .slice(0, 20)
+      .map((m: any) => ({
+        nome: m.nome,
+        data: m.dataHora,
+        complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
+      })),
   };
 }
