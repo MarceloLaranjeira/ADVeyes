@@ -3,7 +3,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart3, Scale, Users, DollarSign, TrendingUp, FileText } from "lucide-react";
+import { BarChart3, Scale, Users, DollarSign, TrendingUp, FileText, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { exportRelatorioGeralPDF } from "@/lib/pdf-export";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--info))", "hsl(var(--accent))"];
@@ -47,9 +49,14 @@ const Relatorios = () => {
   return (
     <AppLayout>
       <div className="animate-fade-in">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold font-serif">Relatórios & Indicadores</h1>
-          <p className="text-muted-foreground text-sm mt-1">Visão analítica do desempenho do escritório</p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold font-serif">Relatórios & Indicadores</h1>
+            <p className="text-muted-foreground text-sm mt-1">Visão analítica do desempenho do escritório</p>
+          </div>
+          <Button variant="outline" onClick={() => exportRelatorioGeralPDF({ processos, clientes, financeiro, documentos })} className="gap-2">
+            <Download className="w-4 h-4" /> Exportar PDF
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">

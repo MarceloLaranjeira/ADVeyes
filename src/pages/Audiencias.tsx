@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Gavel, MapPin, Clock, User, Plus, Pencil, Trash2 } from "lucide-react";
+import { Gavel, MapPin, Clock, User, Plus, Pencil, Trash2, Download } from "lucide-react";
+import { exportAudienciasPDF } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,7 +111,10 @@ const Audiencias = () => {
             <h1 className="text-3xl font-bold font-serif">Audiências</h1>
             <p className="text-muted-foreground text-sm mt-1">Controle de audiências e sessões de julgamento</p>
           </div>
-          <Button onClick={openNew} className="gap-2"><Plus className="w-4 h-4" /> Nova Audiência</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => exportAudienciasPDF(audiencias)} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
+            <Button onClick={openNew} className="gap-2"><Plus className="w-4 h-4" /> Nova Audiência</Button>
+          </div>
         </div>
 
         <div className="space-y-4">
