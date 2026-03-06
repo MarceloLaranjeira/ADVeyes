@@ -23,41 +23,26 @@ const PortalDashboard = () => {
   }, []);
 
   const fetchData = async (token: string) => {
-    // Re-validate token server-side on every load
-    const { data: access, error: accessError } = await supabase
-      .from("portal_acessos")
-      .select("cliente_id")
-      .eq("token", token)
-      .eq("ativo", true)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase.functions.invoke("portal-data", {
+        body: { token, action: "dashboard" },
+      });
 
-    if (accessError || !access) {
+      if (error || !data?.cliente) {
+        sessionStorage.removeItem("portal_token");
+        sessionStorage.removeItem("portal_cliente_id");
+        navigate("/portal");
+        return;
+      }
+
+      setCliente(data.cliente);
+      setProcessos(data.processos || []);
+      setAudiencias(data.audiencias || []);
+      setDocumentos(data.documentos || []);
+    } catch {
       sessionStorage.removeItem("portal_token");
       sessionStorage.removeItem("portal_cliente_id");
       navigate("/portal");
-      return;
-    }
-
-    const clienteId = access.cliente_id;
-    sessionStorage.setItem("portal_cliente_id", clienteId);
-
-    const [cliRes, procRes] = await Promise.all([
-      supabase.from("clientes").select("*").eq("id", clienteId).single(),
-      supabase.from("processos").select("*").eq("cliente_id", clienteId).order("updated_at", { ascending: false }),
-    ]);
-
-    setCliente(cliRes.data);
-    const procs = procRes.data || [];
-    setProcessos(procs);
-
-    if (procs.length > 0) {
-      const procIds = procs.map((p: any) => p.id);
-      const [audRes, docRes] = await Promise.all([
-        supabase.from("audiencias").select("*").in("processo_id", procIds).order("data_hora", { ascending: false }).limit(10),
-        supabase.from("documentos").select("*").in("processo_id", procIds).order("created_at", { ascending: false }).limit(20),
-      ]);
-      setAudiencias(audRes.data || []);
-      setDocumentos(docRes.data || []);
     }
     setLoading(false);
   };
@@ -84,7 +69,6 @@ const PortalDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
