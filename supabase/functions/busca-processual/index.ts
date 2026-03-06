@@ -75,10 +75,6 @@ const DATAJUD_ENDPOINTS: Record<string, string> = {
   stm: "https://api-publica.datajud.cnj.jus.br/api_publica_stm/_search",
   // Justiça Eleitoral
   tse: "https://api-publica.datajud.cnj.jus.br/api_publica_tse/_search",
-  // SEEU (Sistema Eletrônico de Execução Unificado) - via DataJud
-  seeu: "https://api-publica.datajud.cnj.jus.br/api_publica_seeu/_search",
-  // Projudi - via DataJud
-  projudi: "https://api-publica.datajud.cnj.jus.br/api_publica_projudi/_search",
 };
 
 serve(async (req) => {
@@ -95,70 +91,119 @@ serve(async (req) => {
 
     // Support "sistema" param for SEEU/Projudi alongside tribunal
     const key = (sistema || tribunal || "tjam").toLowerCase();
-    const endpoint = DATAJUD_ENDPOINTS[key];
+    const cleanNum = numero.replace(/[.\-\/]/g, "");
 
-    if (!endpoint) {
-      return new Response(JSON.stringify({ error: `Tribunal/sistema "${key}" não encontrado.`, processos: [], total: 0 }), {
+    // SEEU and Projudi don't have dedicated DataJud endpoints.
+    // Their data is indexed under the respective tribunal endpoints.
+    // When user selects SEEU/Projudi, search across multiple relevant tribunals.
+    const SEEU_TRIBUNAIS = ["tjam", "tjba", "tjsp", "tjrj", "tjmg", "tjpr", "tjrs", "tjsc", "tjpe", "tjce", "tjpa", "tjgo", "tjdft"];
+    const PROJUDI_TRIBUNAIS = ["tjam", "tjpr", "tjgo", "tjrn", "tjmt", "tjal", "tjba", "tjms", "tjpi", "tjse", "tjto", "tjac", "tjap", "tjrr", "tjro"];
+
+    const isMultiSearch = key === "seeu" || key === "projudi";
+    const tribunaisToSearch = isMultiSearch
+      ? (key === "seeu" ? SEEU_TRIBUNAIS : PROJUDI_TRIBUNAIS)
+      : [key];
+
+    const endpoint = !isMultiSearch ? DATAJUD_ENDPOINTS[key] : null;
+
+    if (!isMultiSearch && !endpoint) {
+      return new Response(JSON.stringify({ error: `Tribunal "${key}" não encontrado.`, processos: [], total: 0 }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const body = {
-      query: {
-        match: {
-          numeroProcesso: numero.replace(/[.\-\/]/g, ""),
-        },
-      },
+    const apiKey = Deno.env.get("DATAJUD_API_KEY");
+    const searchBody = JSON.stringify({
+      query: { match: { numeroProcesso: cleanNum } },
       size: 10,
-    };
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
-      },
-      body: JSON.stringify(body),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("DataJud error:", response.status, errorText);
-      const userMsg = response.status === 401 
-        ? `O endpoint "${key.toUpperCase()}" não está disponível na API pública do DataJud ou a chave de acesso expirou. Tente outro tribunal.`
-        : `Erro ao consultar DataJud (${response.status})`;
-      return new Response(JSON.stringify({ 
-        error: userMsg,
-        processos: [],
-        total: 0,
-      }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let allProcessos: any[] = [];
+    let totalHits = 0;
+
+    if (isMultiSearch) {
+      // Search across multiple tribunals in parallel (batches of 5)
+      for (let i = 0; i < tribunaisToSearch.length; i += 5) {
+        const batch = tribunaisToSearch.slice(i, i + 5);
+        const results = await Promise.allSettled(
+          batch.map(async (t) => {
+            const ep = DATAJUD_ENDPOINTS[t];
+            if (!ep) return null;
+            const resp = await fetch(ep, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `APIKey ${apiKey}` },
+              body: searchBody,
+            });
+            if (!resp.ok) return null;
+            return { tribunal: t, data: await resp.json() };
+          })
+        );
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value?.data) {
+            const hits = r.value.data.hits?.hits || [];
+            totalHits += r.value.data.hits?.total?.value || 0;
+            for (const hit of hits) {
+              const s = hit._source;
+              allProcessos.push({
+                numero: s.numeroProcesso,
+                classe: s.classe?.nome || s.classeProcessual,
+                assunto: s.assuntos?.map((a: any) => a.nome).join(", ") || "",
+                tribunal: s.tribunal || r.value!.tribunal.toUpperCase(),
+                sistema: key,
+                grau: s.grau,
+                orgaoJulgador: s.orgaoJulgador?.nome || "",
+                dataAjuizamento: s.dataAjuizamento,
+                ultimaAtualizacao: s.dataHoraUltimaAtualizacao,
+                movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({
+                  nome: m.nome, data: m.dataHora,
+                  complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
+                })),
+              });
+            }
+          }
+        }
+      }
+    } else {
+      const response = await fetch(endpoint!, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `APIKey ${apiKey}` },
+        body: searchBody,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("DataJud error:", response.status, errorText);
+        const userMsg = response.status === 401
+          ? `Erro de autenticação com o DataJud. Verifique se a chave de acesso está válida.`
+          : `Erro ao consultar DataJud (${response.status})`;
+        return new Response(JSON.stringify({ error: userMsg, processos: [], total: 0 }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await response.json();
+      totalHits = data.hits?.total?.value || 0;
+      allProcessos = (data.hits?.hits || []).map((hit: any) => {
+        const s = hit._source;
+        return {
+          numero: s.numeroProcesso,
+          classe: s.classe?.nome || s.classeProcessual,
+          assunto: s.assuntos?.map((a: any) => a.nome).join(", ") || "",
+          tribunal: s.tribunal,
+          sistema: key,
+          grau: s.grau,
+          orgaoJulgador: s.orgaoJulgador?.nome || "",
+          dataAjuizamento: s.dataAjuizamento,
+          ultimaAtualizacao: s.dataHoraUltimaAtualizacao,
+          movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({
+            nome: m.nome, data: m.dataHora,
+            complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
+          })),
+        };
       });
     }
 
-    const data = await response.json();
-    
-    const processos = (data.hits?.hits || []).map((hit: any) => {
-      const s = hit._source;
-      return {
-        numero: s.numeroProcesso,
-        classe: s.classe?.nome || s.classeProcessual,
-        assunto: s.assuntos?.map((a: any) => a.nome).join(", ") || "",
-        tribunal: s.tribunal,
-        sistema: key,
-        grau: s.grau,
-        orgaoJulgador: s.orgaoJulgador?.nome || "",
-        dataAjuizamento: s.dataAjuizamento,
-        ultimaAtualizacao: s.dataHoraUltimaAtualizacao,
-        movimentos: (s.movimentos || []).slice(0, 5).map((m: any) => ({
-          nome: m.nome,
-          data: m.dataHora,
-          complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
-        })),
-      };
-    });
-
-    return new Response(JSON.stringify({ processos, total: data.hits?.total?.value || 0 }), {
+    return new Response(JSON.stringify({ processos: allProcessos, total: totalHits }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
