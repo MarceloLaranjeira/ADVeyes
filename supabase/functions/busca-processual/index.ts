@@ -5,6 +5,61 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// === JusBrasil API ===
+// Docs: https://api.jusbrasil.com.br/docs/autenticacao/api_key.html
+// Chave configurada em JUSBRASIL_API_KEY nas secrets da Edge Function
+const JUSBRASIL_BASE = "https://api.jusbrasil.com.br";
+
+async function queryJusBrasil(numero: string): Promise<{ processos?: any[]; error?: string }> {
+  const apiKey = Deno.env.get("JUSBRASIL_API_KEY");
+  if (!apiKey) return { error: "JUSBRASIL_API_KEY não configurada" };
+
+  // Tenta o número como digitado e também formatado
+  const formatted = normalizeCNJ(numero);
+  const query = encodeURIComponent(formatted || numero.trim());
+
+  try {
+    const resp = await fetch(`${JUSBRASIL_BASE}/processos/v1/search?q=${query}&size=10`, {
+      headers: {
+        "Authorization": `ApiKey ${apiKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      return { error: `JusBrasil API: ${resp.status} - ${errText.slice(0, 200)}` };
+    }
+
+    const data = await resp.json();
+    // Normaliza resposta JusBrasil → formato interno
+    const hits = data?.data || data?.processos || data?.hits?.hits || [];
+    const processos = hits.map((p: any) => ({
+      numero: p.numero || p.numeroProcesso || p.number || numero,
+      classe: p.classe || p.classeProcessual || p.type || "Não informado",
+      assunto: Array.isArray(p.assuntos) ? p.assuntos.map((a: any) => a.nome || a).join(", ") : (p.assunto || p.subject || ""),
+      tribunal: p.tribunal || p.court || p.orgao || "",
+      sistema: "jusbrasil",
+      grau: p.grau || p.degree || "",
+      orgaoJulgador: p.orgaoJulgador?.nome || p.orgao || p.court || "",
+      dataAjuizamento: p.dataAjuizamento || p.dataDistribuicao || p.filed_at || null,
+      ultimaAtualizacao: p.dataHoraUltimaAtualizacao || p.updated_at || null,
+      partes: p.partes || p.parties || [],
+      movimentos: (p.movimentos || p.moves || p.movements || []).map((m: any) => ({
+        nome: m.nome || m.name || m.tipo || m.type || "",
+        data: m.dataHora || m.data || m.date || "",
+        complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || m.descricao || m.description || "",
+      })),
+      fonte: "JusBrasil",
+    }));
+
+    return { processos };
+  } catch (err) {
+    return { error: `JusBrasil fetch error: ${err}` };
+  }
+}
+
 // === DataJud CNJ endpoints (APENAS os que realmente existem) ===
 const DATAJUD_ENDPOINTS: Record<string, string> = {
   // Justiça Estadual
@@ -320,10 +375,29 @@ serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // === Tenta JusBrasil primeiro (se API key configurada) ===
+    const jbResult = await queryJusBrasil(numero);
+    if (jbResult.processos && jbResult.processos.length > 0) {
+      const finalResult: any = {
+        processos: jbResult.processos,
+        total: jbResult.processos.length,
+        fonte: "JusBrasil",
+      };
+      if (autoDetected && autoDetected !== inputKey) {
+        finalResult.tribunal_detectado = autoDetected;
+      }
+      return new Response(JSON.stringify(finalResult), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // === Fallback: DataJud ===
     const { data, error: djError, status: djStatus } = await queryDataJud(endpoint, numero);
 
     if (djError) {
       console.error("DataJud error:", djStatus, djError);
+      // Se JusBrasil também falhou com erro (não apenas sem resultados), reportar
+      const jbErr = jbResult.error && !jbResult.error.includes("não configurada") ? ` | JusBrasil: ${jbResult.error.slice(0, 100)}` : "";
       return new Response(JSON.stringify({
         error: djStatus === 401
           ? `Chave de acesso DataJud inválida ou expirada para ${resolvedKey.toUpperCase()}.`
@@ -333,7 +407,7 @@ serve(async (req) => {
           ? `Limite de requisições DataJud excedido. Tente em instantes.`
           : djStatus === 404
           ? `Endpoint ${resolvedKey.toUpperCase()} não disponível no DataJud no momento.`
-          : `Erro ao consultar DataJud (${djStatus}): ${djError.slice(0, 200)}`,
+          : `Erro ao consultar DataJud (${djStatus})${jbErr}`,
         processos: [],
         total: 0,
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -341,7 +415,11 @@ serve(async (req) => {
 
     const processos = mapHits(data.hits?.hits, resolvedKey);
 
-    const finalResult: any = { processos, total: data.hits?.total?.value || 0 };
+    const finalResult: any = {
+      processos,
+      total: data.hits?.total?.value || 0,
+      fonte: "DataJud/CNJ",
+    };
     if (autoDetected && autoDetected !== inputKey) {
       finalResult.tribunal_detectado = autoDetected;
       finalResult.info = `Número CNJ detectado: consulta realizada no ${autoDetected.toUpperCase()}`;
