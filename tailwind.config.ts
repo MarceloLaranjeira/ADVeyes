@@ -12,7 +12,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['Merriweather', 'Georgia', 'serif'],
+        serif: ['"Palatino Linotype"', 'Palatino', '"Book Antiqua"', 'Georgia', 'serif'],
         sans: ['Source Sans 3', 'system-ui', 'sans-serif'],
         rajdhani: ['Rajdhani', 'sans-serif'],
       },
