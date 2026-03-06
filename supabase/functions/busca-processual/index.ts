@@ -50,7 +50,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { numero, tribunal } = await req.json();
+    const { numero, tribunal, filtros } = await req.json();
 
     if (!numero || !numero.trim()) {
       return new Response(JSON.stringify({ error: "Número do processo é obrigatório", processos: [], total: 0 }), {
@@ -80,9 +80,9 @@ serve(async (req) => {
       });
     }
 
-    // Broader Elasticsearch query: try exact match first, then wildcard
-    const searchBody = JSON.stringify({
-      query: {
+    // Build Elasticsearch query with optional filters
+    const mustClauses: any[] = [
+      {
         bool: {
           should: [
             { match: { numeroProcesso: cleanNum } },
@@ -92,6 +92,27 @@ serve(async (req) => {
           minimum_should_match: 1,
         },
       },
+    ];
+
+    // Advanced filters
+    if (filtros?.classe) {
+      mustClauses.push({ match_phrase: { "classe.nome": filtros.classe } });
+    }
+    if (filtros?.assunto) {
+      mustClauses.push({ match: { "assuntos.nome": filtros.assunto } });
+    }
+    if (filtros?.orgaoJulgador) {
+      mustClauses.push({ match: { "orgaoJulgador.nome": filtros.orgaoJulgador } });
+    }
+    if (filtros?.dataInicio || filtros?.dataFim) {
+      const range: any = {};
+      if (filtros.dataInicio) range.gte = filtros.dataInicio;
+      if (filtros.dataFim) range.lte = filtros.dataFim;
+      mustClauses.push({ range: { dataAjuizamento: range } });
+    }
+
+    const searchBody = JSON.stringify({
+      query: { bool: { must: mustClauses } },
       size: 20,
       sort: [{ dataHoraUltimaAtualizacao: { order: "desc" } }],
     });
