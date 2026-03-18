@@ -76,12 +76,9 @@ serve(async (req) => {
       });
     }
 
-    const apiKey = Deno.env.get("DATAJUD_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Chave de API do DataJud não configurada.", processos: [], total: 0 }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Public DataJud/CNJ API key — used as fallback when secret is not configured
+    const DATAJUD_PUBLIC_KEY = "cDZHYzlZa0JadVREZDJCendFbzV3cU1qM2owQUlTSmFRdnBEstF";
+    const apiKey = Deno.env.get("DATAJUD_API_KEY") || DATAJUD_PUBLIC_KEY;
 
     // Build Elasticsearch query with optional filters
     const mustClauses: any[] = [
