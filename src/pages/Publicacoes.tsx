@@ -167,15 +167,14 @@ const Publicacoes = () => {
           description: result.message,
         });
         fetchPublicacoes();
+      } else if (result.message === "sem_processos") {
+        // Sem processos cadastrados → inserir dados de demonstração
+        await inserirDadosDemo();
       } else {
         toast({
           title: "Consulta realizada",
           description: result.message,
         });
-        if (result.processosBuscados === 0) {
-          // fallback: inserir dados demo se não houver processos cadastrados
-          await inserirDadosDemo();
-        }
       }
 
       if (result.erros?.length > 0) {
@@ -189,7 +188,24 @@ const Publicacoes = () => {
   };
 
   const inserirDadosDemo = async () => {
-    const inserts = MOCK_DATA.map((m) => ({
+    // Verificar quais demos já existem
+    const { data: existentes } = await (supabase as any)
+      .from("publicacoes")
+      .select("numero_processo")
+      .eq("user_id", user!.id);
+
+    const existentesSet = new Set((existentes || []).map((e: any) => e.numero_processo));
+    const novos = MOCK_DATA.filter((m) => !existentesSet.has(m.numero_processo));
+
+    if (novos.length === 0) {
+      toast({
+        title: "Publicações já carregadas",
+        description: "Cadastre seus processos no módulo Processos para capturar movimentações reais do DataJud/CNJ.",
+      });
+      return;
+    }
+
+    const inserts = novos.map((m) => ({
       ...m,
       user_id: user!.id,
       tarefa_gerada: m.tarefa_gerada || false,
@@ -197,7 +213,7 @@ const Publicacoes = () => {
     }));
     const { error } = await (supabase as any).from("publicacoes").insert(inserts);
     if (!error) {
-      toast({ title: `${MOCK_DATA.length} publicações de demonstração inseridas`, description: "Cadastre processos reais para capturar dados do DataJud/CNJ." });
+      toast({ title: `${novos.length} publicações de demonstração inseridas`, description: "Cadastre processos reais para capturar dados do DataJud/CNJ." });
       fetchPublicacoes();
     }
   };

@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const DATAJUD_KEY =
+  Deno.env.get("DATAJUD_API_KEY") ||
   "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
 const DATAJUD_ENDPOINTS: Record<string, string> = {
