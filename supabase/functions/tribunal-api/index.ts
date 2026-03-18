@@ -117,7 +117,8 @@ const PROJUDI_PORTALS: Record<string, string> = {
  * Formato: NNNNNNN-DD.AAAA.J.TT.OOOO
  */
 function detectTribunalFromCNJ(numero: string): string | null {
-  const clean = numero.replace(/\s/g, "");
+  const normalized = normalizeCNJ(numero);
+  const clean = (normalized || numero).replace(/\s/g, "");
   const match = clean.match(/\d{7}-\d{2}\.\d{4}\.(\d)\.(\d{2})\.\d{4}/);
   if (!match) return null;
   const j = parseInt(match[1]);
@@ -220,7 +221,7 @@ serve(async (req) => {
     let realKey = tribunalKey;
 
     if (tribunalKey === "seeu" || tribunalKey === "projudi") {
-      const detected = numero_processo ? detectTribunalFromCNJ(numero_processo) : null;
+      const detected = numero_processo ? detectTribunalFromCNJ(normalizeCNJ(numero_processo) || numero_processo) : null;
       if (detected) {
         realKey = detected;
       }

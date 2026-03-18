@@ -163,7 +163,9 @@ const PROJUDI_TRTS: Record<string, string> = {
  * TT = código do tribunal dentro do segmento
  */
 function detectTribunalFromCNJ(numero: string): string | null {
-  const clean = numero.replace(/\s/g, "");
+  // Normaliza para formato com pontuação se receber apenas dígitos
+  const normalized = normalizeCNJ(numero);
+  const clean = (normalized || numero).replace(/\s/g, "");
   const match = clean.match(/\d{7}-\d{2}\.\d{4}\.(\d)\.(\d{2})\.\d{4}/);
   if (!match) return null;
 
@@ -305,7 +307,7 @@ serve(async (req) => {
 
     // === SEEU: não tem endpoint DataJud próprio — detectar pelo número CNJ ===
     if (inputKey === "seeu") {
-      const detected = detectTribunalFromCNJ(numero);
+      const detected = detectTribunalFromCNJ(normalizeCNJ(numero) || numero);
       const endpoint = detected ? DATAJUD_ENDPOINTS[detected] : null;
 
       if (endpoint) {
@@ -334,7 +336,7 @@ serve(async (req) => {
 
     // === PROJUDI: não tem endpoint DataJud próprio — detectar pelo número CNJ ===
     if (inputKey === "projudi") {
-      const detected = detectTribunalFromCNJ(numero);
+      const detected = detectTribunalFromCNJ(normalizeCNJ(numero) || numero);
       const endpoint = detected ? DATAJUD_ENDPOINTS[detected] : null;
 
       if (endpoint) {
@@ -362,7 +364,7 @@ serve(async (req) => {
 
     // === TRIBUNAIS NORMAIS ===
     // Auto-detectar tribunal pelo número CNJ se informado
-    const autoDetected = detectTribunalFromCNJ(numero);
+    const autoDetected = detectTribunalFromCNJ(normalizeCNJ(numero) || numero);
     let resolvedKey = DATAJUD_ENDPOINTS[inputKey] ? inputKey : (autoDetected || inputKey);
 
     const endpoint = DATAJUD_ENDPOINTS[resolvedKey];
