@@ -1,9 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Search, ExternalLink, Loader2, FileText, Calendar, Bell,
-  Send, Shield, Zap, AlertCircle, ChevronDown, Globe, Filter, X,
+  Send, Shield, Zap, AlertCircle, ChevronDown, Globe, Filter, X, Info,
 } from "lucide-react";
+
+// CNJ number format: NNNNNNN-DD.AAAA.J.TT.OOOO
+// Detects the tribunal from the J.TT segment
+const CNJ_TRIBUNAL_MAP: Record<string, string> = {
+  "1.00": "stf",
+  "3.00": "stj",
+  "4.01": "trf1", "4.02": "trf2", "4.03": "trf3",
+  "4.04": "trf4", "4.05": "trf5", "4.06": "trf6",
+  "8.01": "tjac", "8.02": "tjal", "8.03": "tjap", "8.04": "tjam",
+  "8.05": "tjba", "8.06": "tjce", "8.07": "tjdft", "8.08": "tjes",
+  "8.09": "tjgo", "8.10": "tjma", "8.11": "tjmt", "8.12": "tjms",
+  "8.13": "tjmg", "8.14": "tjpa", "8.15": "tjpb", "8.16": "tjpr",
+  "8.17": "tjpe", "8.18": "tjpi", "8.19": "tjrj", "8.20": "tjrn",
+  "8.21": "tjrs", "8.22": "tjro", "8.23": "tjrr", "8.24": "tjsc",
+  "8.25": "tjse", "8.26": "tjsp", "8.27": "tjto",
+  "7.01": "tjmmg", "7.02": "tjmrs", "7.03": "tjmsp",
+};
+
+const detectTribunalFromCNJ = (num: string): string | null => {
+  const match = num.match(/\d{7}-\d{2}\.\d{4}\.(\d)\.(\d{2})\.\d{4}/);
+  if (!match) return null;
+  const j = match[1];
+  const tt = match[2];
+  // TRT: branch 5, code 01-24
+  if (j === "5") {
+    const n = parseInt(tt, 10);
+    if (n >= 1 && n <= 24) return `trt${n}`;
+  }
+  // TST: 5.00
+  if (j === "5" && tt === "00") return "tst";
+  return CNJ_TRIBUNAL_MAP[`${j}.${tt}`] || null;
+};
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -160,6 +192,13 @@ const BuscaJurisprudencia = () => {
   const [filtroOrgao, setFiltroOrgao] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState<Date>();
   const [filtroDataFim, setFiltroDataFim] = useState<Date>();
+  const [detectedTribunal, setDetectedTribunal] = useState<string | null>(null);
+
+  // Auto-detect tribunal from CNJ number as user types
+  useEffect(() => {
+    const detected = detectTribunalFromCNJ(numero);
+    setDetectedTribunal(detected);
+  }, [numero]);
 
   const SEEU_COUNT = 38;
   const PROJUDI_COUNT = 27;
@@ -390,7 +429,16 @@ const BuscaJurisprudencia = () => {
                   className="pl-10 h-11"
                   value={numero}
                   onChange={(e) => setNumero(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && buscar()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (detectedTribunal && detectedTribunal !== tribunal) {
+                        setTribunal(detectedTribunal);
+                        setTimeout(() => buscar(detectedTribunal), 100);
+                      } else {
+                        buscar();
+                      }
+                    }
+                  }}
                 />
               </div>
 
@@ -407,6 +455,28 @@ const BuscaJurisprudencia = () => {
                 <Filter className={cn("w-4 h-4", hasActiveFilters && "text-primary")} />
               </Button>
             </div>
+
+            {/* CNJ auto-detection banner */}
+            {detectedTribunal && detectedTribunal !== tribunal && (
+              <div className="mt-3 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="flex-1 text-amber-800 dark:text-amber-400">
+                  Pelo número CNJ, este processo pertence ao{" "}
+                  <strong>{detectedTribunal.toUpperCase()}</strong>.
+                  Você está buscando em <strong>{tribunal.toUpperCase()}</strong>.
+                </span>
+                <Button
+                  size="sm"
+                  className="h-7 px-3 text-xs shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={() => {
+                    setTribunal(detectedTribunal);
+                    setTimeout(() => buscar(detectedTribunal), 100);
+                  }}
+                >
+                  Buscar no {detectedTribunal.toUpperCase()}
+                </Button>
+              </div>
+            )}
 
             {/* Quick filters */}
             <div className="flex flex-wrap gap-2 mt-3">

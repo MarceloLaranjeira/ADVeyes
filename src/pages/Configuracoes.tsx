@@ -170,6 +170,7 @@ const Configuracoes = () => {
             <TabsTrigger value="geral" className="gap-2"><Palette className="w-3.5 h-3.5" /> Geral</TabsTrigger>
             <TabsTrigger value="voz" className="gap-2"><Volume2 className="w-3.5 h-3.5" /> Voz & IA</TabsTrigger>
             <TabsTrigger value="tribunais" className="gap-2"><Key className="w-3.5 h-3.5" /> Tribunais</TabsTrigger>
+            <TabsTrigger value="integracoes" className="gap-2"><Zap className="w-3.5 h-3.5" /> Integrações</TabsTrigger>
             <TabsTrigger value="notificacoes" className="gap-2"><Bell className="w-3.5 h-3.5" /> Notificações</TabsTrigger>
           </TabsList>
 
@@ -550,6 +551,52 @@ const Configuracoes = () => {
                     </span>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === INTEGRAÇÕES === */}
+          <TabsContent value="integracoes" className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <Zap className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">JusBrasil API</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  A chave da API JusBrasil deve ser configurada como secret na Edge Function do Supabase.
+                  Acesse o painel do Supabase → Edge Functions → Secrets e adicione:
+                </p>
+                <div className="bg-muted rounded-lg p-4 font-mono text-sm space-y-1">
+                  <p className="text-primary font-semibold">JUSBRASIL_API_KEY</p>
+                  <p className="text-muted-foreground text-xs">Obtenha sua chave em api.jusbrasil.com.br</p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Quando configurada, a busca processual usará JusBrasil como fonte primária (cobertura nacional completa),
+                  com DataJud/CNJ como fallback automático.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">Google Agenda</h3>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Para integrar com o Google Agenda, configure o Client ID do OAuth2 Google no arquivo <code className="bg-muted px-1 rounded">.env</code>:
+                </p>
+                <div className="bg-muted rounded-lg p-4 font-mono text-sm space-y-1">
+                  <p className="text-primary font-semibold">VITE_GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com</p>
+                  <p className="text-muted-foreground text-xs mt-2">1. Acesse console.cloud.google.com</p>
+                  <p className="text-muted-foreground text-xs">2. APIs &amp; Services → Credentials → Create OAuth 2.0 Client</p>
+                  <p className="text-muted-foreground text-xs">3. Tipo: Web application. Adicione a URL do app como origem autorizada</p>
+                  <p className="text-muted-foreground text-xs">4. Ative a Google Calendar API no projeto</p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Após configurar, o botão "Conectar Google Agenda" aparecerá na página de Agenda.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
