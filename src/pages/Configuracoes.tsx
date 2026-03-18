@@ -84,24 +84,24 @@ const Configuracoes = () => {
   const [loading, setLoading] = useState(false);
 
   // TTS Settings (persisted in localStorage)
-  const [ttsProvider, setTtsProvider] = useState(() => localStorage.getItem("jarvis_tts_provider") || "browser");
-  const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem("jarvis_tts_key") || "");
-  const [ttsVoice, setTtsVoice] = useState(() => localStorage.getItem("jarvis_tts_voice") || "nova");
-  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => localStorage.getItem("jarvis_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem("jarvis_tts_enabled") !== "false");
+  const [ttsProvider, setTtsProvider] = useState(() => localStorage.getItem("horus_tts_provider") || "browser");
+  const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem("horus_tts_key") || "");
+  const [ttsVoice, setTtsVoice] = useState(() => localStorage.getItem("horus_tts_voice") || "nova");
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => localStorage.getItem("horus_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
+  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem("horus_tts_enabled") !== "false");
 
   const saveTtsSettings = () => {
-    localStorage.setItem("jarvis_tts_provider", ttsProvider);
-    localStorage.setItem("jarvis_tts_key", ttsApiKey);
-    localStorage.setItem("jarvis_tts_voice", ttsVoice);
-    localStorage.setItem("jarvis_11labs_voice", elevenLabsVoiceId);
-    localStorage.setItem("jarvis_tts_enabled", String(ttsEnabled));
+    localStorage.setItem("horus_tts_provider", ttsProvider);
+    localStorage.setItem("horus_tts_key", ttsApiKey);
+    localStorage.setItem("horus_tts_voice", ttsVoice);
+    localStorage.setItem("horus_11labs_voice", elevenLabsVoiceId);
+    localStorage.setItem("horus_tts_enabled", String(ttsEnabled));
     toast({ title: "Configurações de voz salvas!" });
   };
 
   const testTts = () => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
-      const u = new SpeechSynthesisUtterance("HORUS online. Sistema de voz funcionando.");
+      const u = new SpeechSynthesisUtterance("Horus online. Sistema de voz funcionando perfeitamente.");
       u.lang = "pt-BR";
       u.rate = 1.05;
       window.speechSynthesis.speak(u);
@@ -161,7 +161,7 @@ const Configuracoes = () => {
     <AppLayout>
       <div className="animate-fade-in">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold font-serif">Configurações</h1>
+          <h1 className="text-4xl font-bold font-serif tracking-tight">Configurações</h1>
           <p className="text-muted-foreground text-sm mt-1">Personalize o sistema, integrações e IA</p>
         </div>
 
@@ -210,18 +210,68 @@ const Configuracoes = () => {
 
           {/* === VOZ & IA === */}
           <TabsContent value="voz" className="space-y-4">
+            {/* Horus AI Info */}
             <Card>
               <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-5">
+                <div className="flex items-center gap-3 mb-4">
                   <Bot className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">HORUS — Configurações de Voz</h3>
-                  <span className="text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full ml-auto">IA Ativa</span>
+                  <h3 className="font-semibold font-serif">Horus — Assistente de IA Jurídica</h3>
+                  <span className="text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2 py-0.5 rounded-full ml-auto">Ativo</span>
                 </div>
 
-                <div className="flex items-center justify-between py-3 border-b">
+                <div className="space-y-3 mb-4">
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs font-semibold text-foreground mb-1">Como funciona o Horus</p>
+                    <p className="text-xs text-muted-foreground">
+                      O Horus é uma IA treinada para o direito brasileiro. Ele consulta legislação, analisa peças processuais,
+                      gera petições e responde perguntas sobre jurisprudência. O modelo é executado via API Gemini (Google)
+                      diretamente pelo servidor Supabase Edge Function <code className="bg-muted px-1 rounded">chat</code>.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs font-semibold text-foreground mb-2">Configuração da API de IA (backend)</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      A chave de API do modelo de linguagem deve ser configurada como <strong>Secret</strong> no
+                      painel Supabase do projeto, na seção <strong>Edge Functions → Secrets</strong>.
+                      Nunca exponha essas chaves no frontend.
+                    </p>
+                    <div className="space-y-1.5">
+                      {[
+                        { secret: "GEMINI_API_KEY", desc: "Google AI Studio — model: gemini-1.5-pro", link: "aistudio.google.com" },
+                        { secret: "OPENAI_API_KEY", desc: "OpenAI Platform — model: gpt-4o", link: "platform.openai.com" },
+                        { secret: "ANTHROPIC_API_KEY", desc: "Anthropic Console — model: claude-3-5-sonnet", link: "console.anthropic.com" },
+                      ].map((item) => (
+                        <div key={item.secret} className="flex items-start gap-2 text-xs">
+                          <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono shrink-0">{item.secret}</code>
+                          <span className="text-muted-foreground">{item.desc} — <span className="italic">{item.link}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border p-3 bg-muted/30">
+                    <p className="text-xs font-semibold text-foreground mb-2">Modos disponíveis no Horus</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { mode: "assistente", desc: "Perguntas sobre legislação, prazos e procedimentos" },
+                        { mode: "resumo", desc: "Resume petições, sentenças e acórdãos" },
+                        { mode: "analise", desc: "Analisa contratos e documentos jurídicos" },
+                        { mode: "peticao", desc: "Gera petições iniciais, recursos e defesas" },
+                      ].map(m => (
+                        <div key={m.mode} className="text-xs">
+                          <span className="font-medium capitalize text-foreground">{m.mode}</span>
+                          <p className="text-muted-foreground">{m.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between py-3 border-t border-b">
                   <div>
                     <Label className="text-sm font-medium">Resposta por Voz (TTS)</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">O HORUS falará as respostas automaticamente</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Horus fala as respostas automaticamente</p>
                   </div>
                   <Switch checked={ttsEnabled} onCheckedChange={setTtsEnabled} />
                 </div>
@@ -278,9 +328,9 @@ const Configuracoes = () => {
                         }
                       />
                       <p className="text-xs text-muted-foreground">
-                        {ttsProvider === "elevenlabs" && "Obtenha sua chave em elevenlabs.io"}
-                        {ttsProvider === "openai" && "Obtenha sua chave em platform.openai.com"}
-                        {ttsProvider === "google" && "Habilite a API TTS em console.cloud.google.com"}
+                        {ttsProvider === "elevenlabs" && "Obtenha sua chave em elevenlabs.io — a chave é armazenada localmente no navegador"}
+                        {ttsProvider === "openai" && "Obtenha sua chave em platform.openai.com — a chave é armazenada localmente no navegador"}
+                        {ttsProvider === "google" && "Habilite a API Cloud TTS em console.cloud.google.com — a chave é armazenada localmente"}
                       </p>
                     </div>
                   )}
@@ -307,20 +357,19 @@ const Configuracoes = () => {
                         onChange={(e) => setElevenLabsVoiceId(e.target.value)}
                         placeholder="21m00Tcm4TlvDq8ikWAM"
                       />
-                      <p className="text-xs text-muted-foreground">ID da voz no painel ElevenLabs</p>
+                      <p className="text-xs text-muted-foreground">ID da voz no painel ElevenLabs (Voices)</p>
                     </div>
                   )}
                 </div>
 
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="mt-4 pt-3 border-t">
+                  <div className="flex items-center gap-2 mb-2">
                     <Mic className="w-4 h-4 text-primary" />
                     <Label className="text-sm font-medium">Reconhecimento de Voz</Label>
                     <span className="text-xs bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">Web Speech API</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    O JARVIS usa a Web Speech API nativa do navegador para reconhecimento de voz em tempo real.
-                    Funciona melhor no <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>.
+                    Usa a Web Speech API nativa. Funciona melhor no <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>.
                     Nenhuma configuração adicional necessária.
                   </p>
                 </div>
@@ -400,20 +449,95 @@ const Configuracoes = () => {
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Shield className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">Integrações Ativas</h3>
+                  <h3 className="font-semibold font-serif">Guia de Configuração — Tribunais e IA</h3>
                 </div>
-                <div className="flex flex-wrap gap-2 mb-3">
+
+                {/* DataJud */}
+                <div className="mb-5 rounded-lg border p-4 bg-muted/20">
+                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2">API DataJud / CNJ — Consulta Pública</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    A API DataJud do CNJ é pública e gratuita. Permite consultar processos de <strong>todos os tribunais do Brasil</strong>:
+                    STF, STJ, TST, STM, TSE, TRFs (1–6), todos os 26 TJs estaduais, 24 TRTs e sistemas especiais como SEEU e Projudi.
+                  </p>
+                  <div className="space-y-1 text-xs">
+                    <p><span className="font-medium text-foreground">Endpoint base:</span> <code className="bg-muted px-1 rounded">https://api-publica.datajud.cnj.jus.br</code></p>
+                    <p><span className="font-medium text-foreground">Autenticação:</span> API Key pública — <code className="bg-muted px-1 rounded">APIKey cDZHYzlZa0JadVREZDJCendFbzV3cU1qM2owQUlTSmFRdnBEstF</code></p>
+                    <p><span className="font-medium text-foreground">Índice TJAM:</span> <code className="bg-muted px-1 rounded">api_tjam</code> | Índice SEEU: <code className="bg-muted px-1 rounded">api_seeu</code> | Projudi: consultado via TJs parceiros</p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">Essa chave já está configurada na Edge Function busca-processual. Nenhuma ação necessária para consulta básica.</p>
+                </div>
+
+                {/* SEEU */}
+                <div className="mb-5 rounded-lg border border-blue-500/20 p-4 bg-blue-500/5">
+                  <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">SEEU — Sistema Eletrônico de Execução Unificado</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    O SEEU gerencia execuções penais em <strong>35+ estabelecimentos</strong>. A consulta é feita via DataJud (índice <code className="bg-muted px-1 rounded text-[10px]">api_seeu</code>).
+                    Para acesso avançado com peticionamento, configure:
+                  </p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>1. Acesse o portal SEEU e gere um token de acesso vinculado ao seu CPF/OAB.</p>
+                    <p>2. Cadastre-o acima em <strong>Credenciais → SEEU</strong> com número OAB e seccional AM.</p>
+                    <p>3. Após cadastro, o botão "Peticionar" ficará habilitado para processos SEEU.</p>
+                  </div>
+                </div>
+
+                {/* Projudi */}
+                <div className="mb-5 rounded-lg border border-purple-500/20 p-4 bg-purple-500/5">
+                  <p className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2">Projudi — Processo Judicial Digital</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    O Projudi é usado pelo <strong>TJAM</strong>, TJPR, TJRR, TJRO e outros TJs. A consulta pública é feita via DataJud.
+                    Para peticionamento eletrônico no Projudi TJAM:
+                  </p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>1. Acesse <span className="italic">projudi.tjam.jus.br</span> e faça login com certificado digital A1/A3.</p>
+                    <p>2. Gere um token de sessão ou use as credenciais OAB/CPF do sistema.</p>
+                    <p>3. Cadastre-o acima em <strong>Credenciais → Projudi</strong>.</p>
+                    <p>4. Para outros TJs com Projudi, repita o processo com o índice correto de cada tribunal.</p>
+                  </div>
+                </div>
+
+                {/* PJe */}
+                <div className="mb-5 rounded-lg border p-4 bg-muted/20">
+                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2">PJe — Processo Judicial Eletrônico (CNJ)</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    O PJe é o sistema padrão de peticionamento do CNJ, usado pela maioria dos tribunais federais, TRTs e vários TJs.
+                    A integração usa o protocolo <strong>MNI (Message Negotiation Interface)</strong>.
+                  </p>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>1. Instale o software PJe ou acesse via navegador com certificado A1/A3.</p>
+                    <p>2. Obtenha o token JWT no portal do tribunal (ex: <span className="italic">pje.tjam.jus.br</span>, <span className="italic">pje.trf1.jus.br</span>).</p>
+                    <p>3. Cadastre o token em <strong>Credenciais → [Tribunal correspondente]</strong>.</p>
+                    <p>4. O sistema usará esse token para peticionamento via API MNI do PJe.</p>
+                  </div>
+                </div>
+
+                {/* Horus IA para tribunais */}
+                <div className="mb-4 rounded-lg border border-primary/20 p-4 bg-primary/5">
+                  <p className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Horus IA — Consulta com Contexto Processual</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Para que o Horus consulte e analise processos de tribunais específicos, primeiro faça a busca em
+                    <strong> Busca Processual</strong>, depois cole o resultado ou número do processo no chat do Horus.
+                    O assistente pode analisar movimentações, sugerir estratégias e gerar peças com base no processo real.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Tribunais com melhor cobertura via DataJud:</strong> TJAM, STJ, STF, TRF1, TST, TJSP, TJRJ, TJMG — e todos os demais 85+ tribunais indexados pelo CNJ.
+                  </p>
+                </div>
+
+                {/* Status badges */}
+                <div className="flex flex-wrap gap-2">
                   {[
-                    { label: "✓ API DataJud (CNJ) — Pública", ok: true },
-                    { label: "✓ SEEU via DataJud", ok: true },
-                    { label: "✓ Projudi via DataJud", ok: true },
-                    { label: "✓ 26 TJs Estaduais", ok: true },
-                    { label: "✓ 24 TRTs", ok: true },
-                    { label: "✓ TRFs 1-6", ok: true },
-                    { label: "✓ STF / STJ / TST / STM / TSE", ok: true },
-                    { label: "✓ JARVIS IA (Gemini)", ok: true },
-                    { label: "PJe / MNI (credencial)", ok: false },
-                    { label: "Google Calendar", ok: false },
+                    { label: "API DataJud (CNJ)", ok: true },
+                    { label: "SEEU via DataJud", ok: true },
+                    { label: "Projudi via DataJud", ok: true },
+                    { label: "26 TJs Estaduais", ok: true },
+                    { label: "24 TRTs", ok: true },
+                    { label: "TRFs 1-6", ok: true },
+                    { label: "STF / STJ / TST / STM / TSE", ok: true },
+                    { label: "Horus IA (Gemini)", ok: true },
+                    { label: "PJe / MNI (token necessário)", ok: false },
+                    { label: "Projudi AM (token necessário)", ok: false },
+                    { label: "SEEU Peticionamento (token necessário)", ok: false },
                   ].map((item) => (
                     <span
                       key={item.label}
@@ -423,14 +547,10 @@ const Configuracoes = () => {
                           : "bg-muted text-muted-foreground border"
                       }`}
                     >
-                      {item.label}
+                      {item.ok ? "✓ " : ""}{item.label}
                     </span>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground italic">
-                  O peticionamento via PJe/MNI requer certificado digital A1/A3 e credenciais configuradas acima.
-                  O SEEU e Projudi são consultados via API pública do DataJud/CNJ.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>

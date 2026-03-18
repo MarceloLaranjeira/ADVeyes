@@ -7,7 +7,6 @@ import { Scale, FileText, Gavel, LogOut, FolderOpen } from "lucide-react";
 
 const PortalDashboard = () => {
   const navigate = useNavigate();
-  const clienteId = sessionStorage.getItem("portal_cliente_id");
   const [cliente, setCliente] = useState<any>(null);
   const [processos, setProcessos] = useState<any[]>([]);
   const [audiencias, setAudiencias] = useState<any[]>([]);
@@ -15,31 +14,35 @@ const PortalDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!clienteId) {
+    const token = sessionStorage.getItem("portal_token");
+    if (!token) {
       navigate("/portal");
       return;
     }
-    fetchData();
-  }, [clienteId]);
+    fetchData(token);
+  }, []);
 
-  const fetchData = async () => {
-    const [cliRes, procRes] = await Promise.all([
-      supabase.from("clientes").select("*").eq("id", clienteId!).single(),
-      supabase.from("processos").select("*").eq("cliente_id", clienteId!).order("updated_at", { ascending: false }),
-    ]);
+  const fetchData = async (token: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("portal-data", {
+        body: { token, action: "dashboard" },
+      });
 
-    setCliente(cliRes.data);
-    const procs = procRes.data || [];
-    setProcessos(procs);
+      if (error || !data?.cliente) {
+        sessionStorage.removeItem("portal_token");
+        sessionStorage.removeItem("portal_cliente_id");
+        navigate("/portal");
+        return;
+      }
 
-    if (procs.length > 0) {
-      const procIds = procs.map((p: any) => p.id);
-      const [audRes, docRes] = await Promise.all([
-        supabase.from("audiencias").select("*").in("processo_id", procIds).order("data_hora", { ascending: false }).limit(10),
-        supabase.from("documentos").select("*").in("processo_id", procIds).order("created_at", { ascending: false }).limit(20),
-      ]);
-      setAudiencias(audRes.data || []);
-      setDocumentos(docRes.data || []);
+      setCliente(data.cliente);
+      setProcessos(data.processos || []);
+      setAudiencias(data.audiencias || []);
+      setDocumentos(data.documentos || []);
+    } catch {
+      sessionStorage.removeItem("portal_token");
+      sessionStorage.removeItem("portal_cliente_id");
+      navigate("/portal");
     }
     setLoading(false);
   };
@@ -66,7 +69,6 @@ const PortalDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">

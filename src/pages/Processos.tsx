@@ -63,7 +63,7 @@ const Processos = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Processos</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Processos</h1>
             <p className="text-muted-foreground text-sm mt-1">Gerenciamento de todos os processos do escritório</p>
           </div>
           <div className="flex gap-2">

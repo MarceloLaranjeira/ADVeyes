@@ -108,7 +108,7 @@ const Audiencias = () => {
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold font-serif">Audiências</h1>
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Audiências</h1>
             <p className="text-muted-foreground text-sm mt-1">Controle de audiências e sessões de julgamento</p>
           </div>
           <div className="flex gap-2">
