@@ -81,13 +81,18 @@ serve(async (req) => {
     const apiKey = Deno.env.get("DATAJUD_API_KEY") || DATAJUD_PUBLIC_KEY;
 
     // Build Elasticsearch query with optional filters
+    // DataJud stores numeroProcesso as keyword — use multiple strategies for best coverage
+    const formattedNum = numero.trim();
     const mustClauses: any[] = [
       {
         bool: {
           should: [
+            // Exact match on clean number (no separators — most reliable for DataJud)
             { match: { numeroProcesso: cleanNum } },
-            { wildcard: { numeroProcesso: `*${cleanNum}*` } },
-            { match: { numeroProcesso: numero.trim() } },
+            // Exact match on formatted CNJ number (with dots/dashes)
+            { match_phrase: { numeroProcesso: formattedNum } },
+            // Fallback: prefix search on clean number
+            { prefix: { numeroProcesso: cleanNum.slice(0, 14) } },
           ],
           minimum_should_match: 1,
         },
