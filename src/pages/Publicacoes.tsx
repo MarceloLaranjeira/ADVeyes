@@ -158,6 +158,10 @@ const Publicacoes = () => {
 
       if (!resp.ok) {
         toast({ title: "Erro ao capturar publicações", description: result.error || "Tente novamente.", variant: "destructive" });
+        // Se não há publicações ainda, inserir dados demo para demonstração
+        if (publicacoes.length === 0) {
+          await inserirDadosDemo();
+        }
         return;
       }
 
@@ -172,9 +176,13 @@ const Publicacoes = () => {
           title: "Consulta realizada",
           description: result.message,
         });
-        if (result.processosBuscados === 0) {
+        if (result.processosBuscados === 0 || result.processosBuscados === undefined) {
           // fallback: inserir dados demo se não houver processos cadastrados
-          await inserirDadosDemo();
+          if (publicacoes.length === 0) {
+            await inserirDadosDemo();
+          } else {
+            toast({ title: "Dados de demonstração já carregados", description: "Cadastre processos reais no módulo Processos para capturar publicações do DataJud/CNJ." });
+          }
         }
       }
 

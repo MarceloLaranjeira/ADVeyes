@@ -198,6 +198,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           capturadas: 0,
+          processosBuscados: 0,
           message:
             "Nenhum processo cadastrado. Cadastre processos no módulo Processos para capturar publicações reais.",
           novos: [],
