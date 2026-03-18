@@ -36,6 +36,7 @@ type Publicacao = {
 };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const CAPTURAR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capturar-publicacoes`;
 
 const tipoLabels: Record<string, { label: string; color: string }> = {
   intimacao: { label: "Intimação", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
@@ -137,28 +138,67 @@ const Publicacoes = () => {
 
   useEffect(() => { fetchPublicacoes(); }, []);
 
-  const simularCaptura = async () => {
+  const capturarPublicacoes = async () => {
     setLoadingCaptura(true);
     try {
-      const inserts = MOCK_DATA.map((m) => ({
-        ...m,
-        user_id: user!.id,
-        tarefa_gerada: m.tarefa_gerada || false,
-        conteudo_simplificado: null,
-      }));
-      const { error } = await (supabase as any).from("publicacoes").insert(inserts);
-      if (error) {
-        if (error.code === "23505") {
-          toast({ title: "Publicações já capturadas anteriormente", variant: "destructive" });
-        } else {
-          toast({ title: "Erro ao capturar", description: error.message, variant: "destructive" });
-        }
-      } else {
-        toast({ title: `${MOCK_DATA.length} publicações capturadas!`, description: "Diários de 18/03/2026 processados com sucesso." });
-        fetchPublicacoes();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        toast({ title: "Sessão expirada. Faça login novamente.", variant: "destructive" });
+        return;
       }
+
+      const resp = await fetch(CAPTURAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+
+      const result = await resp.json();
+
+      if (!resp.ok) {
+        toast({ title: "Erro ao capturar publicações", description: result.error || "Tente novamente.", variant: "destructive" });
+        return;
+      }
+
+      if (result.capturadas > 0) {
+        toast({
+          title: `${result.capturadas} movimentação(ões) capturada(s)!`,
+          description: result.message,
+        });
+        fetchPublicacoes();
+      } else {
+        toast({
+          title: "Consulta realizada",
+          description: result.message,
+        });
+        if (result.processosBuscados === 0) {
+          // fallback: inserir dados demo se não houver processos cadastrados
+          await inserirDadosDemo();
+        }
+      }
+
+      if (result.erros?.length > 0) {
+        console.warn("Erros na captura:", result.erros);
+      }
+    } catch (err: any) {
+      toast({ title: "Erro de conexão", description: "Verifique sua internet e tente novamente.", variant: "destructive" });
     } finally {
       setLoadingCaptura(false);
+    }
+  };
+
+  const inserirDadosDemo = async () => {
+    const inserts = MOCK_DATA.map((m) => ({
+      ...m,
+      user_id: user!.id,
+      tarefa_gerada: m.tarefa_gerada || false,
+      conteudo_simplificado: null,
+    }));
+    const { error } = await (supabase as any).from("publicacoes").insert(inserts);
+    if (!error) {
+      toast({ title: `${MOCK_DATA.length} publicações de demonstração inseridas`, description: "Cadastre processos reais para capturar dados do DataJud/CNJ." });
+      fetchPublicacoes();
     }
   };
 
@@ -311,7 +351,7 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
             <h1 className="text-4xl font-bold font-serif tracking-tight">Publicações</h1>
             <p className="text-muted-foreground text-sm mt-1">Captura e triagem automática de publicações e intimações dos Diários de Justiça</p>
           </div>
-          <Button onClick={simularCaptura} disabled={loadingCaptura} className="gap-2">
+          <Button onClick={capturarPublicacoes} disabled={loadingCaptura} className="gap-2">
             {loadingCaptura ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {loadingCaptura ? "Capturando..." : "Capturar Publicações"}
           </Button>
@@ -349,8 +389,9 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
                 <div>
                   <h3 className="font-semibold mb-1">Integração com Diários de Justiça</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Em produção, este módulo captura automaticamente publicações dos tribunais via API DataJud (CNJ), PJe e SEEU.
-                    Clique em <strong>Capturar Publicações</strong> para simular uma captura com dados de demonstração.
+                    Este módulo consulta a <strong>API pública DataJud/CNJ</strong> e captura movimentações reais dos seus processos cadastrados.
+                    Clique em <strong>Capturar Publicações</strong> para buscar as últimas movimentações dos últimos 30 dias.
+                    {" "}<span className="text-amber-600 font-medium">Para dados reais, cadastre seus processos no módulo Processos.</span>
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {["DataJud (CNJ)", "API PJe", "TJAM", "TRF1", "STJ", "STF", "SEEU", "Projudi"].map((api) => (
