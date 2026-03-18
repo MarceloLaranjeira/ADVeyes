@@ -5,6 +5,7 @@ import {
   Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield, MessageCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useState } from "react";
 
 const navSections = [
@@ -50,31 +51,33 @@ const navSections = [
   },
 ];
 
-export const AppSidebar = () => {
+export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const { permission, subscribe } = usePushNotifications();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggleSection = (label: string) =>
     setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border z-50">
+    <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border">
       {/* Logo */}
-      <div className="p-5 border-b border-sidebar-border">
+      <div className="p-5 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sidebar-primary/20 border border-sidebar-primary/30 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-sidebar-primary/20 border border-sidebar-primary/30 flex items-center justify-center shrink-0">
             <Scale className="w-5 h-5 text-sidebar-primary" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-sidebar-primary font-serif tracking-widest uppercase">
-              ALBERTINO
-            </h1>
-            <p className="text-[9px] text-sidebar-foreground/40 tracking-widest uppercase">
-              Advogados Associados
-            </p>
+            <h1 className="text-sm font-bold text-sidebar-primary font-serif tracking-widest uppercase">LEXIA</h1>
+            <p className="text-[9px] text-sidebar-foreground/40 tracking-widest uppercase">Albertino &amp; Advogados</p>
           </div>
         </div>
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-sidebar-accent text-sidebar-foreground/50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        )}
       </div>
 
       {/* Horus AI Button */}
@@ -145,6 +148,16 @@ export const AppSidebar = () => {
 
       {/* Footer */}
       <div className="p-3 border-t border-sidebar-border">
+        {/* Push notification activation */}
+        {permission !== "granted" && (
+          <button
+            onClick={subscribe}
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20 text-sidebar-primary hover:bg-sidebar-primary/20 transition-colors text-[10px] font-semibold"
+          >
+            <Bell className="w-3.5 h-3.5 shrink-0" />
+            Ativar notificações
+          </button>
+        )}
         {user && (
           <div className="px-3 mb-2">
             <p className="text-[10px] text-sidebar-foreground/40 truncate">{user.email}</p>
@@ -156,7 +169,7 @@ export const AppSidebar = () => {
         </button>
         <div className="mt-3 px-3">
           <p className="text-[9px] text-sidebar-foreground/25 uppercase tracking-wider">
-            Sistema Jurídico v3.0 · Horus IA
+            LEXIA v3.0 · Horus IA
           </p>
         </div>
       </div>

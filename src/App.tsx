@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import Index from "./pages/Index";
+import Landing from "./pages/Landing";
 import Processos from "./pages/Processos";
 import Clientes from "./pages/Clientes";
 import Agenda from "./pages/Agenda";
@@ -37,6 +38,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               {/* Portal do Cliente (public, token-based) */}
               <Route path="/portal" element={<PortalLogin />} />
