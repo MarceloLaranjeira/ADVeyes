@@ -20,6 +20,7 @@ import Relatorios from "./pages/Relatorios";
 import IAJuridica from "./pages/IAJuridica";
 import PortalCliente from "./pages/PortalCliente";
 import Configuracoes from "./pages/Configuracoes";
+import WhatsApp from "./pages/WhatsApp";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
@@ -54,6 +55,7 @@ const App = () => (
               <Route path="/publicacoes" element={<ProtectedRoute><Publicacoes /></ProtectedRoute>} />
               <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
               <Route path="/ia-juridica" element={<ProtectedRoute><IAJuridica /></ProtectedRoute>} />
+              <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
               <Route path="/portal-cliente" element={<ProtectedRoute><PortalCliente /></ProtectedRoute>} />
               <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />

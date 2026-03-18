@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Bot, Sparkles, MessageSquare, FileSearch, Send, Loader2,
   Mic, MicOff, Volume2, VolumeX, Settings2, ChevronDown,
-  Scale, X, ChevronRight,
+  Scale, X, ChevronRight, Languages, UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,8 @@ const modes = [
   { value: "resumo", label: "Resumo de Peças", icon: MessageSquare, desc: "Petições, sentenças, acórdãos" },
   { value: "analise", label: "Análise de Documentos", icon: FileSearch, desc: "Contratos e documentos" },
   { value: "peticao", label: "Geração de Peças", icon: Sparkles, desc: "Petições e recursos" },
+  { value: "traducao", label: "Tradutor Jurídico", icon: Languages, desc: "Juridiquês para linguagem simples" },
+  { value: "triagem", label: "Triagem de Leads", icon: UserCheck, desc: "Qualificação de clientes potenciais" },
 ];
 
 const openaiVoices = ["alloy", "nova", "echo", "fable", "onyx", "shimmer"];

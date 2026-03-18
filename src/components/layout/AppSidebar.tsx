@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Scale, Users, CalendarDays, FileText,
   Search, Gavel, BookOpen, DollarSign, LogOut, Bell, ListTodo,
-  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield,
+  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield, MessageCircle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
@@ -43,6 +43,7 @@ const navSections = [
   {
     label: "Ferramentas",
     items: [
+      { label: "WhatsApp", icon: MessageCircle, path: "/whatsapp" },
       { label: "Portal do Cliente", icon: UserCircle, path: "/portal-cliente" },
       { label: "Configurações", icon: Settings, path: "/configuracoes" },
     ],
