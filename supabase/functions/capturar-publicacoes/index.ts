@@ -170,7 +170,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -193,7 +193,12 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .neq("status", "Arquivado");
 
-    if (procError) throw procError;
+    if (procError) {
+      return new Response(
+        JSON.stringify({ error: procError.message, capturadas: 0, processosBuscados: 0 }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     if (!processos || processos.length === 0) {
       return new Response(
         JSON.stringify({
