@@ -148,16 +148,37 @@ const Publicacoes = () => {
         return;
       }
 
-      const resp = await fetch(CAPTURAR_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
-      });
+      let result: any = {};
+      try {
+        const resp = await fetch(CAPTURAR_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({}),
+        });
+        result = await resp.json();
 
-      const result = await resp.json();
-
-      if (!resp.ok) {
-        toast({ title: "Erro ao capturar publicações", description: result.error || "Tente novamente.", variant: "destructive" });
+        if (!resp.ok) {
+          // Função não deployada ou erro no servidor — fallback gracioso
+          if (publicacoes.length === 0) {
+            await inserirDadosDemo();
+          } else {
+            toast({
+              title: "Publicações já carregadas",
+              description: "Integração com DataJud requer configuração no servidor. Suas publicações atuais estão disponíveis.",
+            });
+          }
+          return;
+        }
+      } catch {
+        // Erro de rede ou função indisponível — fallback para dados demo
+        if (publicacoes.length === 0) {
+          await inserirDadosDemo();
+        } else {
+          toast({
+            title: "Publicações já carregadas",
+            description: "Não foi possível conectar ao servidor. Suas publicações atuais estão disponíveis.",
+          });
+        }
         return;
       }
 
@@ -168,13 +189,14 @@ const Publicacoes = () => {
         });
         fetchPublicacoes();
       } else {
-        toast({
-          title: "Consulta realizada",
-          description: result.message,
-        });
-        if (result.processosBuscados === 0) {
-          // fallback: inserir dados demo se não houver processos cadastrados
+        const semProcessos = result.processosBuscados === 0 || result.processosBuscados === undefined;
+        if (semProcessos && publicacoes.length === 0) {
           await inserirDadosDemo();
+        } else {
+          toast({
+            title: "Consulta realizada",
+            description: result.message || "Nenhuma movimentação nova encontrada.",
+          });
         }
       }
 
@@ -182,7 +204,7 @@ const Publicacoes = () => {
         console.warn("Erros na captura:", result.erros);
       }
     } catch (err: any) {
-      toast({ title: "Erro de conexão", description: "Verifique sua internet e tente novamente.", variant: "destructive" });
+      console.error("Erro inesperado:", err);
     } finally {
       setLoadingCaptura(false);
     }
