@@ -90,7 +90,7 @@ const Configuracoes = () => {
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
 
   // Asaas / plano state
-  const [planData, setPlanData] = useState<Record<string, unknown> | null>(null);
+  const [planData, setPlanData] = useState<Record<string, any> | null>(null);
   const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
