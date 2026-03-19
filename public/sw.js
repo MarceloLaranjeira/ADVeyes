@@ -1,14 +1,16 @@
 // LEXIA — Service Worker para Push Notifications e PWA
-const CACHE_NAME = "lexia-v1";
-const OFFLINE_URL = "/";
+const CACHE_NAME = "lexia-v2";
+const APP_SHELL_URL = "/index.html";
+
+const isBackendRequest = (url) =>
+  url.includes("/rest/v1/") ||
+  url.includes("/auth/v1/") ||
+  url.includes("/storage/v1/") ||
+  url.includes("/functions/v1/") ||
+  url.includes("supabase");
 
 // ─── Install ──────────────────────────────────────────────────────────────────
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(["/", "/index.html"])
-    )
-  );
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -16,23 +18,54 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
 });
 
-// ─── Fetch (cache-first for assets) ──────────────────────────────────────────
+// ─── Fetch ────────────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  if (event.request.url.includes("/rest/v1/") || event.request.url.includes("supabase")) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).catch(() => caches.match(OFFLINE_URL));
-    })
-  );
+  const requestUrl = new URL(event.request.url);
+
+  if (isBackendRequest(requestUrl.href)) return;
+
+  // Always fetch navigation requests from network first to avoid stale HTML
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const responseClone = response.clone();
+          event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) => cache.put(APP_SHELL_URL, responseClone))
+          );
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match(APP_SHELL_URL)) || Response.error();
+        })
+    );
+    return;
+  }
+
+  // Same-origin assets can use cache-first with background refresh
+  if (requestUrl.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(event.request).then(async (cached) => {
+        const networkFetch = fetch(event.request)
+          .then(async (response) => {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, response.clone());
+            return response;
+          });
+
+        return cached || networkFetch;
+      })
+    );
+  }
 });
 
 // ─── Push Notifications ───────────────────────────────────────────────────────
@@ -75,14 +108,13 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // Focus existing window if open
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
           client.navigate(url);
           return client.focus();
         }
       }
-      // Open new window
+
       if (clients.openWindow) return clients.openWindow(url);
     })
   );
@@ -96,6 +128,5 @@ self.addEventListener("sync", (event) => {
 });
 
 async function syncNotifications() {
-  // Placeholder — will sync pending notifications when back online
   console.log("[SW] Syncing notifications...");
 }
