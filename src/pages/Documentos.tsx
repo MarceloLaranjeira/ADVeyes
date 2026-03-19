@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { FileText, Upload, Search, Trash2, Download, Plus } from "lucide-react";
+import { FileText, Upload, Search, Trash2, Download, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { recognizeDocument, type DocumentInfo } from "@/lib/document-recognition";
 
 const tiposDoc = ["Petição", "Contestação", "Recurso", "HC", "Alegações", "Procuração", "Contrato", "Parecer", "Decisão", "Outros"];
 
@@ -24,6 +26,8 @@ const Documentos = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteFilePath, setDeleteFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [recognized, setRecognized] = useState<DocumentInfo | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [form, setForm] = useState({ nome: "", tipo: "Petição", processo_id: "" });
 
@@ -38,6 +42,35 @@ const Documentos = () => {
   };
 
   useEffect(() => { fetchDocumentos(); fetchProcessos(); }, []);
+
+  const handleFileChange = async (file: File | null) => {
+    setSelectedFile(file);
+    setRecognized(null);
+    if (!file) return;
+
+    setScanning(true);
+    try {
+      const info = await recognizeDocument(file);
+      setRecognized(info);
+
+      // Auto-fill form with recognized data
+      setForm((prev) => ({
+        nome: prev.nome || (info.clienteNome ? `${info.tipo || "Documento"} - ${info.clienteNome}` : prev.nome),
+        tipo: info.tipo || prev.tipo,
+        processo_id: prev.processo_id || (() => {
+          if (info.processoNumero) {
+            const match = processos.find(p => p.numero === info.processoNumero);
+            return match ? String(match.id) : prev.processo_id;
+          }
+          return prev.processo_id;
+        })(),
+      }));
+    } catch {
+      // Silently fail - user can fill manually
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +107,7 @@ const Documentos = () => {
       toast({ title: "Documento enviado com sucesso!" });
       setForm({ nome: "", tipo: "Petição", processo_id: "" });
       setSelectedFile(null);
+      setRecognized(null);
       setShowForm(false);
       fetchDocumentos();
     }
@@ -207,14 +241,45 @@ const Documentos = () => {
                 <Input
                   ref={fileRef}
                   type="file"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                   accept=".pdf,.doc,.docx,.txt,.odt,.jpg,.jpeg,.png"
                   required
                 />
+                {scanning && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Analisando documento...
+                  </div>
+                )}
+                {!scanning && recognized && (
+                  <div className="rounded-md border bg-muted/40 p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-primary">
+                      <Sparkles className="w-3 h-3" />
+                      Reconhecimento automático
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {recognized.tipo && (
+                        <Badge variant="secondary" className="text-xs">Tipo: {recognized.tipo}</Badge>
+                      )}
+                      {recognized.processoNumero && (
+                        <Badge variant="secondary" className="text-xs font-mono">Processo: {recognized.processoNumero}</Badge>
+                      )}
+                      {recognized.clienteNome && (
+                        <Badge variant="secondary" className="text-xs">Cliente: {recognized.clienteNome}</Badge>
+                      )}
+                      {recognized.cpf && (
+                        <Badge variant="secondary" className="text-xs font-mono">CPF: {recognized.cpf}</Badge>
+                      )}
+                      {!recognized.tipo && !recognized.processoNumero && !recognized.clienteNome && (
+                        <span className="text-xs text-muted-foreground">Nenhuma informação identificada automaticamente.</span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-                <Button type="submit" disabled={loading}>{loading ? "Enviando..." : "Enviar"}</Button>
+                <Button type="button" variant="outline" onClick={() => { setShowForm(false); setRecognized(null); }}>Cancelar</Button>
+                <Button type="submit" disabled={loading || scanning}>{loading ? "Enviando..." : "Enviar"}</Button>
               </div>
             </form>
           </DialogContent>
