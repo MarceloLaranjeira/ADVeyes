@@ -493,6 +493,57 @@ export type Database = {
         }
         Relationships: []
       }
+      publicacoes: {
+        Row: {
+          cliente_nome: string | null
+          conteudo: string
+          conteudo_simplificado: string | null
+          created_at: string | null
+          data_prazo: string | null
+          data_publicacao: string | null
+          id: string
+          numero_processo: string | null
+          prazo_dias: number | null
+          status: string
+          tarefa_gerada: boolean | null
+          tipo: string
+          tribunal: string
+          user_id: string
+        }
+        Insert: {
+          cliente_nome?: string | null
+          conteudo: string
+          conteudo_simplificado?: string | null
+          created_at?: string | null
+          data_prazo?: string | null
+          data_publicacao?: string | null
+          id?: string
+          numero_processo?: string | null
+          prazo_dias?: number | null
+          status?: string
+          tarefa_gerada?: boolean | null
+          tipo?: string
+          tribunal?: string
+          user_id: string
+        }
+        Update: {
+          cliente_nome?: string | null
+          conteudo?: string
+          conteudo_simplificado?: string | null
+          created_at?: string | null
+          data_prazo?: string | null
+          data_publicacao?: string | null
+          id?: string
+          numero_processo?: string | null
+          prazo_dias?: number | null
+          status?: string
+          tarefa_gerada?: boolean | null
+          tipo?: string
+          tribunal?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tarefas: {
         Row: {
           created_at: string
