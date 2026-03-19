@@ -14,6 +14,26 @@ import { Plus, CheckCircle2, Clock, AlertCircle, Trash2, Pencil, LayoutList, Col
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+
+interface Tarefa {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  prioridade: string;
+  status: string;
+  data_limite?: string | null;
+  processo_id?: string | null;
+}
+
+interface Processo {
+  id: string;
+  numero: string;
+  area?: string;
+  cliente_id?: string | null;
+  cliente_nome?: string | null;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const KANBAN_COLS = [
@@ -59,8 +79,8 @@ function fmtDate(d: string | null | undefined) {
 function KanbanCard({
   tarefa, processos, onEdit, onDelete, onDragStart,
 }: {
-  tarefa: any; processos: any[];
-  onEdit: (t: any) => void; onDelete: (id: string) => void;
+  tarefa: Tarefa; processos: Processo[];
+  onEdit: (t: Tarefa) => void; onDelete: (id: string) => void;
   onDragStart: (id: string) => void;
 }) {
   const processo = processos.find(p => p.id === tarefa.processo_id);
@@ -114,8 +134,8 @@ function KanbanCard({
 function KanbanColumn({
   col, tarefas, processos, onEdit, onDelete, onDragStart, onDrop, onAdd,
 }: {
-  col: typeof KANBAN_COLS[0]; tarefas: any[]; processos: any[];
-  onEdit: (t: any) => void; onDelete: (id: string) => void;
+  col: typeof KANBAN_COLS[0]; tarefas: Tarefa[]; processos: Processo[];
+  onEdit: (t: Tarefa) => void; onDelete: (id: string) => void;
   onDragStart: (id: string) => void; onDrop: (colId: string) => void;
   onAdd: (status: string) => void;
 }) {
@@ -173,11 +193,11 @@ function KanbanColumn({
 const Tarefas = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [tarefas, setTarefas]     = useState<any[]>([]);
-  const [processos, setProcessos] = useState<any[]>([]);
+  const [tarefas, setTarefas]     = useState<Tarefa[]>([]);
+  const [processos, setProcessos] = useState<Processo[]>([]);
   const [view, setView]           = useState<"kanban" | "lista">("kanban");
   const [showForm, setShowForm]   = useState(false);
-  const [editData, setEditData]   = useState<any>(null);
+  const [editData, setEditData]   = useState<Tarefa | null>(null);
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
   const [search, setSearch]       = useState("");
@@ -281,7 +301,7 @@ const Tarefas = () => {
     setForm(f => ({ ...f, status }));
     setShowForm(true);
   };
-  const openEdit = (t: any) => { setEditData(t); setShowForm(true); };
+  const openEdit = (t: Tarefa) => { setEditData(t); setShowForm(true); };
 
   // ── Filtered tarefas ──
   const filtered = tarefas.filter(t => {

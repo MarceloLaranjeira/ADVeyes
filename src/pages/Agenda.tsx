@@ -19,6 +19,33 @@ import { ptBR } from "date-fns/locale";
 import { googleCalendar } from "@/lib/google-calendar";
 import { Switch } from "@/components/ui/switch";
 
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+interface Evento {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  tipo: string;
+  data_inicio: string;
+  local?: string;
+}
+
+interface Tarefa {
+  id: string;
+  titulo: string;
+  data_limite?: string | null;
+  status: string;
+  prioridade?: string;
+}
+
+interface Audiencia {
+  id: string;
+  tipo: string;
+  data_hora: string;
+  vara?: string;
+  status?: string;
+  processos?: { numero?: string; cliente_nome?: string } | null;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const tipoOptions = ["audiência", "prazo", "reunião", "despacho", "outro"];
 
@@ -38,7 +65,7 @@ function fmtWeekDay(d: Date) { return format(d, "EEE", { locale: ptBR }); }
 
 // ─── Event Card ───────────────────────────────────────────────────────────────
 function EventCard({ evento, onEdit, onDelete, compact = false }: {
-  evento: any; onEdit: (e: any) => void; onDelete: (id: string) => void; compact?: boolean;
+  evento: Evento; onEdit: (e: Evento) => void; onDelete: (id: string) => void; compact?: boolean;
 }) {
   const colors = tipoColors[evento.tipo] || tipoColors.outro;
   return (
@@ -75,8 +102,8 @@ function EventCard({ evento, onEdit, onDelete, compact = false }: {
 
 // ─── Week View ────────────────────────────────────────────────────────────────
 function WeekView({ weekStart, eventos, onEdit, onDelete, onNewOnDay }: {
-  weekStart: Date; eventos: any[];
-  onEdit: (e: any) => void; onDelete: (id: string) => void;
+  weekStart: Date; eventos: Evento[];
+  onEdit: (e: Evento) => void; onDelete: (id: string) => void;
   onNewOnDay: (d: Date) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -135,9 +162,9 @@ function WeekView({ weekStart, eventos, onEdit, onDelete, onNewOnDay }: {
 const Agenda = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [eventos, setEventos]       = useState<any[]>([]);
-  const [tarefas, setTarefas]       = useState<any[]>([]);
-  const [audiencias, setAudiencias] = useState<any[]>([]);
+  const [eventos, setEventos]       = useState<Evento[]>([]);
+  const [tarefas, setTarefas]       = useState<Tarefa[]>([]);
+  const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
   const [gcalConnected, setGcalConnected] = useState(false);
   const [gcalSyncing, setGcalSyncing] = useState(false);
   const [syncToGcal, setSyncToGcal] = useState(true);
@@ -146,7 +173,7 @@ const Agenda = () => {
   const [viewMode, setViewMode]   = useState<"mes" | "semana" | "dia">("mes");
   const [activeTab, setActiveTab] = useState("compromissos");
   const [showForm, setShowForm]   = useState(false);
-  const [editData, setEditData]   = useState<any>(null);
+  const [editData, setEditData]   = useState<Evento | null>(null);
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
   const [form, setForm] = useState({
@@ -196,7 +223,7 @@ const Agenda = () => {
     } else {
       setForm({ titulo: "", descricao: "", tipo: "reunião", data_inicio: format(selectedDate, "yyyy-MM-dd"), hora_inicio: "09:00", local: "" });
     }
-  }, [editData, showForm]);
+  }, [editData, showForm, selectedDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

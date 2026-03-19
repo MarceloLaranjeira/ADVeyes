@@ -121,30 +121,30 @@ function extractPrazoDias(nome: string, complementos: string): number | null {
 
 /** Monta o texto da publicação a partir dos dados DataJud */
 function buildConteudo(
-  hit: any,
-  mov: any,
+  hit: Record<string, unknown>,
+  mov: Record<string, unknown>,
   orgao: string,
   tribunal: string,
   numero: string
 ): string {
   const complementos =
-    mov.complementosTabelados
-      ?.map((c: any) => `${c.nome}: ${c.valor}`)
+    (mov.complementosTabelados as { nome: string; valor: string }[])
+      ?.map((c) => `${c.nome}: ${c.valor}`)
       .join("; ") || "";
 
-  const classe = hit.classe?.nome || hit.classeProcessual || "";
+  const classe = (hit.classe as Record<string, unknown>)?.nome || hit.classeProcessual || "";
   const assuntos =
-    hit.assuntos?.map((a: any) => a.nome).join(", ") || "";
+    (hit.assuntos as { nome: string }[])?.map((a) => a.nome).join(", ") || "";
 
   const dataFormatada = mov.dataHora
-    ? new Date(mov.dataHora).toLocaleDateString("pt-BR", {
+    ? new Date(mov.dataHora as string).toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "long",
         year: "numeric",
       })
     : new Date().toLocaleDateString("pt-BR");
 
-  let texto = `${mov.nome.toUpperCase()} — ${orgao}`;
+  let texto = `${(mov.nome as string).toUpperCase()} — ${orgao}`;
   if (classe) texto += ` — ${classe}`;
   texto += `\nProcesso nº ${numero}`;
   if (assuntos) texto += ` — Assunto: ${assuntos}`;
@@ -221,14 +221,14 @@ serve(async (req) => {
 
     const existentesSet = new Set(
       (existentes || []).map(
-        (e: any) => `${e.numero_processo}::${e.conteudo?.slice(0, 80)}`
+        (e: { numero_processo: string; conteudo?: string }) => `${e.numero_processo}::${e.conteudo?.slice(0, 80)}`
       )
     );
 
     const limiteData = new Date();
     limiteData.setDate(limiteData.getDate() - 30); // últimos 30 dias
 
-    const inserir: any[] = [];
+    const inserir: Record<string, unknown>[] = [];
     const erros: string[] = [];
     let processosBuscados = 0;
 
@@ -249,7 +249,7 @@ serve(async (req) => {
         proc.numero.replace(/\D/g, ""),
       ].filter((v, i, a) => a.indexOf(v) === i);
 
-      let hit: any = null;
+      let hit: Record<string, unknown> | null = null;
       let usedCandidate = "";
 
       for (const candidate of candidates) {
@@ -268,9 +268,9 @@ serve(async (req) => {
 
           if (!resp.ok) continue;
           const data = await resp.json();
-          const hits = data.hits?.hits || [];
+          const hits = (data.hits?.hits || []) as Record<string, unknown>[];
           if (hits.length > 0) {
-            hit = hits[0]._source;
+            hit = hits[0]._source as Record<string, unknown>;
             usedCandidate = candidate;
             break;
           }
@@ -283,35 +283,35 @@ serve(async (req) => {
 
       if (!hit) continue;
 
-      const orgao = hit.orgaoJulgador?.nome || proc.vara || tribunalKey.toUpperCase();
-      const movimentos: any[] = hit.movimentos || [];
+      const orgao = (hit.orgaoJulgador as Record<string, unknown>)?.nome || proc.vara || tribunalKey.toUpperCase();
+      const movimentos = (hit.movimentos || []) as Record<string, unknown>[];
 
       // Pegar apenas movimentos recentes (últimos 30 dias)
-      const recentes = movimentos.filter((m: any) => {
+      const recentes = movimentos.filter((m) => {
         if (!m.dataHora) return false;
-        return new Date(m.dataHora) >= limiteData;
+        return new Date(m.dataHora as string) >= limiteData;
       });
 
       for (const mov of recentes.slice(0, 3)) {
-        const tipo = classifyMovimento(mov.nome);
+        const tipo = classifyMovimento(mov.nome as string);
         const complementosText =
-          mov.complementosTabelados
-            ?.map((c: any) => `${c.nome}: ${c.valor}`)
+          (mov.complementosTabelados as { nome: string; valor: string }[])
+            ?.map((c) => `${c.nome}: ${c.valor}`)
             .join("; ") || "";
         const conteudo = buildConteudo(
           hit,
           mov,
-          orgao,
+          orgao as string,
           tribunalKey,
-          hit.numeroProcesso || usedCandidate
+          (hit.numeroProcesso as string) || usedCandidate
         );
 
         // Verificar duplicata
-        const chave = `${hit.numeroProcesso || usedCandidate}::${conteudo.slice(0, 80)}`;
+        const chave = `${(hit.numeroProcesso as string) || usedCandidate}::${conteudo.slice(0, 80)}`;
         if (existentesSet.has(chave)) continue;
         existentesSet.add(chave);
 
-        const prazo = extractPrazoDias(mov.nome, complementosText);
+        const prazo = extractPrazoDias(mov.nome as string, complementosText);
         const status =
           tipo === "sentenca" || tipo === "acordao"
             ? "nova"
@@ -323,9 +323,9 @@ serve(async (req) => {
           user_id: user.id,
           tipo,
           tribunal: tribunalKey.toUpperCase(),
-          numero_processo: hit.numeroProcesso || usedCandidate,
+          numero_processo: (hit.numeroProcesso as string) || usedCandidate,
           cliente_nome: proc.cliente_nome || null,
-          data_publicacao: mov.dataHora || new Date().toISOString(),
+          data_publicacao: (mov.dataHora as string) || new Date().toISOString(),
           conteudo,
           conteudo_simplificado: null,
           status,

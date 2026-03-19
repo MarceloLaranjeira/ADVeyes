@@ -65,11 +65,11 @@ serve(async (req) => {
     ]);
 
     const procs = procRes.data || [];
-    let audiencias: any[] = [];
-    let documentos: any[] = [];
+    let audiencias: Record<string, unknown>[] = [];
+    let documentos: Record<string, unknown>[] = [];
 
     if (procs.length > 0) {
-      const procIds = procs.map((p: any) => p.id);
+      const procIds = procs.map((p: { id: string }) => p.id);
       const [audRes, docRes] = await Promise.all([
         supabase.from("audiencias").select("*").in("processo_id", procIds).order("data_hora", { ascending: false }).limit(10),
         supabase.from("documentos").select("*").in("processo_id", procIds).order("created_at", { ascending: false }).limit(20),

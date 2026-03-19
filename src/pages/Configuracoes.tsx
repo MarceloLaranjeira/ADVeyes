@@ -79,9 +79,9 @@ const Configuracoes = () => {
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [credenciais, setCredenciais] = useState<any[]>([]);
+  const [credenciais, setCredenciais] = useState<Record<string, unknown>[]>([]);
   const [showCredForm, setShowCredForm] = useState(false);
-  const [editCred, setEditCred] = useState<any>(null);
+  const [editCred, setEditCred] = useState<Record<string, unknown> | null>(null);
   const [deleteCred, setDeleteCred] = useState<string | null>(null);
   const [credForm, setCredForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -90,7 +90,7 @@ const Configuracoes = () => {
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
 
   // Asaas / plano state
-  const [planData, setPlanData] = useState<any>(null);
+  const [planData, setPlanData] = useState<Record<string, unknown> | null>(null);
   const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
@@ -107,6 +107,7 @@ const Configuracoes = () => {
         setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleGcalConnect = () => googleCalendar.authorize();
@@ -129,8 +130,8 @@ const Configuracoes = () => {
       // Save subscription intent
       await supabase.from("asaas_subscriptions").upsert({ user_id: user!.id, asaas_customer_id: customer.id, plan: planKey, status: "pending" }, { onConflict: "user_id" });
       toast({ title: "PIX gerado! Escaneie para ativar o plano." });
-    } catch (err: any) {
-      toast({ title: "Erro ao gerar cobrança", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao gerar cobrança", description: (err as Error).message, variant: "destructive" });
     }
     setCheckoutLoading(false);
   };
@@ -168,9 +169,9 @@ const Configuracoes = () => {
   useEffect(() => { fetchCredenciais(); }, []);
 
   const openNewCred = () => { setEditCred(null); setCredForm(emptyForm); setShowCredForm(true); };
-  const openEditCred = (c: any) => {
+  const openEditCred = (c: Record<string, unknown>) => {
     setEditCred(c);
-    setCredForm({ tribunal: c.tribunal, token_acesso: c.token_acesso || "", numero_oab: c.numero_oab || "", seccional_oab: c.seccional_oab || "", cpf: c.cpf || "" });
+    setCredForm({ tribunal: (c.tribunal as string) || "", token_acesso: (c.token_acesso as string) || "", numero_oab: (c.numero_oab as string) || "", seccional_oab: (c.seccional_oab as string) || "", cpf: (c.cpf as string) || "" });
     setShowCredForm(true);
   };
 

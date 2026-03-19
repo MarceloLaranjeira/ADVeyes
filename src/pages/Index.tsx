@@ -13,12 +13,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
+interface Prazo {
+  tipo: string;
+  titulo: string;
+  data: string;
+  dias: number;
+  prioridade?: string;
+  valor?: number;
+  id: string;
+}
+
 const Index = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ processos: 0, clientes: 0, documentos: 0 });
-  const [prazos, setPrazos] = useState<any[]>([]);
-  const [audienciasProximas, setAudienciasProximas] = useState<any[]>([]);
-  const [notificacoesRecentes, setNotificacoesRecentes] = useState<any[]>([]);
+  const [prazos, setPrazos] = useState<Prazo[]>([]);
+  const [audienciasProximas, setAudienciasProximas] = useState<Record<string, unknown>[]>([]);
+  const [notificacoesRecentes, setNotificacoesRecentes] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
     const now = new Date();
@@ -34,12 +44,12 @@ const Index = () => {
       supabase.from("notificacoes").select("*").eq("lida", false).order("created_at", { ascending: false }).limit(5),
     ]).then(([proc, cli, doc, tarefas, aud, fin, notifs]) => {
       setStats({ processos: proc.count || 0, clientes: cli.count || 0, documentos: doc.count || 0 });
-      const allPrazos: any[] = [];
-      (tarefas.data || []).forEach((t: any) => {
+      const allPrazos: Prazo[] = [];
+      (tarefas.data || []).forEach((t) => {
         const dias = Math.ceil((new Date(t.data_limite).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         allPrazos.push({ tipo: "tarefa", titulo: t.titulo, data: t.data_limite, dias, prioridade: t.prioridade, id: t.id });
       });
-      (fin.data || []).forEach((f: any) => {
+      (fin.data || []).forEach((f) => {
         const dias = Math.ceil((new Date(f.data_vencimento).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         allPrazos.push({ tipo: "financeiro", titulo: f.descricao, data: f.data_vencimento, dias, valor: f.valor, id: f.id });
       });

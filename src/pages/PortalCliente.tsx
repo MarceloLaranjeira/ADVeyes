@@ -8,10 +8,24 @@ import { UserCircle, Plus, Copy, Trash2, ExternalLink, Link2 } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+interface Acesso {
+  id: string;
+  token: string;
+  ativo: boolean;
+  ultimo_acesso?: string;
+  clientes?: { nome?: string; email?: string } | null;
+}
+
+interface Cliente {
+  id: string;
+  nome: string;
+  email?: string;
+}
+
 const PortalCliente = () => {
   const { toast } = useToast();
-  const [acessos, setAcessos] = useState<any[]>([]);
-  const [clientes, setClientes] = useState<any[]>([]);
+  const [acessos, setAcessos] = useState<Acesso[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState("");
 
@@ -105,7 +119,7 @@ const PortalCliente = () => {
               <Card key={a.id}>
                 <CardContent className="p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-sm">{(a as any).clientes?.nome || "Cliente"}</p>
+                    <p className="font-medium text-sm">{a.clientes?.nome || "Cliente"}</p>
                     <p className="text-xs text-muted-foreground">
                       Token: <code className="bg-muted px-1.5 py-0.5 rounded">{a.token.slice(0, 12)}...</code>
                       {a.ultimo_acesso && ` • Último acesso: ${new Date(a.ultimo_acesso).toLocaleDateString("pt-BR")}`}

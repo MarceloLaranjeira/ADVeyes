@@ -10,7 +10,7 @@ const corsHeaders = {
 // Chave configurada em JUSBRASIL_API_KEY nas secrets da Edge Function
 const JUSBRASIL_BASE = "https://api.jusbrasil.com.br";
 
-async function queryJusBrasil(numero: string): Promise<{ processos?: any[]; error?: string }> {
+async function queryJusBrasil(numero: string): Promise<{ processos?: Record<string, unknown>[]; error?: string }> {
   const apiKey = Deno.env.get("JUSBRASIL_API_KEY");
   if (!apiKey) return { error: "JUSBRASIL_API_KEY não configurada" };
 
@@ -35,24 +35,30 @@ async function queryJusBrasil(numero: string): Promise<{ processos?: any[]; erro
     const data = await resp.json();
     // Normaliza resposta JusBrasil → formato interno
     const hits = data?.data || data?.processos || data?.hits?.hits || [];
-    const processos = hits.map((p: any) => ({
-      numero: p.numero || p.numeroProcesso || p.number || numero,
-      classe: p.classe || p.classeProcessual || p.type || "Não informado",
-      assunto: Array.isArray(p.assuntos) ? p.assuntos.map((a: any) => a.nome || a).join(", ") : (p.assunto || p.subject || ""),
-      tribunal: p.tribunal || p.court || p.orgao || "",
-      sistema: "jusbrasil",
-      grau: p.grau || p.degree || "",
-      orgaoJulgador: p.orgaoJulgador?.nome || p.orgao || p.court || "",
-      dataAjuizamento: p.dataAjuizamento || p.dataDistribuicao || p.filed_at || null,
-      ultimaAtualizacao: p.dataHoraUltimaAtualizacao || p.updated_at || null,
-      partes: p.partes || p.parties || [],
-      movimentos: (p.movimentos || p.moves || p.movements || []).map((m: any) => ({
-        nome: m.nome || m.name || m.tipo || m.type || "",
-        data: m.dataHora || m.data || m.date || "",
-        complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || m.descricao || m.description || "",
-      })),
-      fonte: "JusBrasil",
-    }));
+    const processos = (hits as unknown[]).map((p: unknown) => {
+      const proc = p as Record<string, unknown>;
+      return {
+        numero: proc.numero || proc.numeroProcesso || proc.number || numero,
+        classe: proc.classe || proc.classeProcessual || proc.type || "Não informado",
+        assunto: Array.isArray(proc.assuntos) ? (proc.assuntos as { nome?: unknown }[]).map((a) => a.nome || a).join(", ") : (proc.assunto || proc.subject || ""),
+        tribunal: proc.tribunal || proc.court || proc.orgao || "",
+        sistema: "jusbrasil",
+        grau: proc.grau || proc.degree || "",
+        orgaoJulgador: (proc.orgaoJulgador as Record<string, unknown>)?.nome || proc.orgao || proc.court || "",
+        dataAjuizamento: proc.dataAjuizamento || proc.dataDistribuicao || proc.filed_at || null,
+        ultimaAtualizacao: proc.dataHoraUltimaAtualizacao || proc.updated_at || null,
+        partes: proc.partes || proc.parties || [],
+        movimentos: ((proc.movimentos || proc.moves || proc.movements || []) as unknown[]).map((m: unknown) => {
+          const mov = m as Record<string, unknown>;
+          return {
+            nome: mov.nome || mov.name || mov.tipo || mov.type || "",
+            data: mov.dataHora || mov.data || mov.date || "",
+            complementos: (mov.complementosTabelados as { nome: string; valor: string }[])?.map((c) => `${c.nome}: ${c.valor}`).join("; ") || mov.descricao || mov.description || "",
+          };
+        }),
+        fonte: "JusBrasil",
+      };
+    });
 
     return { processos };
   } catch (err) {
@@ -211,7 +217,7 @@ function normalizeCNJ(numero: string): string {
 }
 
 /** Realiza a consulta DataJud com múltiplas estratégias de busca */
-async function queryDataJud(endpoint: string, numero: string): Promise<{ data?: any; error?: string; status?: number }> {
+async function queryDataJud(endpoint: string, numero: string): Promise<{ data?: Record<string, unknown>; error?: string; status?: number }> {
   const headers = {
     "Content-Type": "application/json",
     "Authorization": DATAJUD_KEY,
@@ -269,24 +275,28 @@ async function queryDataJud(endpoint: string, numero: string): Promise<{ data?: 
 }
 
 /** Mapeia hits do DataJud para o formato do sistema */
-function mapHits(hits: any[], sistema: string) {
-  return (hits || []).map((hit: any) => {
-    const s = hit._source;
+function mapHits(hits: unknown[], sistema: string) {
+  return (hits || []).map((hit: unknown) => {
+    const h = hit as Record<string, unknown>;
+    const s = h._source as Record<string, unknown>;
     return {
       numero: s.numeroProcesso,
-      classe: s.classe?.nome || s.classeProcessual || "Não informado",
-      assunto: s.assuntos?.map((a: any) => a.nome).join(", ") || "",
+      classe: (s.classe as Record<string, unknown>)?.nome || s.classeProcessual || "Não informado",
+      assunto: (s.assuntos as { nome: string }[])?.map((a) => a.nome).join(", ") || "",
       tribunal: s.tribunal || sistema.toUpperCase(),
       sistema,
       grau: s.grau || "",
-      orgaoJulgador: s.orgaoJulgador?.nome || "",
+      orgaoJulgador: (s.orgaoJulgador as Record<string, unknown>)?.nome || "",
       dataAjuizamento: s.dataAjuizamento || null,
       ultimaAtualizacao: s.dataHoraUltimaAtualizacao || null,
-      movimentos: (s.movimentos || []).map((m: any) => ({
-        nome: m.nome,
-        data: m.dataHora,
-        complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
-      })),
+      movimentos: ((s.movimentos as unknown[]) || []).map((m: unknown) => {
+        const mov = m as Record<string, unknown>;
+        return {
+          nome: mov.nome,
+          data: mov.dataHora,
+          complementos: (mov.complementosTabelados as { nome: string; valor: string }[])?.map((c) => `${c.nome}: ${c.valor}`).join("; ") || "",
+        };
+      }),
     };
   });
 }
@@ -380,7 +390,7 @@ serve(async (req) => {
     // === Tenta JusBrasil primeiro (se API key configurada) ===
     const jbResult = await queryJusBrasil(numero);
     if (jbResult.processos && jbResult.processos.length > 0) {
-      const finalResult: any = {
+      const finalResult: Record<string, unknown> = {
         processos: jbResult.processos,
         total: jbResult.processos.length,
         fonte: "JusBrasil",
@@ -415,11 +425,11 @@ serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const processos = mapHits(data.hits?.hits, resolvedKey);
+    const processos = mapHits(((data.hits as Record<string, unknown>)?.hits as unknown[]) || [], resolvedKey);
 
-    const finalResult: any = {
+    const finalResult: Record<string, unknown> = {
       processos,
-      total: data.hits?.total?.value || 0,
+      total: ((data.hits as Record<string, unknown>)?.total as Record<string, unknown>)?.value || 0,
       fonte: "DataJud/CNJ",
     };
     if (autoDetected && autoDetected !== inputKey) {

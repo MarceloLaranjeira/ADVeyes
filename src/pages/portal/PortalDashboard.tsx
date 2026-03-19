@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,22 +7,13 @@ import { Scale, FileText, Gavel, LogOut, FolderOpen } from "lucide-react";
 
 const PortalDashboard = () => {
   const navigate = useNavigate();
-  const [cliente, setCliente] = useState<any>(null);
-  const [processos, setProcessos] = useState<any[]>([]);
-  const [audiencias, setAudiencias] = useState<any[]>([]);
-  const [documentos, setDocumentos] = useState<any[]>([]);
+  const [cliente, setCliente] = useState<Record<string, unknown> | null>(null);
+  const [processos, setProcessos] = useState<Record<string, unknown>[]>([]);
+  const [audiencias, setAudiencias] = useState<Record<string, unknown>[]>([]);
+  const [documentos, setDocumentos] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = sessionStorage.getItem("portal_token");
-    if (!token) {
-      navigate("/portal");
-      return;
-    }
-    fetchData(token);
-  }, []);
-
-  const fetchData = async (token: string) => {
+  const fetchData = useCallback(async (token: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("portal-data", {
         body: { token, action: "dashboard" },
@@ -45,7 +36,16 @@ const PortalDashboard = () => {
       navigate("/portal");
     }
     setLoading(false);
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem("portal_token");
+    if (!token) {
+      navigate("/portal");
+      return;
+    }
+    fetchData(token);
+  }, [fetchData, navigate]);
 
   const handleLogout = () => {
     sessionStorage.removeItem("portal_token");

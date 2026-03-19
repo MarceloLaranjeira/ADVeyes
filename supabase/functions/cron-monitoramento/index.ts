@@ -47,7 +47,7 @@ serve(async (req) => {
             "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
           },
           body: JSON.stringify({
-            query: { match: { numeroProcesso: mon.numero_processo.replace(/[.\-\/]/g, "") } },
+            query: { match: { numeroProcesso: mon.numero_processo.replace(/[.\-/]/g, "") } },
             size: 1,
           }),
         });

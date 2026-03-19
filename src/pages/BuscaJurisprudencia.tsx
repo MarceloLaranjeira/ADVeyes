@@ -176,13 +176,30 @@ const quickFilters = [
   { id: "tjsp", nome: "TJSP" }, { id: "tjrj", nome: "TJRJ" }, { id: "tjmg", nome: "TJMG" },
 ];
 
+interface Movimento {
+  nome?: string;
+  data?: string;
+  complementos?: string;
+}
+
+interface ProcessoResult {
+  numero: string;
+  tribunal?: string;
+  grau?: string;
+  classe?: string;
+  assunto?: string;
+  orgaoJulgador?: string;
+  dataAjuizamento?: string;
+  movimentos?: Movimento[];
+}
+
 const BuscaJurisprudencia = () => {
   const { toast } = useToast();
   const [numero, setNumero] = useState("");
   const [tribunal, setTribunal] = useState("tjam");
   const [loading, setLoading] = useState(false);
   const [monitorando, setMonitorando] = useState<string[]>([]);
-  const [resultados, setResultados] = useState<any[]>([]);
+  const [resultados, setResultados] = useState<ProcessoResult[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("geral");
   const [searchProgress, setSearchProgress] = useState({ active: false, current: 0, total: 0, label: "" });
@@ -214,7 +231,7 @@ const BuscaJurisprudencia = () => {
   };
 
   const buildFiltros = () => {
-    const f: any = {};
+    const f: Record<string, string> = {};
     if (filtroClasse.trim()) f.classe = filtroClasse.trim();
     if (filtroAssunto.trim()) f.assunto = filtroAssunto.trim();
     if (filtroOrgao.trim()) f.orgaoJulgador = filtroOrgao.trim();
@@ -259,10 +276,10 @@ const BuscaJurisprudencia = () => {
           if ((data.processos || []).length === 0)
             toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${totalTribunais} tribunais (${label})` });
         }
-      } catch (e: any) {
+      } catch (e) {
         clearInterval(interval);
         setSearchProgress({ active: false, current: 0, total: 0, label: "" });
-        toast({ title: "Erro na consulta", description: e.message, variant: "destructive" });
+        toast({ title: "Erro na consulta", description: (e as Error).message, variant: "destructive" });
       }
     } else {
       try {
@@ -278,8 +295,8 @@ const BuscaJurisprudencia = () => {
           if ((data.processos || []).length === 0)
             toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${t.toUpperCase()}` });
         }
-      } catch (e: any) {
-        toast({ title: "Erro na consulta", description: e.message, variant: "destructive" });
+      } catch (e) {
+        toast({ title: "Erro na consulta", description: (e as Error).message, variant: "destructive" });
       }
     }
     setLoading(false);
@@ -293,8 +310,8 @@ const BuscaJurisprudencia = () => {
       if (error) throw error;
       setMonitorando((prev) => [...prev, numProcesso]);
       toast({ title: "Processo monitorado!", description: "Você será notificado de novas movimentações." });
-    } catch (e: any) {
-      toast({ title: "Erro ao monitorar", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Erro ao monitorar", description: (e as Error).message, variant: "destructive" });
     }
   };
 
@@ -305,8 +322,8 @@ const BuscaJurisprudencia = () => {
       });
       if (error) throw error;
       toast({ title: data.message || "Petição preparada", description: data.nota });
-    } catch (e: any) {
-      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
     }
   };
 
@@ -320,7 +337,7 @@ const BuscaJurisprudencia = () => {
     return id.toUpperCase();
   };
 
-  const ResultCard = ({ p }: { p: any }) => (
+  const ResultCard = ({ p }: { p: ProcessoResult }) => (
     <Card className="border hover:shadow-md transition-shadow">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4 mb-3">
@@ -368,7 +385,7 @@ const BuscaJurisprudencia = () => {
           <div className="border-t pt-3 mt-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Movimentações</h4>
             <div className="space-y-1.5">
-              {p.movimentos.map((m: any, j: number) => (
+              {p.movimentos.map((m, j) => (
                 <div key={j} className="flex items-start gap-2 text-xs">
                   <FileText className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
                   <div>

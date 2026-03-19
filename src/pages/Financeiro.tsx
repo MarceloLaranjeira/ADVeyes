@@ -19,7 +19,7 @@ const statusList = ["Todos", "pendente", "pago", "atrasado"];
 const Financeiro = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [registros, setRegistros] = useState<any[]>([]);
+  const [registros, setRegistros] = useState<Record<string, unknown>[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterTipo, setFilterTipo] = useState("Todos");

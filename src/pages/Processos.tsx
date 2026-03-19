@@ -23,6 +23,60 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 
+interface Processo {
+  id: string;
+  numero: string;
+  cliente_nome?: string;
+  area?: string;
+  status?: string;
+  vara?: string;
+  advogado?: string;
+  percentual_exito?: number;
+  polo_ativo?: string;
+  polo_passivo?: string;
+  descricao?: string;
+  data_prazo?: string;
+  urgente?: boolean;
+  created_at?: string;
+}
+
+interface Andamento {
+  id: string;
+  tipo: string;
+  descricao: string;
+  data_andamento: string;
+  origem?: string;
+  tribunal?: string;
+}
+
+interface FinanceiroItem {
+  id: string;
+  tipo: string;
+  descricao?: string;
+  valor?: number;
+  status?: string;
+  data_vencimento?: string;
+  created_at?: string;
+}
+
+interface TarefaItem {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  status?: string;
+  data_limite?: string | null;
+  prioridade?: string;
+}
+
+interface AudienciaItem {
+  id: string;
+  tipo: string;
+  data_hora: string;
+  local?: string;
+  resultado?: string;
+  descricao?: string;
+}
+
 const areas   = ["Todas", "Penal", "Cível", "Família", "Execução Penal", "Recurso", "Trabalhista"];
 const statuses = ["Todos", "Em andamento", "Aguardando audiência", "Sentença proferida", "Recurso interposto", "Arquivado"];
 
@@ -96,7 +150,7 @@ function AndamentoForm({
 }
 
 // ─── Timeline de andamentos ────────────────────────────────────────────────────
-function AndamentosTimeline({ andamentos }: { andamentos: any[] }) {
+function AndamentosTimeline({ andamentos }: { andamentos: Andamento[] }) {
   if (andamentos.length === 0)
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum andamento registrado</p>;
 
@@ -138,13 +192,13 @@ function AndamentosTimeline({ andamentos }: { andamentos: any[] }) {
 function ProcessoDetalhe({
   processo, onClose, onEdit, userId,
 }: {
-  processo: any; onClose: () => void; onEdit: () => void; userId: string;
+  processo: Processo; onClose: () => void; onEdit: () => void; userId: string;
 }) {
-  const [andamentos, setAndamentos]   = useState<any[]>([]);
-  const [tarefas, setTarefas]         = useState<any[]>([]);
-  const [audiencias, setAudiencias]   = useState<any[]>([]);
-  const [financeiro, setFinanceiro]   = useState<any[]>([]);
-  const [publicacoes, setPublicacoes] = useState<any[]>([]);
+  const [andamentos, setAndamentos]   = useState<Andamento[]>([]);
+  const [tarefas, setTarefas]         = useState<TarefaItem[]>([]);
+  const [audiencias, setAudiencias]   = useState<AudienciaItem[]>([]);
+  const [financeiro, setFinanceiro]   = useState<FinanceiroItem[]>([]);
+  const [publicacoes, setPublicacoes] = useState<Andamento[]>([]);
   const [showAndForm, setShowAndForm] = useState(false);
   const { toast } = useToast();
 
@@ -161,7 +215,7 @@ function ProcessoDetalhe({
     setAudiencias(aud.data || []);
     setFinanceiro(fin.data || []);
     // Merge publicações as andamentos in timeline
-    const pubAsAnd = (pub.data || []).map((p: any) => ({
+    const pubAsAnd = (pub.data || []).map((p) => ({
       id: "pub_" + p.id,
       tipo: "Publicação",
       descricao: p.conteudo?.slice(0, 300) || p.tipo,
@@ -172,6 +226,7 @@ function ProcessoDetalhe({
     setPublicacoes(pubAsAnd);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAll(); }, [processo.id]);
 
   const allAndamentos = [...andamentos, ...publicacoes].sort(
@@ -386,13 +441,13 @@ function ProcessoDetalhe({
 const Processos = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [processos, setProcessos]       = useState<any[]>([]);
+  const [processos, setProcessos]       = useState<Processo[]>([]);
   const [search, setSearch]             = useState("");
   const [showForm, setShowForm]         = useState(false);
-  const [editData, setEditData]         = useState<any>(null);
+  const [editData, setEditData]         = useState<Processo | null>(null);
   const [deleteId, setDeleteId]         = useState<string | null>(null);
-  const [honorarioProcesso, setHonorarioProcesso] = useState<any>(null);
-  const [detalheProcesso, setDetalheProcesso]     = useState<any>(null);
+  const [honorarioProcesso, setHonorarioProcesso] = useState<Processo | null>(null);
+  const [detalheProcesso, setDetalheProcesso]     = useState<Processo | null>(null);
   const [filterArea, setFilterArea]     = useState("Todas");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");

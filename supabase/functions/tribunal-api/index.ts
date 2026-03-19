@@ -151,7 +151,7 @@ function normalizeCNJ(numero: string): string {
   return numero.trim();
 }
 
-async function queryDataJud(endpoint: string, numero_processo: string): Promise<{ data?: any; error?: string; status?: number }> {
+async function queryDataJud(endpoint: string, numero_processo: string): Promise<{ data?: Record<string, unknown>; error?: string; status?: number }> {
   const headers = {
     "Content-Type": "application/json",
     "Authorization": DATAJUD_KEY,
@@ -236,7 +236,7 @@ serve(async (req) => {
       .eq("ativo", true)
       .maybeSingle();
 
-    let result: any = {};
+    let result: Record<string, unknown> = {};
 
     switch (action) {
       case "consultar_processo":
@@ -260,19 +260,23 @@ serve(async (req) => {
         result = {
           sistema: tribunalKey === "seeu" ? "SEEU" : tribunalKey === "projudi" ? "Projudi" : realKey.toUpperCase(),
           tribunal_consultado: realKey.toUpperCase(),
-          processos: (data.hits?.hits || []).map((hit: any) => {
-            const s = hit._source;
+          processos: ((data.hits as Record<string, unknown[]>)?.hits || []).map((hit: unknown) => {
+            const h = hit as Record<string, unknown>;
+            const s = h._source as Record<string, unknown>;
             return {
               numero: s.numeroProcesso,
-              classe: s.classe?.nome || s.classeProcessual || "Não informado",
-              assunto: s.assuntos?.map((a: any) => a.nome).join(", ") || "",
+              classe: (s.classe as Record<string, unknown>)?.nome || s.classeProcessual || "Não informado",
+              assunto: (s.assuntos as { nome: string }[])?.map((a) => a.nome).join(", ") || "",
               tribunal: s.tribunal || realKey.toUpperCase(),
-              orgaoJulgador: s.orgaoJulgador?.nome || "",
+              orgaoJulgador: (s.orgaoJulgador as Record<string, unknown>)?.nome || "",
               dataAjuizamento: s.dataAjuizamento,
-              movimentos: (s.movimentos || []).map((m: any) => ({
-                nome: m.nome, data: m.dataHora,
-                complementos: m.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join("; ") || "",
-              })),
+              movimentos: ((s.movimentos as unknown[]) || []).map((m: unknown) => {
+                const mov = m as Record<string, unknown>;
+                return {
+                  nome: mov.nome, data: mov.dataHora,
+                  complementos: (mov.complementosTabelados as { nome: string; valor: string }[])?.map((c) => `${c.nome}: ${c.valor}`).join("; ") || "",
+                };
+              }),
             };
           }),
           total: data.hits?.total?.value || 0,
@@ -345,7 +349,7 @@ serve(async (req) => {
           .eq("user_id", userId)
           .eq("ativo", true);
 
-        const updates: any[] = [];
+        const updates: { processo: string; movimento: string; tribunal: string }[] = [];
         for (const mon of (monitored || [])) {
           const ep = DATAJUD_ENDPOINTS[mon.tribunal] || DATAJUD_ENDPOINTS.tjam;
           try {

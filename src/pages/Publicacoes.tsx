@@ -132,6 +132,7 @@ const Publicacoes = () => {
   const [criandoTarefa, setCriandoTarefa] = useState(false);
 
   const fetchPublicacoes = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any).from("publicacoes").select("*").order("data_publicacao", { ascending: false });
     if (data) setPublicacoes(data);
   };
@@ -148,7 +149,7 @@ const Publicacoes = () => {
         return;
       }
 
-      let result: any = {};
+      let result: Record<string, unknown> = {};
       try {
         const resp = await fetch(CAPTURAR_URL, {
           method: "POST",
@@ -206,7 +207,7 @@ const Publicacoes = () => {
       if (result.erros?.length > 0) {
         console.warn("Erros na captura:", result.erros);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Erro inesperado:", err);
     } finally {
       setLoadingCaptura(false);
@@ -215,12 +216,13 @@ const Publicacoes = () => {
 
   const inserirDadosDemo = async () => {
     // Verificar quais demos já existem
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: existentes } = await (supabase as any)
       .from("publicacoes")
       .select("numero_processo")
       .eq("user_id", user!.id);
 
-    const existentesSet = new Set((existentes || []).map((e: any) => e.numero_processo));
+    const existentesSet = new Set((existentes || []).map((e: { numero_processo: string }) => e.numero_processo));
     const novos = MOCK_DATA.filter((m) => !existentesSet.has(m.numero_processo));
 
     if (novos.length === 0) {
@@ -237,6 +239,7 @@ const Publicacoes = () => {
       tarefa_gerada: m.tarefa_gerada || false,
       conteudo_simplificado: null,
     }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any).from("publicacoes").insert(inserts);
     if (!error) {
       toast({ title: `${novos.length} publicações de demonstração inseridas`, description: "Cadastre processos reais para capturar dados do DataJud/CNJ." });
@@ -245,6 +248,7 @@ const Publicacoes = () => {
   };
 
   const marcarComoLida = async (id: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from("publicacoes").update({ status: "lida" }).eq("id", id);
     setPublicacoes((prev) => prev.map((p) => p.id === id ? { ...p, status: "lida" } : p));
   };
@@ -318,6 +322,7 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
       // Save simplified content
       const resumoMatch = fullText.match(/RESUMO SIMPLES:\s*([\s\S]+?)(?:$|(?=\n[A-Z]+:))/);
       if (resumoMatch) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from("publicacoes").update({ conteudo_simplificado: resumoMatch[1].trim(), status: "lida" }).eq("id", pub.id);
         fetchPublicacoes();
       }
@@ -342,14 +347,15 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
       });
       if (error) throw error;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any).from("publicacoes").update({ tarefa_gerada: true, status: "processada" }).eq("id", triagemResult.pub.id);
 
       toast({ title: "Tarefa criada com sucesso!", description: tarefaForm.titulo });
       setTriagemDialog(false);
       setTriagemResult(null);
       fetchPublicacoes();
-    } catch (err: any) {
-      toast({ title: "Erro ao criar tarefa", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro ao criar tarefa", description: (err as Error).message, variant: "destructive" });
     } finally {
       setCriandoTarefa(false);
     }
