@@ -1,38 +1,35 @@
-// Asaas Payment Integration — Cobrança Recorrente
-// Docs: https://docs.asaas.com/
-// Set VITE_ASAAS_API_KEY in .env
+// Asaas Payment Integration — via Supabase Edge Function proxy
+// A chave de API fica no servidor (ASAAS_API_KEY em Supabase Secrets).
+// Configure em: Supabase Dashboard → Edge Functions → Secrets → ASAAS_API_KEY
 
-const BASE_URL = "https://api.asaas.com/v3";
-const API_KEY = import.meta.env.VITE_ASAAS_API_KEY || "";
+import { supabase } from "@/integrations/supabase/client";
 
-const headers = {
-  "Content-Type": "application/json",
-  "access_token": API_KEY,
-};
+async function call(path: string, method = "GET", body?: object) {
+  const { data, error } = await supabase.functions.invoke("asaas", {
+    body: { path, method, body },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.errors) throw new Error(JSON.stringify(data.errors));
+  return data;
+}
 
 export const asaas = {
   /** Create a customer in Asaas */
-  async createCustomer(data: {
+  createCustomer(data: {
     name: string;
     cpfCnpj: string;
     email?: string;
     phone?: string;
   }) {
-    const res = await fetch(`${BASE_URL}/customers`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Asaas createCustomer: ${res.status}`);
-    return res.json();
+    return call("customers", "POST", data);
   },
 
   /** Create a recurring subscription */
-  async createSubscription(data: {
-    customer: string;          // Asaas customer ID
+  createSubscription(data: {
+    customer: string;
     billingType: "CREDIT_CARD" | "PIX" | "BOLETO";
     value: number;
-    nextDueDate: string;       // "YYYY-MM-DD"
+    nextDueDate: string;
     cycle: "MONTHLY" | "YEARLY";
     description: string;
     creditCard?: {
@@ -51,52 +48,32 @@ export const asaas = {
       phone: string;
     };
   }) {
-    const res = await fetch(`${BASE_URL}/subscriptions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`Asaas createSubscription: ${res.status}`);
-    return res.json();
+    return call("subscriptions", "POST", data);
   },
 
   /** Get subscription status */
-  async getSubscription(subscriptionId: string) {
-    const res = await fetch(`${BASE_URL}/subscriptions/${subscriptionId}`, { headers });
-    if (!res.ok) return null;
-    return res.json();
+  getSubscription(subscriptionId: string) {
+    return call(`subscriptions/${subscriptionId}`);
   },
 
   /** Cancel subscription */
-  async cancelSubscription(subscriptionId: string) {
-    const res = await fetch(`${BASE_URL}/subscriptions/${subscriptionId}`, {
-      method: "DELETE",
-      headers,
-    });
-    return res.status === 200;
+  cancelSubscription(subscriptionId: string) {
+    return call(`subscriptions/${subscriptionId}`, "DELETE");
   },
 
-  /** Create a one-time Pix payment */
-  async createPixPayment(data: {
+  /** Create a one-time PIX payment */
+  createPixPayment(data: {
     customer: string;
     value: number;
     dueDate: string;
     description: string;
   }) {
-    const res = await fetch(`${BASE_URL}/payments`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ ...data, billingType: "PIX" }),
-    });
-    if (!res.ok) throw new Error(`Asaas createPixPayment: ${res.status}`);
-    return res.json();
+    return call("payments", "POST", { ...data, billingType: "PIX" });
   },
 
-  /** Get Pix QR code for a payment */
-  async getPixQrCode(paymentId: string) {
-    const res = await fetch(`${BASE_URL}/payments/${paymentId}/pixQrCode`, { headers });
-    if (!res.ok) return null;
-    return res.json();
+  /** Get PIX QR code for a payment */
+  getPixQrCode(paymentId: string) {
+    return call(`payments/${paymentId}/pixQrCode`);
   },
 };
 
