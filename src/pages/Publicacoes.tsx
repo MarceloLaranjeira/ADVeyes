@@ -149,7 +149,7 @@ const Publicacoes = () => {
         return;
       }
 
-      let result: Record<string, unknown> = {};
+      let result: Record<string, any> = {};
       try {
         const resp = await fetch(CAPTURAR_URL, {
           method: "POST",

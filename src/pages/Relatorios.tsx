@@ -137,7 +137,7 @@ const Relatorios = () => {
           </div>
           <Button
             variant="outline"
-            onClick={() => exportRelatorioGeralPDF({ processos, clientes, financeiro, documentos })}
+            onClick={() => exportRelatorioGeralPDF({ processos: processos as any, clientes, financeiro: financeiro as any, documentos })}
             className="gap-2"
           >
             <Download className="w-4 h-4" /> Exportar PDF
