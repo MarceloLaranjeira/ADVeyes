@@ -168,7 +168,7 @@ const IAJuridica = () => {
   }, [messages]);
 
   const initRecognition = useCallback(() => {
-    const w = window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    const w = window as any;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) return null;
     const recognition = new SpeechRecognition();
