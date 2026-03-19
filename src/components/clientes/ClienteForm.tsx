@@ -12,7 +12,7 @@ interface ClienteFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  editData?: any;
+  editData?: Record<string, unknown>;
 }
 
 export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: ClienteFormProps) => {

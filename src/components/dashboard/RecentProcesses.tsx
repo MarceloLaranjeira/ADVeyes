@@ -29,7 +29,7 @@ export const RecentProcesses = () => {
       .limit(8);
 
     if (data) {
-      setProcessos(data.map((p: any) => ({
+      setProcessos(data.map((p) => ({
         id: p.id,
         numero: p.numero,
         cliente_nome: p.clientes?.nome || "—",

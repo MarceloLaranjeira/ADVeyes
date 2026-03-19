@@ -365,7 +365,7 @@ serve(async (req) => {
     // === TRIBUNAIS NORMAIS ===
     // Auto-detectar tribunal pelo número CNJ se informado
     const autoDetected = detectTribunalFromCNJ(normalizeCNJ(numero) || numero);
-    let resolvedKey = DATAJUD_ENDPOINTS[inputKey] ? inputKey : (autoDetected || inputKey);
+    const resolvedKey = DATAJUD_ENDPOINTS[inputKey] ? inputKey : (autoDetected || inputKey);
 
     const endpoint = DATAJUD_ENDPOINTS[resolvedKey];
     if (!endpoint) {

@@ -1,7 +1,34 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-export const exportProcessosPDF = (processos: any[]) => {
+interface Processo {
+  numero: string;
+  cliente_nome?: string;
+  area?: string;
+  status?: string;
+  vara?: string;
+  advogado?: string;
+}
+
+interface FinanceiroRecord {
+  tipo: string;
+  descricao?: string;
+  valor: number;
+  data_vencimento?: string;
+  status?: string;
+}
+
+interface Audiencia {
+  tipo: string;
+  data_hora: string;
+  processo_numero?: string;
+  cliente_nome?: string;
+  vara?: string;
+  juiz?: string;
+  status?: string;
+}
+
+export const exportProcessosPDF = (processos: Processo[]) => {
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.text("Relatório de Processos", 14, 20);
@@ -19,7 +46,7 @@ export const exportProcessosPDF = (processos: any[]) => {
   doc.save(`processos-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
-export const exportFinanceiroPDF = (registros: any[], resumo: { recebido: number; pendente: number; atrasado: number }) => {
+export const exportFinanceiroPDF = (registros: FinanceiroRecord[], resumo: { recebido: number; pendente: number; atrasado: number }) => {
   const doc = new jsPDF();
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -44,7 +71,7 @@ export const exportFinanceiroPDF = (registros: any[], resumo: { recebido: number
   doc.save(`financeiro-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
-export const exportAudienciasPDF = (audiencias: any[]) => {
+export const exportAudienciasPDF = (audiencias: Audiencia[]) => {
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.text("Relatório de Audiências", 14, 20);
@@ -71,10 +98,10 @@ export const exportAudienciasPDF = (audiencias: any[]) => {
 };
 
 export const exportRelatorioGeralPDF = (data: {
-  processos: any[];
-  clientes: any[];
-  financeiro: any[];
-  documentos: any[];
+  processos: Processo[];
+  clientes: Record<string, unknown>[];
+  financeiro: FinanceiroRecord[];
+  documentos: Record<string, unknown>[];
 }) => {
   const doc = new jsPDF();
   const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

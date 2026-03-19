@@ -1,4 +1,11 @@
 // Google Calendar Integration
+interface GoogleCalendarEvent {
+  id?: string;
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  htmlLink?: string;
+}
 // Setup: Create OAuth 2.0 credentials at console.cloud.google.com
 // Required scopes: https://www.googleapis.com/auth/calendar
 
@@ -100,7 +107,7 @@ export const googleCalendar = {
   },
 
   /** List upcoming events from Google Calendar */
-  async listEvents(maxResults = 20): Promise<any[]> {
+  async listEvents(maxResults = 20): Promise<GoogleCalendarEvent[]> {
     const token = this.getToken();
     if (!token) return [];
 
