@@ -24,7 +24,7 @@ export const RecentProcesses = () => {
     setLoading(true);
     const { data } = await supabase
       .from("processos")
-      .select("id, numero, area, status, data_prazo, urgente, clientes(nome)")
+      .select("id, numero, area, status, cliente_nome")
       .order("updated_at", { ascending: false })
       .limit(8);
 
@@ -32,11 +32,9 @@ export const RecentProcesses = () => {
       setProcessos(data.map((p) => ({
         id: p.id,
         numero: p.numero,
-        cliente_nome: p.clientes?.nome || "—",
+        cliente_nome: p.cliente_nome || "—",
         area: p.area || "Geral",
         status: p.status || "Em andamento",
-        data_prazo: p.data_prazo,
-        urgente: p.urgente || false,
       })));
     }
     setLoading(false);

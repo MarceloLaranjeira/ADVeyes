@@ -16,7 +16,7 @@ interface ProcessoFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  editData?: Record<string, unknown>;
+  editData?: Record<string, any>;
 }
 
 export const ProcessoForm = ({ open, onOpenChange, onSuccess, editData }: ProcessoFormProps) => {
