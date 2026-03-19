@@ -51,7 +51,7 @@ function AndamentoForm({
     e.preventDefault();
     if (!form.descricao.trim()) { toast({ title: "Descrição obrigatória", variant: "destructive" }); return; }
     setLoading(true);
-    const { error } = await supabase.from("andamentos").insert({
+    const { error } = await (supabase.from as any)("andamentos").insert({
       user_id: userId, processo_id: processoId,
       numero_processo: numeroProcesso,
       tipo: form.tipo, descricao: form.descricao,
