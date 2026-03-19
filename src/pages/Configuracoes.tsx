@@ -103,7 +103,7 @@ const Configuracoes = () => {
 
     // Load plan from Supabase
     if (user) {
-      supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+      (supabase.from as any)("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }: any) => {
         setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
       });
     }
