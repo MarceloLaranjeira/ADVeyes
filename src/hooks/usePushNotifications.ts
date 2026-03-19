@@ -74,8 +74,7 @@ export function usePushNotifications() {
         icon: "/favicon.ico",
         data: { url },
         badge: "/favicon.ico",
-        vibrate: [200, 100, 200] as any,
-      });
+      } as NotificationOptions);
     });
   };
 
