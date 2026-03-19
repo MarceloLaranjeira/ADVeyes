@@ -103,7 +103,7 @@ const Configuracoes = () => {
 
     // Load plan from Supabase
     if (user) {
-      supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+      (supabase.from as any)("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }: any) => {
         setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
       });
     }
@@ -127,7 +127,7 @@ const Configuracoes = () => {
       const qr = await asaas.getPixQrCode(payment.id);
       if (qr) setPixQr({ encodedImage: qr.encodedImage, payload: qr.payload });
       // Save subscription intent
-      await supabase.from("asaas_subscriptions").upsert({ user_id: user!.id, asaas_customer_id: customer.id, plan: planKey, status: "pending" }, { onConflict: "user_id" });
+      await (supabase.from as any)("asaas_subscriptions").upsert({ user_id: user!.id, asaas_customer_id: customer.id, plan: planKey, status: "pending" }, { onConflict: "user_id" });
       toast({ title: "PIX gerado! Escaneie para ativar o plano." });
     } catch (err: any) {
       toast({ title: "Erro ao gerar cobrança", description: err.message, variant: "destructive" });

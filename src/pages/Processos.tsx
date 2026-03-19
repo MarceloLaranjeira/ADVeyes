@@ -51,7 +51,7 @@ function AndamentoForm({
     e.preventDefault();
     if (!form.descricao.trim()) { toast({ title: "Descrição obrigatória", variant: "destructive" }); return; }
     setLoading(true);
-    const { error } = await supabase.from("andamentos").insert({
+    const { error } = await (supabase.from as any)("andamentos").insert({
       user_id: userId, processo_id: processoId,
       numero_processo: numeroProcesso,
       tipo: form.tipo, descricao: form.descricao,
@@ -150,11 +150,11 @@ function ProcessoDetalhe({
 
   const fetchAll = async () => {
     const [and, tar, aud, fin, pub] = await Promise.all([
-      supabase.from("andamentos").select("*").eq("processo_id", processo.id).order("data_andamento", { ascending: false }),
-      supabase.from("tarefas").select("*").eq("processo_id", processo.id).order("data_limite"),
+      (supabase.from as any)("andamentos").select("*").eq("processo_id", processo.id).order("data_andamento", { ascending: false }),
+      supabase.from("tarefas").select("*").eq("user_id", userId).order("data_limite"),
       supabase.from("audiencias").select("*").eq("processo_id", processo.id).order("data_hora", { ascending: false }),
       supabase.from("financeiro").select("*").eq("processo_id", processo.id).order("created_at", { ascending: false }),
-      supabase.from("publicacoes").select("*").eq("numero_processo", processo.numero).order("data_publicacao", { ascending: false }).limit(20),
+      (supabase.from as any)("publicacoes").select("*").eq("numero_processo", processo.numero).order("data_publicacao", { ascending: false }).limit(20),
     ]);
     setAndamentos(and.data || []);
     setTarefas(tar.data || []);

@@ -52,7 +52,7 @@ export function usePushNotifications() {
       });
 
       // Save subscription to Supabase
-      await supabase.from("push_subscriptions").upsert({
+      await (supabase.from as any)("push_subscriptions").upsert({
         user_id: user.id,
         subscription: JSON.stringify(sub),
         updated_at: new Date().toISOString(),
@@ -74,8 +74,7 @@ export function usePushNotifications() {
         icon: "/favicon.ico",
         data: { url },
         badge: "/favicon.ico",
-        vibrate: [200, 100, 200],
-      });
+      } as NotificationOptions);
     });
   };
 
