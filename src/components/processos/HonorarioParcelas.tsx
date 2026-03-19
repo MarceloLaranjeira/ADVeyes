@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Download, Trash2, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
 
+interface Parcela {
+  id: string;
+  numero_parcela: number;
+  valor: number;
+  data_vencimento: string;
+  descricao: string;
+  status: string;
+  data_pagamento?: string | null;
+}
+
 interface Props {
   processoId: string;
   processoNumero: string;
@@ -19,21 +29,21 @@ interface Props {
 export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: Props) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [parcelas, setParcelas] = useState<any[]>([]);
+  const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ valor: "", data_vencimento: "", descricao: "" });
 
-  const fetchParcelas = async () => {
+  const fetchParcelas = useCallback(async () => {
     const { data } = await supabase
       .from("honorario_parcelas")
       .select("*")
       .eq("processo_id", processoId)
       .order("numero_parcela");
     if (data) setParcelas(data);
-  };
+  }, [processoId]);
 
-  useEffect(() => { fetchParcelas(); }, [processoId]);
+  useEffect(() => { fetchParcelas(); }, [fetchParcelas]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +70,7 @@ export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: P
     setLoading(false);
   };
 
-  const togglePago = async (parcela: any) => {
+  const togglePago = async (parcela: Parcela) => {
     const newStatus = parcela.status === "pago" ? "pendente" : "pago";
     await supabase.from("honorario_parcelas").update({
       status: newStatus,
@@ -74,7 +84,7 @@ export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: P
     fetchParcelas();
   };
 
-  const gerarRecibo = (parcela: any) => {
+  const gerarRecibo = (parcela: Parcela) => {
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text("RECIBO DE HONORÁRIOS", 105, 25, { align: "center" });

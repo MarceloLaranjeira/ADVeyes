@@ -217,7 +217,7 @@ serve(async (req) => {
     const { action, tribunal, numero_processo, documento, processo_id, sistema } = await req.json();
 
     // Resolver o tribunal: pode vir como "seeu" ou "projudi" → detectar pelo número CNJ
-    let tribunalKey = (sistema || tribunal || "tjam").toLowerCase();
+    const tribunalKey = (sistema || tribunal || "tjam").toLowerCase();
     let realKey = tribunalKey;
 
     if (tribunalKey === "seeu" || tribunalKey === "projudi") {

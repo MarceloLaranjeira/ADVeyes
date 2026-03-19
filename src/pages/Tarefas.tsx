@@ -206,7 +206,7 @@ const Tarefas = () => {
     // also fetch client names
     if (data) {
       const clientIds = [...new Set(data.map(p => p.cliente_id).filter(Boolean))];
-      let clientMap: Record<string, string> = {};
+      const clientMap: Record<string, string> = {};
       if (clientIds.length > 0) {
         const { data: clientes } = await supabase
           .from("clientes")

@@ -12,7 +12,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   // Close sidebar on route change (mobile)
   useEffect(() => {
     setSidebarOpen(false);
-  }, [window.location.pathname]);
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background">
