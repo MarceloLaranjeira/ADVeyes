@@ -155,7 +155,7 @@ const IAJuridica = () => {
   const [transcript, setTranscript] = useState("");
   const [showModePanel, setShowModePanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
   const ttsRef = useRef<HorusTTS | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -168,7 +168,8 @@ const IAJuridica = () => {
   }, [messages]);
 
   const initRecognition = useCallback(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) return null;
     const recognition = new SpeechRecognition();
     recognition.lang = "pt-BR";
@@ -176,8 +177,8 @@ const IAJuridica = () => {
     recognition.continuous = false;
     recognition.maxAlternatives = 1;
     recognition.onstart = () => setVoiceState("listening");
-    recognition.onresult = (e: any) => {
-      const t = Array.from(e.results).map((r: any) => r[0].transcript).join("");
+    recognition.onresult = (e: Event & { results: SpeechRecognitionResultList }) => {
+      const t = Array.from(e.results).map((r) => r[0].transcript).join("");
       setTranscript(t);
       if (e.results[e.results.length - 1].isFinal) {
         setInput(t);
@@ -190,7 +191,8 @@ const IAJuridica = () => {
   }, []);
 
   const toggleVoice = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast({ title: "Voz não suportada", description: "Use Chrome ou Edge.", variant: "destructive" });
       return;
@@ -278,8 +280,8 @@ const IAJuridica = () => {
       } else {
         setVoiceState("idle");
       }
-    } catch (e: any) {
-      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
       setVoiceState("idle");
     }
     setIsLoading(false);

@@ -17,8 +17,8 @@ const Documentos = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [documentos, setDocumentos] = useState<any[]>([]);
-  const [processos, setProcessos] = useState<any[]>([]);
+  const [documentos, setDocumentos] = useState<Record<string, unknown>[]>([]);
+  const [processos, setProcessos] = useState<Record<string, unknown>[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);

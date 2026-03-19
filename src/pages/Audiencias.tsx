@@ -13,6 +13,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+interface Audiencia {
+  id: string;
+  tipo: string;
+  data_hora: string;
+  vara?: string;
+  juiz?: string;
+  local?: string;
+  observacoes?: string;
+  status: string;
+  processo_id?: string;
+  processo_numero?: string;
+  cliente_nome?: string;
+}
+
+interface Processo {
+  id: string;
+  numero: string;
+  cliente_nome?: string;
+}
+
 const tiposAudiencia = ["Instrução e Julgamento", "Custódia", "Conciliação", "Júri Popular", "Sustentação Oral", "Justificação", "Admonitória"];
 const statusOptions = ["Agendada", "Confirmada", "Realizada", "Adiada", "Cancelada"];
 
@@ -29,10 +49,10 @@ const emptyForm = { tipo: "Instrução e Julgamento", data_hora: "", vara: "", j
 const Audiencias = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [audiencias, setAudiencias] = useState<any[]>([]);
-  const [processos, setProcessos] = useState<any[]>([]);
+  const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
+  const [processos, setProcessos] = useState<Processo[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [editData, setEditData] = useState<any>(null);
+  const [editData, setEditData] = useState<Audiencia | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -48,7 +68,7 @@ const Audiencias = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const openEdit = (a: any) => {
+  const openEdit = (a: Audiencia) => {
     setEditData(a);
     setForm({
       tipo: a.tipo, data_hora: a.data_hora?.slice(0, 16) || "", vara: a.vara || "", juiz: a.juiz || "",
