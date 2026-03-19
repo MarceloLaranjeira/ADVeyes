@@ -168,7 +168,7 @@ const IAJuridica = () => {
   }, [messages]);
 
   const initRecognition = useCallback(() => {
-    const w = window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    const w = window as any;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) return null;
     const recognition = new SpeechRecognition();
@@ -191,7 +191,7 @@ const IAJuridica = () => {
   }, []);
 
   const toggleVoice = () => {
-    const w = window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
+    const w = window as any;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast({ title: "Voz não suportada", description: "Use Chrome ou Edge.", variant: "destructive" });

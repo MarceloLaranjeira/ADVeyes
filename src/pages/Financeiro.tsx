@@ -19,7 +19,7 @@ const statusList = ["Todos", "pendente", "pago", "atrasado"];
 const Financeiro = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [registros, setRegistros] = useState<Record<string, unknown>[]>([]);
+  const [registros, setRegistros] = useState<Record<string, any>[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterTipo, setFilterTipo] = useState("Todos");
@@ -96,7 +96,7 @@ const Financeiro = () => {
             <p className="text-muted-foreground text-sm mt-1">Controle de honorários e pagamentos</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => exportFinanceiroPDF(filtered, { recebido: totalRecebido, pendente: totalPendente, atrasado: totalAtrasado })} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
+            <Button variant="outline" onClick={() => exportFinanceiroPDF(filtered as any, { recebido: totalRecebido, pendente: totalPendente, atrasado: totalAtrasado })} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
             <Button onClick={() => setShowForm(true)} className="gap-2"><Plus className="w-4 h-4" /> Novo Lançamento</Button>
           </div>
         </div>

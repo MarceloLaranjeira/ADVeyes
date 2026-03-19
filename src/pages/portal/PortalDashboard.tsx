@@ -7,10 +7,10 @@ import { Scale, FileText, Gavel, LogOut, FolderOpen } from "lucide-react";
 
 const PortalDashboard = () => {
   const navigate = useNavigate();
-  const [cliente, setCliente] = useState<Record<string, unknown> | null>(null);
-  const [processos, setProcessos] = useState<Record<string, unknown>[]>([]);
-  const [audiencias, setAudiencias] = useState<Record<string, unknown>[]>([]);
-  const [documentos, setDocumentos] = useState<Record<string, unknown>[]>([]);
+  const [cliente, setCliente] = useState<Record<string, any> | null>(null);
+  const [processos, setProcessos] = useState<Record<string, any>[]>([]);
+  const [audiencias, setAudiencias] = useState<Record<string, any>[]>([]);
+  const [documentos, setDocumentos] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async (token: string) => {

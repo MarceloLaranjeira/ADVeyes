@@ -17,12 +17,12 @@ const COLORS = ["hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--suc
 const MONTH_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 const Relatorios = () => {
-  const [processos, setProcessos] = useState<Record<string, unknown>[]>([]);
-  const [clientes, setClientes] = useState<Record<string, unknown>[]>([]);
-  const [financeiro, setFinanceiro] = useState<Record<string, unknown>[]>([]);
-  const [documentos, setDocumentos] = useState<Record<string, unknown>[]>([]);
-  const [tarefas, setTarefas] = useState<Record<string, unknown>[]>([]);
-  const [audiencias, setAudiencias] = useState<Record<string, unknown>[]>([]);
+  const [processos, setProcessos] = useState<Record<string, any>[]>([]);
+  const [clientes, setClientes] = useState<Record<string, any>[]>([]);
+  const [financeiro, setFinanceiro] = useState<Record<string, any>[]>([]);
+  const [documentos, setDocumentos] = useState<Record<string, any>[]>([]);
+  const [tarefas, setTarefas] = useState<Record<string, any>[]>([]);
+  const [audiencias, setAudiencias] = useState<Record<string, any>[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -137,7 +137,7 @@ const Relatorios = () => {
           </div>
           <Button
             variant="outline"
-            onClick={() => exportRelatorioGeralPDF({ processos, clientes, financeiro, documentos })}
+            onClick={() => exportRelatorioGeralPDF({ processos: processos as any, clientes, financeiro: financeiro as any, documentos })}
             className="gap-2"
           >
             <Download className="w-4 h-4" /> Exportar PDF

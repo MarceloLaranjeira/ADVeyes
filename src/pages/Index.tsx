@@ -27,8 +27,8 @@ const Index = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ processos: 0, clientes: 0, documentos: 0 });
   const [prazos, setPrazos] = useState<Prazo[]>([]);
-  const [audienciasProximas, setAudienciasProximas] = useState<Record<string, unknown>[]>([]);
-  const [notificacoesRecentes, setNotificacoesRecentes] = useState<Record<string, unknown>[]>([]);
+  const [audienciasProximas, setAudienciasProximas] = useState<Record<string, any>[]>([]);
+  const [notificacoesRecentes, setNotificacoesRecentes] = useState<Record<string, any>[]>([]);
 
   useEffect(() => {
     const now = new Date();

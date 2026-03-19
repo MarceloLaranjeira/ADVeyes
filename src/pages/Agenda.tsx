@@ -32,6 +32,7 @@ interface Evento {
 interface Tarefa {
   id: string;
   titulo: string;
+  descricao?: string | null;
   data_limite?: string | null;
   status: string;
   prioridade?: string;

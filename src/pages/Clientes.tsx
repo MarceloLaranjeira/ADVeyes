@@ -10,10 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const Clientes = () => {
   const { toast } = useToast();
-  const [clientes, setClientes] = useState<Record<string, unknown>[]>([]);
+  const [clientes, setClientes] = useState<Record<string, any>[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editData, setEditData] = useState<Record<string, unknown> | null>(null);
+  const [editData, setEditData] = useState<Record<string, any> | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchClientes = async () => {

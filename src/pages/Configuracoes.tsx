@@ -79,9 +79,9 @@ const Configuracoes = () => {
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [credenciais, setCredenciais] = useState<Record<string, unknown>[]>([]);
+  const [credenciais, setCredenciais] = useState<Record<string, any>[]>([]);
   const [showCredForm, setShowCredForm] = useState(false);
-  const [editCred, setEditCred] = useState<Record<string, unknown> | null>(null);
+  const [editCred, setEditCred] = useState<Record<string, any> | null>(null);
   const [deleteCred, setDeleteCred] = useState<string | null>(null);
   const [credForm, setCredForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -90,7 +90,7 @@ const Configuracoes = () => {
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
 
   // Asaas / plano state
-  const [planData, setPlanData] = useState<Record<string, unknown> | null>(null);
+  const [planData, setPlanData] = useState<Record<string, any> | null>(null);
   const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
