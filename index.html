@@ -2,28 +2,43 @@
 <html lang="pt-BR" class="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title>Albertino e Advogados Associados - Sistema Jurídico</title>
-    <meta name="description" content="Sistema de gestão jurídica - Albertino e Advogados Associados. Direito penal, cível, família, execução penal e recursos.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>LEXIA — Gestão Jurídica para Advogados</title>
+    <meta name="description" content="LEXIA é o sistema de gestão jurídica completo para advogados e escritórios. Controle processos, agenda, honorários e use IA jurídica. 7 dias grátis, sem cartão.">
     <meta name="author" content="Albertino e Advogados Associados" />
+    <meta name="theme-color" content="#1a2a5e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="LEXIA" />
 
-    
-    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/uZCWApnkrsS0WFmWyNxleebAbbP2/social-images/social-1772756850445-WhatsApp_Image_2025-12-24_at_15.26.24.webp">
-
+    <meta property="og:title" content="LEXIA — Gestão Jurídica para Advogados" />
+    <meta property="og:description" content="Sistema completo de gestão jurídica. Processos, agenda, IA jurídica e muito mais. 7 dias grátis, sem cartão de crédito." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/uZCWApnkrsS0WFmWyNxleebAbbP2/social-images/social-1772756850445-WhatsApp_Image_2025-12-24_at_15.26.24.webp">
-    <meta property="og:title" content="Albertino e Advogados Associados - Sistema Jurídico">
-  <meta name="twitter:title" content="Albertino e Advogados Associados - Sistema Jurídico">
-  <meta property="og:description" content="Sistema de gestão jurídica - Albertino e Advogados Associados. Direito penal, cível, família, execução penal e recursos.">
-  <meta name="twitter:description" content="Sistema de gestão jurídica - Albertino e Advogados Associados. Direito penal, cível, família, execução penal e recursos.">
-</head>
+    <meta name="twitter:title" content="LEXIA — Gestão Jurídica para Advogados" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Register Service Worker -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

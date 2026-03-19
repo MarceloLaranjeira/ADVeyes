@@ -4,7 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
+  CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
 } from "lucide-react";
+import { PLANS, asaas } from "@/lib/asaas";
+import { googleCalendar } from "@/lib/google-calendar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -82,6 +85,55 @@ const Configuracoes = () => {
   const [deleteCred, setDeleteCred] = useState<string | null>(null);
   const [credForm, setCredForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
+
+  // Google Calendar state
+  const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
+
+  // Asaas / plano state
+  const [planData, setPlanData] = useState<any>(null);
+  const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
+  const [checkoutForm, setCheckoutForm] = useState({ nome: "", cpfCnpj: "", email: "" });
+
+  useEffect(() => {
+    // Handle Google OAuth token redirect
+    const token = googleCalendar.extractToken();
+    if (token) { setGcalConnected(true); toast({ title: "Google Calendar conectado com sucesso!" }); }
+
+    // Load plan from Supabase
+    if (user) {
+      supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+        setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
+      });
+    }
+  }, [user]);
+
+  const handleGcalConnect = () => googleCalendar.authorize();
+  const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
+
+  const handleCheckout = async (planKey: string) => {
+    if (!checkoutForm.nome || !checkoutForm.cpfCnpj || !checkoutForm.email) {
+      toast({ title: "Preencha todos os campos", variant: "destructive" }); return;
+    }
+    setCheckoutLoading(true);
+    try {
+      // Create customer on Asaas
+      const customer = await asaas.createCustomer({ name: checkoutForm.nome, cpfCnpj: checkoutForm.cpfCnpj.replace(/\D/g, ""), email: checkoutForm.email });
+      // Create PIX payment for first month
+      const plan = PLANS[planKey as keyof typeof PLANS];
+      const payment = await asaas.createPixPayment({ customer: customer.id, value: plan.price, dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10), description: `LEXIA ${plan.name} — 1º mês` });
+      // Get QR code
+      const qr = await asaas.getPixQrCode(payment.id);
+      if (qr) setPixQr({ encodedImage: qr.encodedImage, payload: qr.payload });
+      // Save subscription intent
+      await supabase.from("asaas_subscriptions").upsert({ user_id: user!.id, asaas_customer_id: customer.id, plan: planKey, status: "pending" }, { onConflict: "user_id" });
+      toast({ title: "PIX gerado! Escaneie para ativar o plano." });
+    } catch (err: any) {
+      toast({ title: "Erro ao gerar cobrança", description: err.message, variant: "destructive" });
+    }
+    setCheckoutLoading(false);
+  };
 
   // TTS Settings (persisted in localStorage)
   const [ttsProvider, setTtsProvider] = useState(() => localStorage.getItem("horus_tts_provider") || "browser");
@@ -166,12 +218,15 @@ const Configuracoes = () => {
         </div>
 
         <Tabs defaultValue="geral" className="max-w-4xl">
-          <TabsList className="mb-6 bg-muted/50">
-            <TabsTrigger value="geral" className="gap-2"><Palette className="w-3.5 h-3.5" /> Geral</TabsTrigger>
-            <TabsTrigger value="voz" className="gap-2"><Volume2 className="w-3.5 h-3.5" /> Voz & IA</TabsTrigger>
-            <TabsTrigger value="tribunais" className="gap-2"><Key className="w-3.5 h-3.5" /> Tribunais</TabsTrigger>
-            <TabsTrigger value="integracoes" className="gap-2"><Zap className="w-3.5 h-3.5" /> Integrações</TabsTrigger>
-            <TabsTrigger value="notificacoes" className="gap-2"><Bell className="w-3.5 h-3.5" /> Notificações</TabsTrigger>
+          <TabsList className="mb-6 bg-muted/50 flex-wrap h-auto gap-1">
+            <TabsTrigger value="geral" className="gap-2 text-xs"><Palette className="w-3.5 h-3.5" /> Geral</TabsTrigger>
+            <TabsTrigger value="voz" className="gap-2 text-xs"><Volume2 className="w-3.5 h-3.5" /> Voz & IA</TabsTrigger>
+            <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> Tribunais</TabsTrigger>
+            <TabsTrigger value="integracoes" className="gap-2 text-xs">
+              <Zap className="w-3.5 h-3.5" /> Integrações
+              {planData?.status === "trial" && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 ml-0.5" />}
+            </TabsTrigger>
+            <TabsTrigger value="notificacoes" className="gap-2 text-xs"><Bell className="w-3.5 h-3.5" /> Notificações</TabsTrigger>
           </TabsList>
 
           {/* === GERAL === */}
@@ -557,46 +612,185 @@ const Configuracoes = () => {
 
           {/* === INTEGRAÇÕES === */}
           <TabsContent value="integracoes" className="space-y-4">
+
+            {/* ── Plano / Asaas ── */}
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-5">
+                  <Crown className="w-5 h-5 text-yellow-500" />
+                  <h3 className="font-semibold font-serif">Plano & Assinatura</h3>
+                  {planData?.status === "trial" && (
+                    <span className="ml-auto text-xs bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {planData?.trial_ends_at ? `Trial — ${Math.max(0, Math.ceil((new Date(planData.trial_ends_at).getTime() - Date.now()) / 86400000))} dias restantes` : "Trial"}
+                    </span>
+                  )}
+                  {planData?.status === "active" && (
+                    <span className="ml-auto text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Ativo — {PLANS[planData?.plan as keyof typeof PLANS]?.name || planData?.plan}
+                    </span>
+                  )}
+                </div>
+
+                {/* Current plan indicator */}
+                {planData?.status === "trial" && (
+                  <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 mb-5">
+                    <p className="text-sm font-semibold text-yellow-700 mb-1">Você está no período de teste gratuito</p>
+                    <p className="text-xs text-muted-foreground">Escolha um plano abaixo para continuar usando o LEXIA após o trial. O pagamento é feito via PIX ou cartão de crédito.</p>
+                  </div>
+                )}
+
+                {/* Plans */}
+                <div className="grid sm:grid-cols-3 gap-3 mb-4">
+                  {(Object.entries(PLANS) as [string, typeof PLANS[keyof typeof PLANS]][]).map(([key, plan]) => (
+                    <div key={key} className={`rounded-xl border p-4 relative transition-all hover:shadow-md ${"popular" in plan && plan.popular ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
+                      {"popular" in plan && plan.popular && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-bold px-3 py-0.5 rounded-full">
+                          POPULAR
+                        </div>
+                      )}
+                      <p className="font-serif font-bold text-sm">{plan.name}</p>
+                      <p className="text-2xl font-bold mt-1">R$ {plan.price}<span className="text-xs text-muted-foreground font-normal">/mês</span></p>
+                      <ul className="mt-2 space-y-1">
+                        {plan.features.slice(0, 3).map(f => (
+                          <li key={f} className="flex items-start gap-1 text-xs text-muted-foreground">
+                            <CheckCircle className="w-3 h-3 text-green-500 shrink-0 mt-0.5" /> {f}
+                          </li>
+                        ))}
+                        {plan.features.length > 3 && <li className="text-xs text-muted-foreground">+{plan.features.length - 3} mais...</li>}
+                      </ul>
+                      <Button
+                        size="sm"
+                        className="w-full mt-3 gap-1.5"
+                        variant={("popular" in plan && plan.popular) ? "default" : "outline"}
+                        onClick={() => { setShowCheckout(key); setPixQr(null); }}
+                        disabled={planData?.plan === key && planData?.status === "active"}
+                      >
+                        {planData?.plan === key && planData?.status === "active" ? "Plano atual" : "Assinar com PIX"}
+                        {!(planData?.plan === key && planData?.status === "active") && <ArrowRight className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Checkout form */}
+                {showCheckout && (
+                  <div className="border rounded-xl p-5 bg-muted/20 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-sm flex items-center gap-2">
+                        <QrCode className="w-4 h-4 text-primary" />
+                        Pagamento via PIX — {PLANS[showCheckout as keyof typeof PLANS]?.name}
+                      </p>
+                      <button onClick={() => { setShowCheckout(null); setPixQr(null); }} className="text-muted-foreground hover:text-foreground text-xs">Fechar</button>
+                    </div>
+
+                    {!pixQr ? (
+                      <div className="space-y-3">
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Nome completo *</Label>
+                            <Input value={checkoutForm.nome} onChange={e => setCheckoutForm({ ...checkoutForm, nome: e.target.value })} placeholder="Dr. Fulano de Tal" className="h-9 text-sm" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">CPF ou CNPJ *</Label>
+                            <Input value={checkoutForm.cpfCnpj} onChange={e => setCheckoutForm({ ...checkoutForm, cpfCnpj: e.target.value })} placeholder="000.000.000-00" className="h-9 text-sm" />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">E-mail *</Label>
+                          <Input type="email" value={checkoutForm.email} onChange={e => setCheckoutForm({ ...checkoutForm, email: e.target.value })} placeholder="seu@email.com.br" className="h-9 text-sm" />
+                        </div>
+                        <Button className="w-full gap-2" onClick={() => handleCheckout(showCheckout)} disabled={checkoutLoading}>
+                          <QrCode className="w-4 h-4" />
+                          {checkoutLoading ? "Gerando PIX..." : `Gerar PIX — R$ ${PLANS[showCheckout as keyof typeof PLANS]?.price}/mês`}
+                        </Button>
+                        <p className="text-[10px] text-center text-muted-foreground">Processado com segurança via Asaas · LGPD compliant</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="bg-white p-3 rounded-xl border shadow-sm">
+                          <img src={`data:image/png;base64,${pixQr.encodedImage}`} alt="QR Code PIX" className="w-48 h-48 object-contain" />
+                        </div>
+                        <div className="w-full space-y-2">
+                          <p className="text-xs font-medium text-center">Ou copie o código PIX:</p>
+                          <div className="flex gap-2">
+                            <Input value={pixQr.payload} readOnly className="text-xs h-8 font-mono" />
+                            <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => { navigator.clipboard.writeText(pixQr.payload); toast({ title: "Código PIX copiado!" }); }}>
+                              Copiar
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">Após o pagamento confirmado, seu plano será ativado automaticamente em até 5 minutos.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Google Calendar ── */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
+                    <rect x="3" y="4" width="18" height="18" rx="2" stroke={gcalConnected ? "#22c55e" : "currentColor"} strokeWidth="2" fill="none"/>
+                    <path d="M16 2v4M8 2v4M3 10h18" stroke={gcalConnected ? "#22c55e" : "currentColor"} strokeWidth="2" strokeLinecap="round"/>
+                    <circle cx="12" cy="16" r="2" fill={gcalConnected ? "#22c55e" : "currentColor"}/>
+                  </svg>
+                  <h3 className="font-semibold font-serif">Google Calendar</h3>
+                  {gcalConnected
+                    ? <span className="ml-auto text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Conectado</span>
+                    : <span className="ml-auto text-xs text-muted-foreground">Não conectado</span>
+                  }
+                </div>
+
+                {gcalConnected ? (
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                      <p className="text-sm font-medium text-green-700 mb-1">Integração ativa</p>
+                      <p className="text-xs text-muted-foreground">Novos compromissos criados na Agenda serão automaticamente sincronizados com seu Google Calendar.</p>
+                    </div>
+                    <Button variant="outline" className="gap-2 text-destructive hover:text-destructive w-full sm:w-auto" onClick={handleGcalDisconnect}>
+                      <Link2Off className="w-4 h-4" /> Desconectar Google Calendar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Conecte sua conta Google para sincronizar compromissos, audiências e prazos diretamente no seu calendário.
+                    </p>
+                    <div className="rounded-lg border p-3 bg-muted/30 text-xs space-y-1">
+                      <p className="font-semibold text-foreground">Como funciona:</p>
+                      <p className="text-muted-foreground">1. Clique em "Conectar Google" abaixo</p>
+                      <p className="text-muted-foreground">2. Authorize o LEXIA no Google</p>
+                      <p className="text-muted-foreground">3. Novos eventos serão sincronizados automaticamente</p>
+                    </div>
+                    <Button className="gap-2 w-full sm:w-auto" onClick={handleGcalConnect}>
+                      <Link2 className="w-4 h-4" /> Conectar Google Calendar
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground">
+                      Requer <code className="bg-muted px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> configurado no ambiente.
+                      Obtenha em <span className="italic">console.cloud.google.com</span>.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── JusBrasil ── */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
                   <Zap className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">JusBrasil API</h3>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  A chave da API JusBrasil deve ser configurada como secret na Edge Function do Supabase.
-                  Acesse o painel do Supabase → Edge Functions → Secrets e adicione:
+                  Configure como secret no Supabase → Edge Functions → Secrets:
                 </p>
-                <div className="bg-muted rounded-lg p-4 font-mono text-sm space-y-1">
+                <div className="bg-muted rounded-lg p-4 font-mono text-sm">
                   <p className="text-primary font-semibold">JUSBRASIL_API_KEY</p>
-                  <p className="text-muted-foreground text-xs">Obtenha sua chave em api.jusbrasil.com.br</p>
+                  <p className="text-muted-foreground text-xs mt-1">Obtenha em api.jusbrasil.com.br</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Quando configurada, a busca processual usará JusBrasil como fonte primária (cobertura nacional completa),
-                  com DataJud/CNJ como fallback automático.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">Google Agenda</h3>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Para integrar com o Google Agenda, configure o Client ID do OAuth2 Google no arquivo <code className="bg-muted px-1 rounded">.env</code>:
-                </p>
-                <div className="bg-muted rounded-lg p-4 font-mono text-sm space-y-1">
-                  <p className="text-primary font-semibold">VITE_GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com</p>
-                  <p className="text-muted-foreground text-xs mt-2">1. Acesse console.cloud.google.com</p>
-                  <p className="text-muted-foreground text-xs">2. APIs &amp; Services → Credentials → Create OAuth 2.0 Client</p>
-                  <p className="text-muted-foreground text-xs">3. Tipo: Web application. Adicione a URL do app como origem autorizada</p>
-                  <p className="text-muted-foreground text-xs">4. Ative a Google Calendar API no projeto</p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Após configurar, o botão "Conectar Google Agenda" aparecerá na página de Agenda.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>

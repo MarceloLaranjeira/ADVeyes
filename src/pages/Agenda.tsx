@@ -12,10 +12,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Clock, MapPin, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarDays, ListTodo, AlertCircle } from "lucide-react";
+import { Plus, Clock, MapPin, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarDays, ListTodo, AlertCircle, RefreshCw, Link2, Link2Off } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, isSameDay, addDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isToday, isBefore } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { googleCalendar } from "@/lib/google-calendar";
+import { Switch } from "@/components/ui/switch";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const tipoOptions = ["audiência", "prazo", "reunião", "despacho", "outro"];
@@ -136,6 +138,9 @@ const Agenda = () => {
   const [eventos, setEventos]       = useState<any[]>([]);
   const [tarefas, setTarefas]       = useState<any[]>([]);
   const [audiencias, setAudiencias] = useState<any[]>([]);
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [gcalSyncing, setGcalSyncing] = useState(false);
+  const [syncToGcal, setSyncToGcal] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [viewMode, setViewMode]   = useState<"mes" | "semana" | "dia">("mes");
@@ -147,6 +152,27 @@ const Agenda = () => {
   const [form, setForm] = useState({
     titulo: "", descricao: "", tipo: "reunião", data_inicio: "", hora_inicio: "09:00", local: "",
   });
+
+  // Google Calendar: detect token on mount (after OAuth redirect)
+  useEffect(() => {
+    const token = googleCalendar.extractToken() || googleCalendar.getToken();
+    setGcalConnected(!!token);
+  }, []);
+
+  const handleGcalConnect = () => googleCalendar.authorize();
+  const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
+
+  const syncAllToGcal = async () => {
+    if (!gcalConnected) return;
+    setGcalSyncing(true);
+    let ok = 0;
+    for (const e of eventos) {
+      const result = await googleCalendar.createEvent({ titulo: e.titulo, descricao: e.descricao, data_inicio: e.data_inicio, local: e.local });
+      if (result) ok++;
+    }
+    toast({ title: `${ok} evento(s) sincronizado(s) com Google Calendar!` });
+    setGcalSyncing(false);
+  };
 
   const fetchAll = async () => {
     const now = new Date();
@@ -182,9 +208,17 @@ const Agenda = () => {
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else { toast({ title: "Evento atualizado!" }); setShowForm(false); fetchAll(); }
     } else {
-      const { error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id });
+      const { data: inserted, error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id }).select().single();
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else { toast({ title: "Evento criado!" }); setShowForm(false); fetchAll(); }
+      else {
+        // Sync to Google Calendar if connected and toggle is on
+        if (gcalConnected && syncToGcal && inserted) {
+          await googleCalendar.createEvent({ titulo: form.titulo, descricao: form.descricao, data_inicio, local: form.local });
+        }
+        toast({ title: gcalConnected && syncToGcal ? "Evento criado e sincronizado com Google!" : "Evento criado!" });
+        setShowForm(false);
+        fetchAll();
+      }
     }
     setLoading(false);
   };
@@ -232,6 +266,36 @@ const Agenda = () => {
           <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
             <Plus className="w-4 h-4" /> Novo Evento
           </Button>
+        </div>
+
+        {/* Google Calendar banner */}
+        <div className={`flex items-center gap-3 p-3.5 rounded-xl border mb-5 ${gcalConnected ? "bg-green-500/5 border-green-500/20" : "bg-muted/40 border-dashed"}`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${gcalConnected ? "bg-green-500/10" : "bg-muted"}`}>
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+              <rect x="3" y="4" width="18" height="18" rx="2" stroke={gcalConnected ? "#22c55e" : "#94a3b8"} strokeWidth="2" fill="none"/>
+              <path d="M16 2v4M8 2v4M3 10h18" stroke={gcalConnected ? "#22c55e" : "#94a3b8"} strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="12" cy="16" r="2" fill={gcalConnected ? "#22c55e" : "#94a3b8"}/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">{gcalConnected ? "Google Calendar conectado" : "Conectar Google Calendar"}</p>
+            <p className="text-xs text-muted-foreground">{gcalConnected ? "Eventos sincronizados automaticamente" : "Sincronize compromissos com seu Google Calendar"}</p>
+          </div>
+          {gcalConnected ? (
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={syncAllToGcal} disabled={gcalSyncing}>
+                <RefreshCw className={`w-3 h-3 ${gcalSyncing ? "animate-spin" : ""}`} />
+                {gcalSyncing ? "Sincronizando..." : "Sincronizar tudo"}
+              </Button>
+              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={handleGcalDisconnect}>
+                <Link2Off className="w-3 h-3" /> Desconectar
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" className="gap-1.5 h-8 text-xs shrink-0" onClick={handleGcalConnect}>
+              <Link2 className="w-3 h-3" /> Conectar
+            </Button>
+          )}
         </div>
 
         {/* Stats row */}
@@ -503,6 +567,15 @@ const Agenda = () => {
                 <Label>Descrição</Label>
                 <Textarea value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} placeholder="Detalhes do compromisso..." rows={2} />
               </div>
+              {gcalConnected && !editData && (
+                <div className="flex items-center justify-between py-2 border rounded-xl px-3 bg-green-500/5 border-green-500/20">
+                  <div className="flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" strokeWidth="2" fill="none"/><path d="M16 2v4M8 2v4M3 10h18" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="2" fill="#22c55e"/></svg>
+                    <span className="text-xs font-medium">Sincronizar com Google Calendar</span>
+                  </div>
+                  <Switch checked={syncToGcal} onCheckedChange={setSyncToGcal} />
+                </div>
+              )}
               <div className="flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
                 <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editData ? "Salvar" : "Criar"}</Button>
