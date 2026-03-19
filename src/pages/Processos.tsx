@@ -150,8 +150,8 @@ function ProcessoDetalhe({
 
   const fetchAll = async () => {
     const [and, tar, aud, fin, pub] = await Promise.all([
-      supabase.from("andamentos").select("*").eq("processo_id", processo.id).order("data_andamento", { ascending: false }),
-      supabase.from("tarefas").select("*").eq("processo_id", processo.id).order("data_limite"),
+      (supabase.from as any)("andamentos").select("*").eq("processo_id", processo.id).order("data_andamento", { ascending: false }),
+      supabase.from("tarefas").select("*").eq("user_id", userId).order("data_limite"),
       supabase.from("audiencias").select("*").eq("processo_id", processo.id).order("data_hora", { ascending: false }),
       supabase.from("financeiro").select("*").eq("processo_id", processo.id).order("created_at", { ascending: false }),
       supabase.from("publicacoes").select("*").eq("numero_processo", processo.numero).order("data_publicacao", { ascending: false }).limit(20),
