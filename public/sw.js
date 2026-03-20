@@ -1,5 +1,5 @@
 // LEXIA — Service Worker para Push Notifications e PWA
-const CACHE_NAME = "lexia-v2";
+const CACHE_NAME = "lexia-v4";
 const APP_SHELL_URL = "/index.html";
 
 const isBackendRequest = (url) =>
