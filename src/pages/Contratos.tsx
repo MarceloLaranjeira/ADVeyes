@@ -183,8 +183,8 @@ const Contratos = () => {
     const uniqueVars = [...new Set(vars)];
     const payload = { ...form, variaveis: uniqueVars, user_id: user!.id };
     const { error } = editTemplate
-      ? await supabase.from("contratos_templates").update(payload).eq("id", editTemplate.id)
-      : await supabase.from("contratos_templates").insert(payload);
+      ? await (supabase.from as any)("contratos_templates").update(payload).eq("id", editTemplate.id)
+      : await (supabase.from as any)("contratos_templates").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
