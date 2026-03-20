@@ -241,14 +241,22 @@ serve(async (req) => {
         query = {
           bool: {
             should: [
-              // Tentativas nested (se mapeado como nested)
+              // Path correto DataJud: partes[].advogados[].oab (nested em partes)
+              ...variacoes.map((v) => ({
+                nested: {
+                  path: "partes",
+                  query: { match: { "partes.advogados.oab": v } },
+                },
+              })),
+              // Alternativa: advogados no root como nested
               ...variacoes.map((v) => ({
                 nested: { path: "advogados", query: { match: { "advogados.oab": v } } },
               })),
-              // Tentativas flat (se mapeado como object)
+              // Flat object fallback
               ...variacoes.map((v) => ({ match: { "advogados.oab": v } })),
-              // query_string ampla como fallback
-              { query_string: { query: `*${oabNumero}*`, fields: ["advogados.oab", "advogados.inscricaoOab", "advogados.numeroOab"] } },
+              ...variacoes.map((v) => ({ match: { "partes.advogados.oab": v } })),
+              // query_string broad fallback — pesquisa em todos os campos de texto
+              { query_string: { query: oabNumero, default_operator: "AND" } },
             ],
             minimum_should_match: 1,
           },
