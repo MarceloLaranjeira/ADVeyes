@@ -45,7 +45,7 @@ const TimeTracking = () => {
 
   const fetchData = async () => {
     const [entriesRes, processosRes, clientesRes] = await Promise.all([
-      supabase.from("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
+      (supabase.from as any)("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
       supabase.from("processos").select("id, numero, descricao").order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
