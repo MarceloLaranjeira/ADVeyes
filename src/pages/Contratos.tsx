@@ -220,7 +220,7 @@ const Contratos = () => {
       titulo, conteudo: content, template_id: selectedTemplate?.id,
       user_id: user!.id, status: "rascunho",
     });
-    await supabase.from("contratos_templates").update({ uso_count: (selectedTemplate?.uso_count || 0) + 1 }).eq("id", selectedTemplate?.id);
+    await (supabase.from as any)("contratos_templates").update({ uso_count: (selectedTemplate?.uso_count || 0) + 1 }).eq("id", selectedTemplate?.id);
     toast({ title: "Documento salvo!" });
     setShowUso(false);
     fetchData();
