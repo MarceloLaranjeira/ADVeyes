@@ -33,8 +33,8 @@ const Equipe = () => {
 
   const fetchData = async () => {
     const [membrosRes, timeRes] = await Promise.all([
-      supabase.from("equipe").select("*").order("nome"),
-      supabase.from("time_entries").select("horas, valor_hora, faturado, created_at").gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      (supabase.from as any)("equipe").select("*").order("nome"),
+      (supabase.from as any)("time_entries").select("horas, valor_hora, faturado, created_at").gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
     ]);
     if (membrosRes.data) setMembros(membrosRes.data);
     if (timeRes.data) setTimeEntries(timeRes.data);
