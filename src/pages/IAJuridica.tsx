@@ -14,7 +14,8 @@ type Msg = { role: "user" | "assistant"; content: string; timestamp?: number };
 type TtsProvider = "browser" | "elevenlabs" | "openai" | "google";
 type VoiceState = "idle" | "listening" | "speaking" | "processing";
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
 
 const modes = [
   { value: "assistente", label: "Assistente Jurídico", icon: Bot, desc: "Legislação e jurisprudência" },
@@ -220,7 +221,7 @@ const IAJuridica = () => {
     try {
       // Use authenticated session token — never expose anon key as bearer
       const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const authToken = session?.access_token ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhd2ZybXVpdGRpcW1kamV6eWx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NDk4NzQsImV4cCI6MjA4ODMyNTg3NH0.tRm-_Gl2W9yWVnM7Jrs4flyhdwN1UlMo8OYcE373Fp8";
 
       const resp = await fetch(CHAT_URL, {
         method: "POST",

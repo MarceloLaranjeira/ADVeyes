@@ -35,8 +35,9 @@ type Publicacao = {
   created_at: string;
 };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-const CAPTURAR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capturar-publicacoes`;
+const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
+const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
 
 const tipoLabels: Record<string, { label: string; color: string }> = {
   intimacao: { label: "Intimação", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
