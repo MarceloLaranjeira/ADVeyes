@@ -118,7 +118,7 @@ const CRM = () => {
   };
 
   const updateStatus = async (id: string, status: string) => {
-    await supabase.from("leads").update({ status }).eq("id", id);
+    await (supabase.from as any)("leads").update({ status }).eq("id", id);
     fetchLeads();
     toast({ title: `Status atualizado para "${statusFunil.find(s => s.id === status)?.label}"` });
   };
