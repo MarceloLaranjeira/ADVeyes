@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, Plus, TrendingUp, Phone, Mail, Calendar,
   ArrowRight, Star, CheckCircle2, XCircle, Clock,
-  Search, Filter, UserCheck, DollarSign, Funnel,
+  Search, Filter, UserCheck, DollarSign,
 } from "lucide-react";
 
 const statusFunil = [
