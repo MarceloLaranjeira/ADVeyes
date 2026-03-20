@@ -3,7 +3,10 @@
     "allow": [
       "Bash(find /c/Users/marce/.vscode/AlbertinoAdvogados -name .env* -type f)",
       "Bash(xargs cat:*)",
-      "mcp__claude_ai_Supabase__list_projects"
+      "mcp__claude_ai_Supabase__list_projects",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
