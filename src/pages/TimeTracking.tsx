@@ -140,7 +140,7 @@ const TimeTracking = () => {
   };
 
   const marcarFaturado = async (id: string, faturado: boolean) => {
-    await supabase.from("time_entries").update({ faturado }).eq("id", id);
+    await (supabase.from as any)("time_entries").update({ faturado }).eq("id", id);
     fetchData();
   };
 

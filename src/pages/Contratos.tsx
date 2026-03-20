@@ -242,7 +242,7 @@ const Contratos = () => {
 
   const deleteTemplate = async (id: string) => {
     if (!confirm("Excluir este template?")) return;
-    await supabase.from("contratos_templates").delete().eq("id", id);
+    await (supabase.from as any)("contratos_templates").delete().eq("id", id);
     toast({ title: "Template excluído" });
     fetchData();
   };

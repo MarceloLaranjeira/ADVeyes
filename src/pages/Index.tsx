@@ -50,9 +50,9 @@ const Index = () => {
       supabase.from("financeiro").select("*").eq("status", "pendente").not("data_vencimento", "is", null).lte("data_vencimento", em7dias.slice(0, 10)).order("data_vencimento"),
       supabase.from("notificacoes").select("*").eq("lida", false).order("created_at", { ascending: false }).limit(5),
       supabase.from("financeiro").select("tipo, status, valor"),
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "novo"),
-      supabase.from("time_entries").select("horas").gte("created_at", inicioMes),
-      supabase.from("metas_financeiras").select("*").eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).single(),
+      (supabase.from as any)("leads").select("id", { count: "exact", head: true }).eq("status", "novo"),
+      (supabase.from as any)("time_entries").select("horas").gte("created_at", inicioMes),
+      (supabase.from as any)("metas_financeiras").select("*").eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).single(),
       supabase.from("tarefas").select("id", { count: "exact", head: true }).eq("data_limite", hoje).neq("status", "concluída"),
     ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes]) => {
       setStats({ processos: proc.count || 0, clientes: cli.count || 0, documentos: doc.count || 0 });

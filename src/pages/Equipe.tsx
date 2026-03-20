@@ -88,7 +88,7 @@ const Equipe = () => {
 
   const deleteMembro = async (id: string) => {
     if (!confirm("Remover este membro da equipe?")) return;
-    await supabase.from("equipe").delete().eq("id", id);
+    await (supabase.from as any)("equipe").delete().eq("id", id);
     toast({ title: "Membro removido" });
     fetchData();
   };

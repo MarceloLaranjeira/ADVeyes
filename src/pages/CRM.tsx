@@ -130,7 +130,7 @@ const CRM = () => {
       user_id: user!.id,
     }).select().single();
     if (!error && data) {
-      await supabase.from("leads").update({ status: "convertido", convertido: true, cliente_id: data.id }).eq("id", lead.id);
+      await (supabase.from as any)("leads").update({ status: "convertido", convertido: true, cliente_id: data.id }).eq("id", lead.id);
       toast({ title: "Lead convertido em cliente!", description: `${lead.nome} foi adicionado como cliente.` });
       fetchLeads();
     }

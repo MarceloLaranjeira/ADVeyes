@@ -164,7 +164,7 @@ const Financeiro = () => {
   const handleMetaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.from("metas_financeiras").upsert({
+    const { error } = await (supabase.from as any)("metas_financeiras").upsert({
       mes: metaForm.mes, ano: metaForm.ano,
       meta_receita: parseFloat(metaForm.meta_receita) || 0,
       meta_novos_clientes: parseInt(metaForm.meta_novos_clientes) || 0,
