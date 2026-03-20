@@ -216,7 +216,7 @@ const Contratos = () => {
     Object.entries(varValues).forEach(([k, v]) => {
       content = content.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v || `[${k}]`);
     });
-    await supabase.from("documentos_gerados").insert({
+    await (supabase.from as any)("documentos_gerados").insert({
       titulo, conteudo: content, template_id: selectedTemplate?.id,
       user_id: user!.id, status: "rascunho",
     });
