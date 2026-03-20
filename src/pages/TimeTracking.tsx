@@ -117,7 +117,7 @@ const TimeTracking = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("time_entries").insert({
+    const { error } = await (supabase.from as any)("time_entries").insert({
       descricao: form.descricao,
       data: form.data,
       horas: parseFloat(form.horas),
