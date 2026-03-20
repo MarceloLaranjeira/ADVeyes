@@ -18,6 +18,25 @@ import {
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+type PerfilMonitorado = {
+  id: string;
+  tipo: "oab" | "cpf" | "nome";
+  valor: string;
+  tribunais: string[];
+  criadoEm: string;
+};
+
+type ResultadoBusca = {
+  tribunal: string;
+  numero_processo: string;
+  classe: string;
+  assuntos: string;
+  orgao: string;
+  data_ajuizamento: string | null;
+  partes: { nome: string; tipo: string }[];
+  ultimos_movimentos: { nome: string; data: string; tipo: string }[];
+};
+
 type Publicacao = {
   id: string;
   user_id: string;
@@ -132,6 +151,14 @@ const Publicacoes = () => {
   const [tarefaForm, setTarefaForm] = useState({ titulo: "", prazo: "", prioridade: "alta" });
   const [criandoTarefa, setCriandoTarefa] = useState(false);
 
+  // ─── Busca por OAB/CPF/Nome ─────────────────────────────────────────────────
+  const [buscaTipo, setBuscaTipo] = useState<"oab" | "cpf" | "nome">("oab");
+  const [buscaValor, setBuscaValor] = useState("");
+  const [loadingBusca, setLoadingBusca] = useState(false);
+  const [buscaResultados, setBuscaResultados] = useState<ResultadoBusca[]>([]);
+  const [buscaFeita, setBuscaFeita] = useState(false);
+  const [perfisSalvos, setPerfisSalvos] = useState<PerfilMonitorado[]>([]);
+
   const fetchPublicacoes = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any).from("publicacoes").select("*").order("data_publicacao", { ascending: false });
@@ -139,6 +166,70 @@ const Publicacoes = () => {
   };
 
   useEffect(() => { fetchPublicacoes(); }, []);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("lexia_perfis_monitorados");
+      if (saved) setPerfisSalvos(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  const buscarPorPerfil = async (tipo?: string, valor?: string) => {
+    const t = (tipo || buscaTipo) as "oab" | "cpf" | "nome";
+    const v = (valor !== undefined ? valor : buscaValor).trim();
+    if (!v) {
+      toast({ title: "Informe um valor para busca", variant: "destructive" });
+      return;
+    }
+    setLoadingBusca(true);
+    setBuscaFeita(false);
+    setBuscaResultados([]);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
+      const resp = await fetch(CAPTURAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ busca: { tipo: t, valor: v } }),
+      });
+      const result = await resp.json();
+      if (!resp.ok) {
+        toast({ title: "Erro na busca", description: result.error || "Tente novamente", variant: "destructive" });
+        return;
+      }
+      setBuscaResultados(result.resultados || []);
+      setBuscaFeita(true);
+      if ((result.resultados || []).length === 0) {
+        toast({ title: "Nenhum processo encontrado", description: `Sem resultados para ${t.toUpperCase()}: ${v}` });
+      }
+    } catch {
+      toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor.", variant: "destructive" });
+    } finally {
+      setLoadingBusca(false);
+    }
+  };
+
+  const salvarPerfil = () => {
+    if (!buscaValor.trim()) return;
+    const novoPerfil: PerfilMonitorado = {
+      id: Date.now().toString(),
+      tipo: buscaTipo,
+      valor: buscaValor.trim(),
+      tribunais: [],
+      criadoEm: new Date().toISOString(),
+    };
+    const novos = [...perfisSalvos, novoPerfil];
+    setPerfisSalvos(novos);
+    localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(novos));
+    toast({ title: "Perfil salvo!", description: `Monitorando ${buscaTipo.toUpperCase()}: ${buscaValor.trim()}` });
+  };
+
+  const removerPerfil = (id: string) => {
+    const novos = perfisSalvos.filter((p) => p.id !== id);
+    setPerfisSalvos(novos);
+    localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(novos));
+  };
 
   const capturarPublicacoes = async () => {
     setLoadingCaptura(true);
@@ -405,6 +496,99 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
             {loadingCaptura ? "Capturando..." : "Capturar Publicações"}
           </Button>
         </div>
+
+        {/* ─── Busca por OAB/CPF/Nome ─────────────────────────────────────────── */}
+        <Card className="mb-6">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Search className="w-4 h-4 text-primary" />
+              <div>
+                <h3 className="font-semibold text-sm">Buscar por OAB / CPF / Nome</h3>
+                <p className="text-xs text-muted-foreground">Consulta direta no DataJud/CNJ — sem necessidade de configurar token</p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                className="h-10 px-3 rounded-md border border-input bg-background text-sm shrink-0 w-full sm:w-36"
+                value={buscaTipo}
+                onChange={(e) => setBuscaTipo(e.target.value as "oab" | "cpf" | "nome")}
+              >
+                <option value="oab">Nº OAB</option>
+                <option value="cpf">CPF</option>
+                <option value="nome">Nome</option>
+              </select>
+              <Input
+                placeholder={buscaTipo === "oab" ? "Ex: 12345/AM" : buscaTipo === "cpf" ? "000.000.000-00" : "Nome do advogado"}
+                value={buscaValor}
+                onChange={(e) => setBuscaValor(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && buscarPorPerfil()}
+                className="flex-1"
+              />
+              <Button onClick={() => buscarPorPerfil()} disabled={loadingBusca || !buscaValor.trim()} className="gap-2 shrink-0">
+                {loadingBusca ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {loadingBusca ? "Buscando..." : "Buscar"}
+              </Button>
+              <Button variant="outline" onClick={salvarPerfil} disabled={!buscaValor.trim()} className="gap-2 shrink-0">
+                <Bell className="w-4 h-4" /> Monitorar
+              </Button>
+            </div>
+
+            {/* Perfis monitorados */}
+            {perfisSalvos.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Perfis monitorados</p>
+                <div className="flex flex-wrap gap-2">
+                  {perfisSalvos.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setBuscaTipo(p.tipo); setBuscaValor(p.valor); buscarPorPerfil(p.tipo, p.valor); }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors group"
+                    >
+                      <span className="uppercase font-bold text-[10px] opacity-60">{p.tipo}</span>
+                      {p.valor}
+                      <span
+                        onClick={(e) => { e.stopPropagation(); removerPerfil(p.id); }}
+                        className="ml-1 opacity-50 group-hover:opacity-100 hover:text-red-500 transition-colors"
+                      >×</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Resultados da busca */}
+            {buscaFeita && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  {buscaResultados.length > 0 ? `${buscaResultados.length} processo(s) encontrado(s) no DataJud` : "Nenhum processo encontrado"}
+                </p>
+                {buscaResultados.length > 0 && (
+                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {buscaResultados.map((r, i) => (
+                      <div key={i} className="p-3 rounded-lg border bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{r.tribunal}</span>
+                          <span className="font-medium text-xs font-mono">{r.numero_processo}</span>
+                          {r.classe && <span className="text-xs text-muted-foreground">{r.classe}</span>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{r.orgao}</p>
+                        {r.partes.length > 0 && (
+                          <p className="text-xs text-foreground/70 mt-1">{r.partes.map((p) => p.nome).join(" × ")}</p>
+                        )}
+                        {r.ultimos_movimentos.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Último mov.: {r.ultimos_movimentos[0].nome}
+                            {r.ultimos_movimentos[0].data && ` (${format(new Date(r.ultimos_movimentos[0].data), "dd/MM/yyyy", { locale: ptBR })})`}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">

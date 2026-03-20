@@ -187,6 +187,127 @@ serve(async (req) => {
       });
     }
 
+    // Ler corpo da requisição
+    const body = await req.json().catch(() => ({}));
+
+    // ─── MODO BUSCA: por OAB / CPF / Nome (sem token do usuário) ──────────────
+    if (body.busca) {
+      const { tipo = "oab", valor = "", tribunais: tribList } = body.busca as {
+        tipo: "oab" | "cpf" | "nome";
+        valor: string;
+        tribunais?: string[];
+      };
+
+      if (!valor.trim()) {
+        return new Response(JSON.stringify({ error: "Informe um valor para busca" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Detectar tribunal pelo estado da OAB (ex: 12345/AM → tjam)
+      const estadoMatch = tipo === "oab" ? valor.match(/\/\s*([A-Z]{2})\s*$/i) : null;
+      const estadoOAB = estadoMatch?.[1]?.toLowerCase();
+      const estadoParaTribunal: Record<string, string> = {
+        ac: "tjac", al: "tjal", ap: "tjap", am: "tjam", ba: "tjba",
+        ce: "tjce", df: "tjdft", es: "tjes", go: "tjgo", ma: "tjma",
+        mg: "tjmg", ms: "tjms", mt: "tjmt", pa: "tjpa", pb: "tjpb",
+        pe: "tjpe", pi: "tjpi", pr: "tjpr", rj: "tjrj", rn: "tjrn",
+        ro: "tjro", rr: "tjrr", rs: "tjrs", sc: "tjsc", se: "tjse",
+        sp: "tjsp", to: "tjto",
+      };
+
+      let defaultTribs = ["tjam", "tjsp", "tjrj", "tjmg", "tjpr", "stj", "trf1", "trf3"];
+      if (estadoOAB && estadoParaTribunal[estadoOAB]) {
+        const tEstado = estadoParaTribunal[estadoOAB];
+        defaultTribs = [tEstado, ...defaultTribs.filter((x) => x !== tEstado)];
+      }
+      const tribunaisParaBuscar = (tribList?.length ? tribList : defaultTribs).slice(0, 8);
+
+      let query: Record<string, unknown>;
+      if (tipo === "oab") {
+        const oabSemEstado = valor.replace(/\/\s*[A-Z]{2}\s*$/i, "").trim();
+        query = {
+          bool: {
+            should: [
+              { nested: { path: "advogados", query: { match: { "advogados.oab": valor.trim() } } } },
+              { nested: { path: "advogados", query: { match_phrase: { "advogados.oab": oabSemEstado } } } },
+            ],
+            minimum_should_match: 1,
+          },
+        };
+      } else if (tipo === "cpf") {
+        const cpfLimpo = valor.replace(/\D/g, "");
+        query = {
+          bool: {
+            should: [
+              { nested: { path: "partes", query: { match: { "partes.cpf": cpfLimpo } } } },
+              { nested: { path: "advogados", query: { match: { "advogados.cpf": cpfLimpo } } } },
+            ],
+            minimum_should_match: 1,
+          },
+        };
+      } else {
+        query = {
+          bool: {
+            should: [
+              { nested: { path: "advogados", query: { match: { "advogados.nome": valor } } } },
+              { nested: { path: "partes", query: { match: { "partes.nome": valor } } } },
+            ],
+            minimum_should_match: 1,
+          },
+        };
+      }
+
+      const resultados: Record<string, unknown>[] = [];
+
+      for (const trib of tribunaisParaBuscar) {
+        const endpoint = DATAJUD_ENDPOINTS[trib];
+        if (!endpoint) continue;
+        try {
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: DATAJUD_KEY },
+            body: JSON.stringify({
+              query,
+              size: 10,
+              _source: ["numeroProcesso", "classe", "assuntos", "orgaoJulgador", "movimentos", "partes", "dataAjuizamento"],
+            }),
+          });
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          const hits = ((data.hits?.hits as Record<string, unknown>[]) || []);
+          for (const hit of hits) {
+            const src = hit._source as Record<string, unknown>;
+            const movimentos = ((src.movimentos as Record<string, unknown>[]) || []);
+            resultados.push({
+              tribunal: trib.toUpperCase(),
+              numero_processo: src.numeroProcesso || "",
+              classe: (src.classe as Record<string, unknown>)?.nome || "",
+              assuntos: ((src.assuntos as { nome: string }[]) || []).map((a) => a.nome).join(", "),
+              orgao: (src.orgaoJulgador as Record<string, unknown>)?.nome || trib.toUpperCase(),
+              data_ajuizamento: src.dataAjuizamento || null,
+              partes: ((src.partes as { nome: string; tipo: string }[]) || []).slice(0, 4),
+              ultimos_movimentos: movimentos.slice(0, 3).map((m) => ({
+                nome: m.nome,
+                data: m.dataHora,
+                tipo: classifyMovimento(m.nome as string),
+              })),
+            });
+          }
+        } catch (e) {
+          console.error(`Erro buscando no ${trib}:`, e);
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
+      return new Response(
+        JSON.stringify({ resultados, total: resultados.length }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ─── FIM MODO BUSCA ────────────────────────────────────────────────────────
+
     // Buscar processos cadastrados do usuário
     const { data: processos, error: procError } = await supabase
       .from("processos")
