@@ -152,7 +152,7 @@ const Financeiro = () => {
     e.preventDefault();
     if (!despesaForm.descricao || !despesaForm.valor) { toast({ title: "Preencha os campos obrigatórios", variant: "destructive" }); return; }
     setLoading(true);
-    const { error } = await supabase.from("despesas_escritorio").insert({
+    const { error } = await (supabase.from as any)("despesas_escritorio").insert({
       ...despesaForm, valor: parseFloat(despesaForm.valor),
       data_pagamento: despesaForm.data_pagamento || null, user_id: user!.id,
     });
