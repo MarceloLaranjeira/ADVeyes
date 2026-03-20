@@ -144,7 +144,7 @@ const Contratos = () => {
 
   const seedDefaultTemplates = async () => {
     for (const t of templatesDefault) {
-      await supabase.from("contratos_templates").insert({
+      await (supabase.from as any)("contratos_templates").insert({
         ...t, user_id: user!.id, variaveis: t.variaveis,
       });
     }
