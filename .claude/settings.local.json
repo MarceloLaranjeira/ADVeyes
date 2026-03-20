@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(find /c/Users/marce/.vscode/AlbertinoAdvogados -name .env* -type f)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "mcp__claude_ai_Supabase__list_projects"
     ]
   }
 }
