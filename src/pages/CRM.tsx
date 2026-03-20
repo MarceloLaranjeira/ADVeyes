@@ -104,8 +104,8 @@ const CRM = () => {
       user_id: user!.id,
     };
     const { error } = editLead
-      ? await supabase.from("leads").update(payload).eq("id", editLead.id)
-      : await supabase.from("leads").insert(payload);
+      ? await (supabase.from as any)("leads").update(payload).eq("id", editLead.id)
+      : await (supabase.from as any)("leads").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
