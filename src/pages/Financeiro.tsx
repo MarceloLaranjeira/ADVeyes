@@ -58,8 +58,8 @@ const Financeiro = () => {
   const fetchData = async () => {
     const [finRes, despRes, metaRes] = await Promise.all([
       supabase.from("financeiro").select("*").order("created_at", { ascending: false }),
-      supabase.from("despesas_escritorio").select("*").order("data_competencia", { ascending: false }),
-      supabase.from("metas_financeiras").select("*").order("ano", { ascending: false }).order("mes", { ascending: false }),
+      (supabase.from as any)("despesas_escritorio").select("*").order("data_competencia", { ascending: false }),
+      (supabase.from as any)("metas_financeiras").select("*").order("ano", { ascending: false }).order("mes", { ascending: false }),
     ]);
     if (finRes.data) setRegistros(finRes.data);
     if (despRes.data) setDespesasEscritorio(despRes.data);
