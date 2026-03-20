@@ -136,19 +136,25 @@ const Configuracoes = () => {
     setCheckoutLoading(false);
   };
 
-  // TTS Settings (persisted in localStorage)
-  const [ttsProvider, setTtsProvider] = useState(() => localStorage.getItem("horus_tts_provider") || "browser");
-  const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem("horus_tts_key") || "");
-  const [ttsVoice, setTtsVoice] = useState(() => localStorage.getItem("horus_tts_voice") || "nova");
-  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => localStorage.getItem("horus_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem("horus_tts_enabled") !== "false");
+  // TTS Settings (persisted in sessionStorage for security — keys cleared when tab closes)
+  const [ttsProvider, setTtsProvider] = useState(() => sessionStorage.getItem("horus_tts_provider") || "browser");
+  const [ttsApiKey, setTtsApiKey] = useState(() => sessionStorage.getItem("horus_tts_key") || "");
+  const [ttsVoice, setTtsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "nova");
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => sessionStorage.getItem("horus_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
+  const [ttsEnabled, setTtsEnabled] = useState(() => sessionStorage.getItem("horus_tts_enabled") !== "false");
 
   const saveTtsSettings = () => {
-    localStorage.setItem("horus_tts_provider", ttsProvider);
-    localStorage.setItem("horus_tts_key", ttsApiKey);
-    localStorage.setItem("horus_tts_voice", ttsVoice);
-    localStorage.setItem("horus_11labs_voice", elevenLabsVoiceId);
-    localStorage.setItem("horus_tts_enabled", String(ttsEnabled));
+    sessionStorage.setItem("horus_tts_provider", ttsProvider);
+    sessionStorage.setItem("horus_tts_key", ttsApiKey);
+    sessionStorage.setItem("horus_tts_voice", ttsVoice);
+    sessionStorage.setItem("horus_11labs_voice", elevenLabsVoiceId);
+    sessionStorage.setItem("horus_tts_enabled", String(ttsEnabled));
+    // Clean up any old localStorage keys
+    localStorage.removeItem("horus_tts_key");
+    localStorage.removeItem("horus_tts_provider");
+    localStorage.removeItem("horus_tts_voice");
+    localStorage.removeItem("horus_11labs_voice");
+    localStorage.removeItem("horus_tts_enabled");
     toast({ title: "Configurações de voz salvas!" });
   };
 

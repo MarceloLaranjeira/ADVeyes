@@ -46,7 +46,7 @@ const CRM = () => {
   });
 
   const fetchLeads = async () => {
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    const { data } = await (supabase.from as any)("leads").select("*").order("created_at", { ascending: false });
     if (data) setLeads(data);
   };
 
