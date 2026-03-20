@@ -109,6 +109,87 @@ export type Database = {
         }
         Relationships: []
       }
+      contratos_templates: {
+        Row: {
+          area: string | null
+          ativo: boolean | null
+          conteudo: string
+          created_at: string | null
+          id: string
+          tipo: string | null
+          titulo: string
+          updated_at: string | null
+          user_id: string
+          uso_count: number | null
+          variaveis: string[] | null
+        }
+        Insert: {
+          area?: string | null
+          ativo?: boolean | null
+          conteudo: string
+          created_at?: string | null
+          id?: string
+          tipo?: string | null
+          titulo: string
+          updated_at?: string | null
+          user_id: string
+          uso_count?: number | null
+          variaveis?: string[] | null
+        }
+        Update: {
+          area?: string | null
+          ativo?: boolean | null
+          conteudo?: string
+          created_at?: string | null
+          id?: string
+          tipo?: string | null
+          titulo?: string
+          updated_at?: string | null
+          user_id?: string
+          uso_count?: number | null
+          variaveis?: string[] | null
+        }
+        Relationships: []
+      }
+      despesas_escritorio: {
+        Row: {
+          categoria: string | null
+          created_at: string | null
+          data_competencia: string
+          data_pagamento: string | null
+          descricao: string
+          id: string
+          recorrente: boolean | null
+          status: string | null
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string | null
+          data_competencia?: string
+          data_pagamento?: string | null
+          descricao: string
+          id?: string
+          recorrente?: boolean | null
+          status?: string | null
+          user_id: string
+          valor: number
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string | null
+          data_competencia?: string
+          data_pagamento?: string | null
+          descricao?: string
+          id?: string
+          recorrente?: boolean | null
+          status?: string | null
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
       documentos: {
         Row: {
           arquivo_path: string
@@ -149,6 +230,44 @@ export type Database = {
             columns: ["processo_id"]
             isOneToOne: false
             referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_gerados: {
+        Row: {
+          conteudo: string
+          created_at: string | null
+          id: string
+          status: string | null
+          template_id: string | null
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          template_id?: string | null
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          template_id?: string | null
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_gerados_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -237,6 +356,54 @@ export type Database = {
           id?: string
           token?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      equipe: {
+        Row: {
+          ativo: boolean | null
+          cargo: string | null
+          created_at: string | null
+          email: string | null
+          especialidades: string[] | null
+          id: string
+          meta_horas_mes: number | null
+          nome: string
+          oab: string | null
+          telefone: string | null
+          updated_at: string | null
+          user_id: string
+          valor_hora: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          id?: string
+          meta_horas_mes?: number | null
+          nome: string
+          oab?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          user_id: string
+          valor_hora?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo?: string | null
+          created_at?: string | null
+          email?: string | null
+          especialidades?: string[] | null
+          id?: string
+          meta_horas_mes?: number | null
+          nome?: string
+          oab?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          user_id?: string
+          valor_hora?: number | null
         }
         Relationships: []
       }
@@ -390,6 +557,99 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leads: {
+        Row: {
+          area_interesse: string | null
+          convertido: boolean | null
+          created_at: string | null
+          data_contato: string | null
+          descricao: string | null
+          email: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          origem: string | null
+          prioridade: string | null
+          proximo_contato: string | null
+          status: string | null
+          telefone: string | null
+          updated_at: string | null
+          user_id: string
+          valor_estimado: number | null
+        }
+        Insert: {
+          area_interesse?: string | null
+          convertido?: boolean | null
+          created_at?: string | null
+          data_contato?: string | null
+          descricao?: string | null
+          email?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          origem?: string | null
+          prioridade?: string | null
+          proximo_contato?: string | null
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          user_id: string
+          valor_estimado?: number | null
+        }
+        Update: {
+          area_interesse?: string | null
+          convertido?: boolean | null
+          created_at?: string | null
+          data_contato?: string | null
+          descricao?: string | null
+          email?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          origem?: string | null
+          prioridade?: string | null
+          proximo_contato?: string | null
+          status?: string | null
+          telefone?: string | null
+          updated_at?: string | null
+          user_id?: string
+          valor_estimado?: number | null
+        }
+        Relationships: []
+      }
+      metas_financeiras: {
+        Row: {
+          ano: number
+          created_at: string | null
+          id: string
+          mes: number
+          meta_horas: number | null
+          meta_novos_clientes: number | null
+          meta_receita: number | null
+          user_id: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string | null
+          id?: string
+          mes: number
+          meta_horas?: number | null
+          meta_novos_clientes?: number | null
+          meta_receita?: number | null
+          user_id: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string | null
+          id?: string
+          mes?: number
+          meta_horas?: number | null
+          meta_novos_clientes?: number | null
+          meta_receita?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       notificacoes: {
         Row: {
@@ -685,6 +945,48 @@ export type Database = {
           status?: string
           titulo?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      time_entries: {
+        Row: {
+          categoria: string | null
+          created_at: string | null
+          data: string
+          descricao: string
+          faturado: boolean | null
+          faturavel: boolean | null
+          horas: number
+          id: string
+          updated_at: string | null
+          user_id: string
+          valor_hora: number | null
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string | null
+          data?: string
+          descricao: string
+          faturado?: boolean | null
+          faturavel?: boolean | null
+          horas?: number
+          id?: string
+          updated_at?: string | null
+          user_id: string
+          valor_hora?: number | null
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string | null
+          data?: string
+          descricao?: string
+          faturado?: boolean | null
+          faturavel?: boolean | null
+          horas?: number
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+          valor_hora?: number | null
         }
         Relationships: []
       }
