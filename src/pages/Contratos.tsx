@@ -131,8 +131,8 @@ const Contratos = () => {
 
   const fetchData = async () => {
     const [tRes, dRes, pRes, cRes] = await Promise.all([
-      supabase.from("contratos_templates").select("*").order("uso_count", { ascending: false }),
-      supabase.from("documentos_gerados").select("*, contratos_templates(titulo), clientes(nome), processos(numero)").order("created_at", { ascending: false }).limit(20),
+      (supabase.from as any)("contratos_templates").select("*").order("uso_count", { ascending: false }),
+      (supabase.from as any)("documentos_gerados").select("*, contratos_templates(titulo), clientes(nome), processos(numero)").order("created_at", { ascending: false }).limit(20),
       supabase.from("processos").select("id, numero").order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
