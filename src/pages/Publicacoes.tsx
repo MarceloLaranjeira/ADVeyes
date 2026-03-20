@@ -172,6 +172,18 @@ const Publicacoes = () => {
       const saved = localStorage.getItem("lexia_perfis_monitorados");
       if (saved) setPerfisSalvos(JSON.parse(saved));
     } catch { /* ignore */ }
+
+    // Se o usuário salvou o perfil em Configurações, pré-preenche o campo OAB
+    try {
+      const perfil = JSON.parse(localStorage.getItem("lexia_perfil_advogado") || "{}");
+      if (perfil.numero_oab && perfil.seccional) {
+        setBuscaValor(`${perfil.numero_oab}/${perfil.seccional}`.toUpperCase());
+        setBuscaTipo("oab");
+      } else if (perfil.cpf) {
+        setBuscaValor(perfil.cpf);
+        setBuscaTipo("cpf");
+      }
+    } catch { /* ignore */ }
   }, []);
 
   const buscarPorPerfil = async (tipo?: string, valor?: string) => {

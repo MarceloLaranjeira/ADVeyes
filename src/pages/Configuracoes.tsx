@@ -21,6 +21,77 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+// ─── Perfil do Advogado (salvo em localStorage) ───────────────────────────────
+const PERFIL_KEY = "lexia_perfil_advogado";
+
+const PerfilAdvogadoForm = () => {
+  const { toast } = useToast();
+  const [form, setForm] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}"); } catch { return {}; }
+  });
+
+  const salvar = () => {
+    localStorage.setItem(PERFIL_KEY, JSON.stringify(form));
+    // Sincroniza com os perfis monitorados do módulo Publicações
+    if (form.numero_oab && form.seccional) {
+      const valor = `${form.numero_oab}/${form.seccional}`.toUpperCase();
+      const perfis = JSON.parse(localStorage.getItem("lexia_perfis_monitorados") || "[]");
+      const jaExiste = perfis.some((p: { tipo: string; valor: string }) => p.tipo === "oab" && p.valor === valor);
+      if (!jaExiste) {
+        perfis.unshift({ id: "perfil-principal", tipo: "oab", valor, tribunais: [], criadoEm: new Date().toISOString() });
+        localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(perfis));
+      }
+    }
+    toast({ title: "Perfil salvo!", description: "Seus dados serão usados automaticamente no módulo Publicações." });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Número OAB</Label>
+          <Input
+            placeholder="Ex: 10099"
+            value={form.numero_oab || ""}
+            onChange={(e) => setForm({ ...form, numero_oab: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Seccional (Estado)</Label>
+          <Input
+            placeholder="Ex: AM"
+            maxLength={2}
+            value={form.seccional || ""}
+            onChange={(e) => setForm({ ...form, seccional: e.target.value.toUpperCase() })}
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">CPF</Label>
+        <Input
+          placeholder="000.000.000-00"
+          value={form.cpf || ""}
+          onChange={(e) => setForm({ ...form, cpf: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Nome completo</Label>
+        <Input
+          placeholder="Dr. Nome do Advogado"
+          value={form.nome || ""}
+          onChange={(e) => setForm({ ...form, nome: e.target.value })}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+        OAB e CPF são usados automaticamente no módulo <strong>Publicações</strong> para monitorar o Diário de Justiça. Nenhum token é necessário para a consulta básica.
+      </p>
+      <Button onClick={salvar} className="gap-2 w-full sm:w-auto">
+        <CheckCircle className="w-4 h-4" /> Salvar Perfil
+      </Button>
+    </div>
+  );
+};
+
 const tribunaisDisponiveis = [
   // Superiores
   { id: "stf", nome: "STF - Supremo Tribunal Federal" },
@@ -262,10 +333,12 @@ const Configuracoes = () => {
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-5">
                   <User className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">Perfil</h3>
+                  <h3 className="font-semibold font-serif">Perfil do Advogado</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-2">Usuário logado: <span className="font-medium text-foreground">{user?.email}</span></p>
-                <p className="text-xs text-muted-foreground">Gerencie suas informações de perfil e dados do escritório nas configurações da conta.</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Usuário: <span className="font-medium text-foreground">{user?.email}</span>
+                </p>
+                <PerfilAdvogadoForm />
               </CardContent>
             </Card>
           </TabsContent>
@@ -866,9 +939,14 @@ const Configuracoes = () => {
                 <Input value={credForm.cpf} onChange={(e) => setCredForm({ ...credForm, cpf: e.target.value })} placeholder="000.000.000-00" />
               </div>
               <div className="space-y-2">
-                <Label>Token de Acesso / API Key</Label>
-                <Input type="password" value={credForm.token_acesso} onChange={(e) => setCredForm({ ...credForm, token_acesso: e.target.value })} placeholder="Cole aqui o token do tribunal" />
-                <p className="text-xs text-muted-foreground">Token JWT ou API Key do tribunal, SEEU ou Projudi.</p>
+                <Label className="flex items-center gap-2">
+                  Token de Acesso / API Key
+                  <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Opcional</span>
+                </Label>
+                <Input type="password" value={credForm.token_acesso} onChange={(e) => setCredForm({ ...credForm, token_acesso: e.target.value })} placeholder="Cole aqui o token do tribunal (opcional)" />
+                <p className="text-xs text-muted-foreground">
+                  Token JWT para peticionamento eletrônico (PJe, SEEU, Projudi). Deixe em branco se quiser apenas monitorar publicações via DataJud/CNJ — isso funciona só com OAB ou CPF.
+                </p>
               </div>
               <div className="flex justify-end gap-3">
                 <Button type="button" variant="outline" onClick={() => setShowCredForm(false)}>Cancelar</Button>
