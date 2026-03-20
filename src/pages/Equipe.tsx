@@ -73,8 +73,8 @@ const Equipe = () => {
       ativo: form.ativo, user_id: user!.id,
     };
     const { error } = editMembro
-      ? await supabase.from("equipe").update(payload).eq("id", editMembro.id)
-      : await supabase.from("equipe").insert(payload);
+      ? await (supabase.from as any)("equipe").update(payload).eq("id", editMembro.id)
+      : await (supabase.from as any)("equipe").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
