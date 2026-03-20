@@ -226,12 +226,29 @@ serve(async (req) => {
 
       let query: Record<string, unknown>;
       if (tipo === "oab") {
-        const oabSemEstado = valor.replace(/\/\s*[A-Z]{2}\s*$/i, "").trim();
+        // OAB pode estar em vários formatos no DataJud:
+        // "10099/AM", "10099 AM", "AM10099", "10099", "OAB/AM 10099"
+        const oabNumero = valor.replace(/[^0-9]/g, ""); // só dígitos
+        const estadoSigla = estadoOAB?.toUpperCase() || "";
+        const variacoes = [
+          valor.trim(),                         // como digitado: 10099/AM
+          `${oabNumero} ${estadoSigla}`,        // 10099 AM
+          `${estadoSigla} ${oabNumero}`,        // AM 10099
+          `${estadoSigla}${oabNumero}`,         // AM10099
+          oabNumero,                             // só o número
+        ].filter(Boolean);
+
         query = {
           bool: {
             should: [
-              { nested: { path: "advogados", query: { match: { "advogados.oab": valor.trim() } } } },
-              { nested: { path: "advogados", query: { match_phrase: { "advogados.oab": oabSemEstado } } } },
+              // Tentativas nested (se mapeado como nested)
+              ...variacoes.map((v) => ({
+                nested: { path: "advogados", query: { match: { "advogados.oab": v } } },
+              })),
+              // Tentativas flat (se mapeado como object)
+              ...variacoes.map((v) => ({ match: { "advogados.oab": v } })),
+              // query_string ampla como fallback
+              { query_string: { query: `*${oabNumero}*`, fields: ["advogados.oab", "advogados.inscricaoOab", "advogados.numeroOab"] } },
             ],
             minimum_should_match: 1,
           },
@@ -243,6 +260,9 @@ serve(async (req) => {
             should: [
               { nested: { path: "partes", query: { match: { "partes.cpf": cpfLimpo } } } },
               { nested: { path: "advogados", query: { match: { "advogados.cpf": cpfLimpo } } } },
+              { match: { "partes.cpf": cpfLimpo } },
+              { match: { "advogados.cpf": cpfLimpo } },
+              { query_string: { query: cpfLimpo, fields: ["partes.cpf", "advogados.cpf"] } },
             ],
             minimum_should_match: 1,
           },
@@ -253,6 +273,9 @@ serve(async (req) => {
             should: [
               { nested: { path: "advogados", query: { match: { "advogados.nome": valor } } } },
               { nested: { path: "partes", query: { match: { "partes.nome": valor } } } },
+              { match: { "advogados.nome": valor } },
+              { match: { "partes.nome": valor } },
+              { multi_match: { query: valor, fields: ["advogados.nome", "partes.nome"], type: "best_fields", fuzziness: "AUTO" } },
             ],
             minimum_should_match: 1,
           },
