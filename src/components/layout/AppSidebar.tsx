@@ -2,7 +2,8 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Scale, Users, CalendarDays, FileText,
   Search, Gavel, BookOpen, DollarSign, LogOut, Bell, ListTodo,
-  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield, MessageCircle,
+  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield,
+  MessageCircle, Timer, UserPlus, Users2, FileSignature,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -15,6 +16,13 @@ const navSections = [
       { label: "Dashboard", icon: LayoutDashboard, path: "/" },
       { label: "Processos", icon: Scale, path: "/processos" },
       { label: "Clientes", icon: Users, path: "/clientes" },
+    ],
+  },
+  {
+    label: "CRM & Captação",
+    items: [
+      { label: "CRM — Leads", icon: UserPlus, path: "/crm" },
+      { label: "Equipe", icon: Users2, path: "/equipe" },
     ],
   },
   {
@@ -37,6 +45,8 @@ const navSections = [
     label: "Gestão",
     items: [
       { label: "Financeiro", icon: DollarSign, path: "/financeiro" },
+      { label: "Controle de Horas", icon: Timer, path: "/time-tracking" },
+      { label: "Contratos & Templates", icon: FileSignature, path: "/contratos" },
       { label: "Documentos", icon: FileText, path: "/documentos" },
       { label: "Relatórios", icon: BarChart3, path: "/relatorios" },
     ],
@@ -118,6 +128,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                         key={item.path}
                         to={item.path}
                         className={`nav-item ${isActive ? "nav-item-active" : ""}`}
+                        onClick={onClose}
                       >
                         <item.icon className="w-4 h-4 shrink-0" />
                         {item.label}
@@ -148,7 +159,6 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
 
       {/* Footer */}
       <div className="p-3 border-t border-sidebar-border">
-        {/* Push notification activation */}
         {permission !== "granted" && (
           <button
             onClick={subscribe}
@@ -169,7 +179,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         </button>
         <div className="mt-3 px-3">
           <p className="text-[9px] text-sidebar-foreground/25 uppercase tracking-wider">
-            LEXIA v3.0 · Horus IA
+            LEXIA v4.0 · Horus IA
           </p>
         </div>
       </div>

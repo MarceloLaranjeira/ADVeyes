@@ -22,6 +22,10 @@ import IAJuridica from "./pages/IAJuridica";
 import PortalCliente from "./pages/PortalCliente";
 import Configuracoes from "./pages/Configuracoes";
 import WhatsApp from "./pages/WhatsApp";
+import TimeTracking from "./pages/TimeTracking";
+import CRM from "./pages/CRM";
+import Equipe from "./pages/Equipe";
+import Contratos from "./pages/Contratos";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
@@ -60,6 +64,11 @@ const App = () => (
               <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
               <Route path="/portal-cliente" element={<ProtectedRoute><PortalCliente /></ProtectedRoute>} />
               <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+              {/* Novos módulos */}
+              <Route path="/time-tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+              <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+              <Route path="/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
+              <Route path="/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
