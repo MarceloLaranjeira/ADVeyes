@@ -45,7 +45,7 @@ const TimeTracking = () => {
 
   const fetchData = async () => {
     const [entriesRes, processosRes, clientesRes] = await Promise.all([
-      supabase.from("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
+      (supabase.from as any)("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
       supabase.from("processos").select("id, numero, descricao").order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
@@ -117,7 +117,7 @@ const TimeTracking = () => {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("time_entries").insert({
+    const { error } = await (supabase.from as any)("time_entries").insert({
       descricao: form.descricao,
       data: form.data,
       horas: parseFloat(form.horas),
@@ -140,7 +140,7 @@ const TimeTracking = () => {
   };
 
   const marcarFaturado = async (id: string, faturado: boolean) => {
-    await supabase.from("time_entries").update({ faturado }).eq("id", id);
+    await (supabase.from as any)("time_entries").update({ faturado }).eq("id", id);
     fetchData();
   };
 

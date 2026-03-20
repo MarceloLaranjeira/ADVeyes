@@ -33,8 +33,8 @@ const Equipe = () => {
 
   const fetchData = async () => {
     const [membrosRes, timeRes] = await Promise.all([
-      supabase.from("equipe").select("*").order("nome"),
-      supabase.from("time_entries").select("horas, valor_hora, faturado, created_at").gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      (supabase.from as any)("equipe").select("*").order("nome"),
+      (supabase.from as any)("time_entries").select("horas, valor_hora, faturado, created_at").gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
     ]);
     if (membrosRes.data) setMembros(membrosRes.data);
     if (timeRes.data) setTimeEntries(timeRes.data);
@@ -73,8 +73,8 @@ const Equipe = () => {
       ativo: form.ativo, user_id: user!.id,
     };
     const { error } = editMembro
-      ? await supabase.from("equipe").update(payload).eq("id", editMembro.id)
-      : await supabase.from("equipe").insert(payload);
+      ? await (supabase.from as any)("equipe").update(payload).eq("id", editMembro.id)
+      : await (supabase.from as any)("equipe").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -88,7 +88,7 @@ const Equipe = () => {
 
   const deleteMembro = async (id: string) => {
     if (!confirm("Remover este membro da equipe?")) return;
-    await supabase.from("equipe").delete().eq("id", id);
+    await (supabase.from as any)("equipe").delete().eq("id", id);
     toast({ title: "Membro removido" });
     fetchData();
   };

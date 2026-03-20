@@ -147,10 +147,10 @@ const IAJuridica = () => {
   const [mode, setMode] = useState("assistente");
   const [isLoading, setIsLoading] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [ttsEnabled, setTtsEnabled] = useState(() => localStorage.getItem("horus_tts_enabled") !== "false");
-  const [ttsProvider] = useState<TtsProvider>(() => (localStorage.getItem("horus_tts_provider") as TtsProvider) || "browser");
-  const [ttsApiKey] = useState(() => localStorage.getItem("horus_tts_key") || "");
-  const [ttsVoice] = useState(() => localStorage.getItem("horus_tts_voice") || "nova");
+  const [ttsEnabled, setTtsEnabled] = useState(() => sessionStorage.getItem("horus_tts_enabled") !== "false");
+  const [ttsProvider] = useState<TtsProvider>(() => (sessionStorage.getItem("horus_tts_provider") as TtsProvider) || "browser");
+  const [ttsApiKey] = useState(() => sessionStorage.getItem("horus_tts_key") || "");
+  const [ttsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "nova");
   const [showSettings, setShowSettings] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showModePanel, setShowModePanel] = useState(false);

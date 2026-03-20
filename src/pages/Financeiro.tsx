@@ -58,8 +58,8 @@ const Financeiro = () => {
   const fetchData = async () => {
     const [finRes, despRes, metaRes] = await Promise.all([
       supabase.from("financeiro").select("*").order("created_at", { ascending: false }),
-      supabase.from("despesas_escritorio").select("*").order("data_competencia", { ascending: false }),
-      supabase.from("metas_financeiras").select("*").order("ano", { ascending: false }).order("mes", { ascending: false }),
+      (supabase.from as any)("despesas_escritorio").select("*").order("data_competencia", { ascending: false }),
+      (supabase.from as any)("metas_financeiras").select("*").order("ano", { ascending: false }).order("mes", { ascending: false }),
     ]);
     if (finRes.data) setRegistros(finRes.data);
     if (despRes.data) setDespesasEscritorio(despRes.data);
@@ -152,7 +152,7 @@ const Financeiro = () => {
     e.preventDefault();
     if (!despesaForm.descricao || !despesaForm.valor) { toast({ title: "Preencha os campos obrigatórios", variant: "destructive" }); return; }
     setLoading(true);
-    const { error } = await supabase.from("despesas_escritorio").insert({
+    const { error } = await (supabase.from as any)("despesas_escritorio").insert({
       ...despesaForm, valor: parseFloat(despesaForm.valor),
       data_pagamento: despesaForm.data_pagamento || null, user_id: user!.id,
     });
@@ -164,7 +164,7 @@ const Financeiro = () => {
   const handleMetaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.from("metas_financeiras").upsert({
+    const { error } = await (supabase.from as any)("metas_financeiras").upsert({
       mes: metaForm.mes, ano: metaForm.ano,
       meta_receita: parseFloat(metaForm.meta_receita) || 0,
       meta_novos_clientes: parseInt(metaForm.meta_novos_clientes) || 0,

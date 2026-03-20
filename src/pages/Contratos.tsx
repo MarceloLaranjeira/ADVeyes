@@ -131,8 +131,8 @@ const Contratos = () => {
 
   const fetchData = async () => {
     const [tRes, dRes, pRes, cRes] = await Promise.all([
-      supabase.from("contratos_templates").select("*").order("uso_count", { ascending: false }),
-      supabase.from("documentos_gerados").select("*, contratos_templates(titulo), clientes(nome), processos(numero)").order("created_at", { ascending: false }).limit(20),
+      (supabase.from as any)("contratos_templates").select("*").order("uso_count", { ascending: false }),
+      (supabase.from as any)("documentos_gerados").select("*, contratos_templates(titulo), clientes(nome), processos(numero)").order("created_at", { ascending: false }).limit(20),
       supabase.from("processos").select("id, numero").order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
@@ -144,7 +144,7 @@ const Contratos = () => {
 
   const seedDefaultTemplates = async () => {
     for (const t of templatesDefault) {
-      await supabase.from("contratos_templates").insert({
+      await (supabase.from as any)("contratos_templates").insert({
         ...t, user_id: user!.id, variaveis: t.variaveis,
       });
     }
@@ -183,8 +183,8 @@ const Contratos = () => {
     const uniqueVars = [...new Set(vars)];
     const payload = { ...form, variaveis: uniqueVars, user_id: user!.id };
     const { error } = editTemplate
-      ? await supabase.from("contratos_templates").update(payload).eq("id", editTemplate.id)
-      : await supabase.from("contratos_templates").insert(payload);
+      ? await (supabase.from as any)("contratos_templates").update(payload).eq("id", editTemplate.id)
+      : await (supabase.from as any)("contratos_templates").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -216,11 +216,11 @@ const Contratos = () => {
     Object.entries(varValues).forEach(([k, v]) => {
       content = content.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v || `[${k}]`);
     });
-    await supabase.from("documentos_gerados").insert({
+    await (supabase.from as any)("documentos_gerados").insert({
       titulo, conteudo: content, template_id: selectedTemplate?.id,
       user_id: user!.id, status: "rascunho",
     });
-    await supabase.from("contratos_templates").update({ uso_count: (selectedTemplate?.uso_count || 0) + 1 }).eq("id", selectedTemplate?.id);
+    await (supabase.from as any)("contratos_templates").update({ uso_count: (selectedTemplate?.uso_count || 0) + 1 }).eq("id", selectedTemplate?.id);
     toast({ title: "Documento salvo!" });
     setShowUso(false);
     fetchData();
@@ -242,7 +242,7 @@ const Contratos = () => {
 
   const deleteTemplate = async (id: string) => {
     if (!confirm("Excluir este template?")) return;
-    await supabase.from("contratos_templates").delete().eq("id", id);
+    await (supabase.from as any)("contratos_templates").delete().eq("id", id);
     toast({ title: "Template excluído" });
     fetchData();
   };

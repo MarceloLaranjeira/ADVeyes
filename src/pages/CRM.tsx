@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, Plus, TrendingUp, Phone, Mail, Calendar,
   ArrowRight, Star, CheckCircle2, XCircle, Clock,
-  Search, Filter, UserCheck, DollarSign, Funnel,
+  Search, Filter, UserCheck, DollarSign,
 } from "lucide-react";
 
 const statusFunil = [
@@ -46,7 +46,7 @@ const CRM = () => {
   });
 
   const fetchLeads = async () => {
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    const { data } = await (supabase.from as any)("leads").select("*").order("created_at", { ascending: false });
     if (data) setLeads(data);
   };
 
@@ -104,8 +104,8 @@ const CRM = () => {
       user_id: user!.id,
     };
     const { error } = editLead
-      ? await supabase.from("leads").update(payload).eq("id", editLead.id)
-      : await supabase.from("leads").insert(payload);
+      ? await (supabase.from as any)("leads").update(payload).eq("id", editLead.id)
+      : await (supabase.from as any)("leads").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -118,7 +118,7 @@ const CRM = () => {
   };
 
   const updateStatus = async (id: string, status: string) => {
-    await supabase.from("leads").update({ status }).eq("id", id);
+    await (supabase.from as any)("leads").update({ status }).eq("id", id);
     fetchLeads();
     toast({ title: `Status atualizado para "${statusFunil.find(s => s.id === status)?.label}"` });
   };
@@ -130,7 +130,7 @@ const CRM = () => {
       user_id: user!.id,
     }).select().single();
     if (!error && data) {
-      await supabase.from("leads").update({ status: "convertido", convertido: true, cliente_id: data.id }).eq("id", lead.id);
+      await (supabase.from as any)("leads").update({ status: "convertido", convertido: true, cliente_id: data.id }).eq("id", lead.id);
       toast({ title: "Lead convertido em cliente!", description: `${lead.nome} foi adicionado como cliente.` });
       fetchLeads();
     }
