@@ -5,7 +5,9 @@ import {
   User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
   CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
+  SlidersHorizontal,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { PLANS, asaas } from "@/lib/asaas";
 import { googleCalendar } from "@/lib/google-calendar";
 import { Switch } from "@/components/ui/switch";
@@ -181,7 +183,17 @@ const Configuracoes = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleGcalConnect = () => googleCalendar.authorize();
+  const handleGcalConnect = () => {
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      toast({
+        title: "Configuração necessária",
+        description: "Adicione VITE_GOOGLE_CLIENT_ID no painel Lovable (Project Settings → Environment Variables) e redeploye.",
+        variant: "destructive",
+      });
+      return;
+    }
+    googleCalendar.authorize();
+  };
   const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
 
   const handleCheckout = async (planKey: string) => {
@@ -205,6 +217,18 @@ const Configuracoes = () => {
       toast({ title: "Erro ao gerar cobrança", description: (err as Error).message, variant: "destructive" });
     }
     setCheckoutLoading(false);
+  };
+
+  // AI Custom Prompt (persisted in localStorage)
+  const [customPrompt, setCustomPrompt] = useState(() => localStorage.getItem("horus_custom_prompt") || "");
+
+  const saveCustomPrompt = () => {
+    if (customPrompt.trim()) {
+      localStorage.setItem("horus_custom_prompt", customPrompt.trim());
+    } else {
+      localStorage.removeItem("horus_custom_prompt");
+    }
+    toast({ title: "Prompt personalizado salvo!", description: "O Horus usará essas instruções em todas as conversas." });
   };
 
   // TTS Settings (persisted in sessionStorage for security — keys cleared when tab closes)
@@ -345,6 +369,47 @@ const Configuracoes = () => {
 
           {/* === VOZ & IA === */}
           <TabsContent value="voz" className="space-y-4">
+
+            {/* Prompt Personalizado */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <SlidersHorizontal className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">Prompt Personalizado do Horus</h3>
+                  {customPrompt.trim() && (
+                    <span className="ml-auto text-xs bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full font-semibold">Ativo</span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Adicione instruções personalizadas que o Horus seguirá em <strong>todas as conversas</strong>, em qualquer modo.
+                  Por exemplo: estilo de resposta, foco em determinadas áreas do direito, nome do escritório, tom formal ou informal.
+                </p>
+                <Textarea
+                  className="min-h-[120px] text-sm font-mono resize-y"
+                  placeholder={`Exemplos de instruções:\n- Sempre mencione o escritório Albertino Advogados Associados ao finalizar respostas\n- Foco em processos do TJAM e TRF1\n- Prefira linguagem formal e técnica\n- Sempre cite o número do artigo de lei quando relevante`}
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                />
+                <div className="flex items-center gap-3 mt-3">
+                  <Button onClick={saveCustomPrompt} className="gap-2">
+                    <CheckCircle className="w-4 h-4" /> Salvar Prompt
+                  </Button>
+                  {customPrompt.trim() && (
+                    <Button
+                      variant="ghost"
+                      className="gap-2 text-muted-foreground hover:text-destructive"
+                      onClick={() => { setCustomPrompt(""); localStorage.removeItem("horus_custom_prompt"); toast({ title: "Prompt personalizado removido" }); }}
+                    >
+                      <XCircle className="w-4 h-4" /> Remover
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Essas instruções são adicionadas ao prompt base do Horus. O prompt base define o papel do assistente (jurídico, resumo, petição etc.) — suas instruções complementam e personalizam o comportamento.
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Horus AI Info */}
             <Card>
               <CardContent className="p-6">

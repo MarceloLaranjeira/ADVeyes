@@ -187,7 +187,17 @@ const Agenda = () => {
     setGcalConnected(!!token);
   }, []);
 
-  const handleGcalConnect = () => googleCalendar.authorize();
+  const handleGcalConnect = () => {
+    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+      toast({
+        title: "Configuração necessária",
+        description: "Adicione VITE_GOOGLE_CLIENT_ID em Configurações → Integrações para habilitar o Google Calendar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    googleCalendar.authorize();
+  };
   const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
 
   const syncAllToGcal = async () => {

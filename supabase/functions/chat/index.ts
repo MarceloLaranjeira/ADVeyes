@@ -32,7 +32,7 @@ serve(async (req) => {
       });
     }
 
-    const { messages, mode } = await req.json();
+    const { messages, mode, customSystemPrompt } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -45,7 +45,10 @@ serve(async (req) => {
       triagem: "Você é um agente especializado em triagem e qualificação de leads jurídicos para um escritório de advocacia. Sua função é analisar a consulta inicial de um potencial cliente e: 1) Identificar a área do Direito envolvida (Penal, Cível, Família, Trabalhista, Consumidor, Previdenciário, etc.); 2) Avaliar a urgência do caso (alta/média/baixa) com base nos prazos mencionados; 3) Fazer perguntas objetivas para coletar as informações essenciais (fatos, documentos disponíveis, partes envolvidas, prazos); 4) Apresentar um resumo do caso qualificado para o advogado; 5) Orientar o cliente sobre os próximos passos. Seja empático, profissional e objetivo. Ao final de cada interação, apresente um RELATÓRIO DE TRIAGEM com: Área Jurídica, Urgência, Resumo do Caso, Documentos Necessários, Ação Recomendada.",
     };
 
-    const systemContent = systemPrompts[mode] || systemPrompts.assistente;
+    const basePrompt = systemPrompts[mode] || systemPrompts.assistente;
+    const systemContent = customSystemPrompt?.trim()
+      ? `${basePrompt}\n\n--- INSTRUÇÕES PERSONALIZADAS DO ESCRITÓRIO ---\n${customSystemPrompt.trim()}`
+      : basePrompt;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

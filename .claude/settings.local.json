@@ -6,7 +6,8 @@
       "mcp__claude_ai_Supabase__list_projects",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "mcp__claude_ai_Supabase__get_logs"
     ]
   }
 }

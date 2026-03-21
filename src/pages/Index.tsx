@@ -106,14 +106,14 @@ const Index = () => {
   const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const quickActions = [
-    { label: "Busca Processual", icon: Search, path: "/busca", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/30" },
-    { label: "Nova Tarefa", icon: ListTodo, path: "/tarefas", color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/30" },
-    { label: "Financeiro", icon: DollarSign, path: "/financeiro", color: "text-yellow-600", bg: "bg-yellow-50 dark:bg-yellow-950/30" },
-    { label: "Controle Horas", icon: Timer, path: "/time-tracking", color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30" },
-    { label: "Novo Lead (CRM)", icon: UserPlus, path: "/crm", color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950/30" },
-    { label: "Documentos", icon: FileText, path: "/documentos", color: "text-teal-600", bg: "bg-teal-50 dark:bg-teal-950/30" },
-    { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia", color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/30" },
-    { label: "Relatórios", icon: BarChart3, path: "/relatorios", color: "text-rose-600", bg: "bg-rose-50 dark:bg-rose-950/30" },
+    { label: "Busca Processual", icon: Search, path: "/busca" },
+    { label: "Nova Tarefa", icon: ListTodo, path: "/tarefas" },
+    { label: "Financeiro", icon: DollarSign, path: "/financeiro" },
+    { label: "Controle Horas", icon: Timer, path: "/time-tracking" },
+    { label: "Novo Lead (CRM)", icon: UserPlus, path: "/crm" },
+    { label: "Documentos", icon: FileText, path: "/documentos" },
+    { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
+    { label: "Relatórios", icon: BarChart3, path: "/relatorios" },
   ];
 
   return (
@@ -129,11 +129,10 @@ const Index = () => {
           </div>
           <Button
             onClick={() => navigate("/ia-juridica")}
-            className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg"
+            className="gap-2"
           >
             <Bot className="w-4 h-4" />
             Horus IA
-            <Zap className="w-3.5 h-3.5 text-yellow-300" />
           </Button>
         </div>
 
@@ -307,8 +306,8 @@ const Index = () => {
                   onClick={() => navigate(a.path)}
                   className="quick-action-card group"
                 >
-                  <div className={`w-9 h-9 rounded-xl ${a.bg} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <a.icon className={`w-4 h-4 ${a.color}`} />
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary/10 group-hover:scale-105 transition-all">
+                    <a.icon className="w-4 h-4 text-slate-500 group-hover:text-primary transition-colors" />
                   </div>
                   <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">{a.label}</span>
                 </button>

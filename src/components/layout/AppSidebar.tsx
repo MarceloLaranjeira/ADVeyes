@@ -73,18 +73,18 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   return (
     <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border">
       {/* Logo */}
-      <div className="p-5 border-b border-sidebar-border flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sidebar-primary/20 border border-sidebar-primary/30 flex items-center justify-center shrink-0">
-            <Scale className="w-5 h-5 text-sidebar-primary" />
+          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            <Scale className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-sidebar-primary font-serif tracking-widest uppercase">LEXIA</h1>
-            <p className="text-[9px] text-sidebar-foreground/40 tracking-widest uppercase">Albertino &amp; Advogados</p>
+            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Georgia, serif' }}>LEXIA</h1>
+            <p className="text-[9px] text-muted-foreground tracking-widest uppercase">Albertino &amp; Advogados</p>
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-sidebar-accent text-sidebar-foreground/50">
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-muted text-muted-foreground">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         )}
@@ -96,25 +96,25 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           to="/ia-juridica"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             location.pathname === "/ia-juridica"
-              ? "bg-sidebar-primary text-sidebar-primary-foreground"
-              : "bg-sidebar-primary/10 text-sidebar-primary hover:bg-sidebar-primary/20 border border-sidebar-primary/20"
+              ? "bg-primary text-white"
+              : "bg-primary/8 text-primary hover:bg-primary/12 border border-primary/20"
           }`}
         >
           <Bot className="w-4 h-4 shrink-0" />
           <span className="flex-1">Horus — IA</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 pt-3 pb-3 overflow-y-auto space-y-0.5">
+      <nav className="flex-1 px-3 pt-2 pb-3 overflow-y-auto space-y-0.5">
         {navSections.map((section) => {
           const isCollapsed = collapsed[section.label];
           return (
             <div key={section.label}>
               <button
                 onClick={() => toggleSection(section.label)}
-                className="w-full flex items-center justify-between px-3 py-1.5 mt-1 text-[9px] font-bold text-sidebar-foreground/35 uppercase tracking-widest hover:text-sidebar-foreground/55 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-1.5 mt-1 text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest hover:text-muted-foreground transition-colors"
               >
                 {section.label}
                 <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
@@ -142,18 +142,18 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         })}
       </nav>
 
-      {/* Tribunal APIs indicator */}
+      {/* APIs indicator */}
       <div className="mx-3 mb-3">
         <Link
           to="/busca"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent/60 border border-sidebar-border hover:bg-sidebar-accent transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
         >
-          <Shield className="w-3.5 h-3.5 text-green-400 shrink-0" />
+          <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-sidebar-foreground/70">APIs Ativas</p>
-            <p className="text-[9px] text-sidebar-foreground/40">85+ Tribunais • SEEU • Projudi</p>
+            <p className="text-[10px] font-semibold text-foreground/60">APIs Ativas</p>
+            <p className="text-[9px] text-muted-foreground">85+ Tribunais • SEEU • Projudi</p>
           </div>
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
         </Link>
       </div>
 
@@ -162,7 +162,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         {permission !== "granted" && (
           <button
             onClick={subscribe}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20 text-sidebar-primary hover:bg-sidebar-primary/20 transition-colors text-[10px] font-semibold"
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-colors text-[10px] font-semibold"
           >
             <Bell className="w-3.5 h-3.5 shrink-0" />
             Ativar notificações
@@ -170,15 +170,15 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         )}
         {user && (
           <div className="px-3 mb-2">
-            <p className="text-[10px] text-sidebar-foreground/40 truncate">{user.email}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
           </div>
         )}
-        <button onClick={signOut} className="nav-item w-full text-left hover:text-red-400">
+        <button onClick={signOut} className="nav-item w-full text-left hover:text-red-500">
           <LogOut className="w-4 h-4 shrink-0" />
           Sair do Sistema
         </button>
         <div className="mt-3 px-3">
-          <p className="text-[9px] text-sidebar-foreground/25 uppercase tracking-wider">
+          <p className="text-[9px] text-muted-foreground/40 uppercase tracking-wider">
             LEXIA v4.0 · Horus IA
           </p>
         </div>

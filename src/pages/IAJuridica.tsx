@@ -229,7 +229,11 @@ const IAJuridica = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ messages: newMessages, mode }),
+        body: JSON.stringify({
+          messages: newMessages,
+          mode,
+          customSystemPrompt: localStorage.getItem("horus_custom_prompt") || undefined,
+        }),
       });
 
       if (resp.status === 429) {
