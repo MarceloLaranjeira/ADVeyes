@@ -192,14 +192,15 @@ serve(async (req) => {
 
     // ─── MODO BUSCA: por OAB / CPF / Nome (via DataJud/DJe) ───────────────────
     if (body.busca) {
-      const { tipo = "oab", valor = "", tribunais: tribList, salvar = false } = body.busca as {
-        tipo: "oab" | "cpf" | "nome";
-        valor: string;
-        tribunais?: string[];
-        salvar?: boolean;
-      };
+      console.log("[busca] iniciando", JSON.stringify(body.busca));
 
-      if (!valor.trim()) {
+      const busca = body.busca as Record<string, unknown>;
+      const tipo = (busca.tipo as string) || "oab";
+      const valor = ((busca.valor as string) || "").trim();
+      const tribList = busca.tribunais as string[] | undefined;
+      const salvar = busca.salvar === true;
+
+      if (!valor) {
         return new Response(JSON.stringify({ error: "Informe um valor para busca" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -208,7 +209,7 @@ serve(async (req) => {
 
       // Detectar tribunal pelo estado da OAB (ex: 12345/AM → tjam)
       const estadoMatch = tipo === "oab" ? valor.match(/\/\s*([A-Z]{2})\s*$/i) : null;
-      const estadoOAB = estadoMatch?.[1]?.toLowerCase();
+      const estadoOAB = estadoMatch ? estadoMatch[1].toLowerCase() : "";
       const estadoParaTribunal: Record<string, string> = {
         ac: "tjac", al: "tjal", ap: "tjap", am: "tjam", ba: "tjba",
         ce: "tjce", df: "tjdft", es: "tjes", go: "tjgo", ma: "tjma",
@@ -217,177 +218,185 @@ serve(async (req) => {
         ro: "tjro", rr: "tjrr", rs: "tjrs", sc: "tjsc", se: "tjse",
         sp: "tjsp", to: "tjto",
       };
+      const trfMap: Record<string, string> = {
+        am: "trf1", pa: "trf1", ma: "trf1", ap: "trf1", rr: "trf1", ro: "trf1", to: "trf1", ac: "trf1",
+        ba: "trf1", go: "trf1", mt: "trf1", mg: "trf1", df: "trf1", pi: "trf1",
+        rj: "trf2", es: "trf2", sp: "trf3", ms: "trf3",
+        rs: "trf4", sc: "trf4", pr: "trf4",
+        pe: "trf5", ce: "trf5", al: "trf5", rn: "trf5", pb: "trf5", se: "trf5",
+      };
 
-      // Para OAB com estado detectado: busca no tribunal do estado + federais relevantes
-      // Limite de 4 tribunais em paralelo para caber no timeout de ~10s
       let defaultTribs: string[];
       if (estadoOAB && estadoParaTribunal[estadoOAB]) {
         const tEstado = estadoParaTribunal[estadoOAB];
-        // TRF da região: AM/PA/MA/AP/RR/RO/TO/AC → trf1; SP/MS/PR → trf3/trf4
-        const trfMap: Record<string, string> = {
-          am: "trf1", pa: "trf1", ma: "trf1", ap: "trf1", rr: "trf1", ro: "trf1", to: "trf1", ac: "trf1",
-          ba: "trf1", go: "trf1", mt: "trf1", mg: "trf1", df: "trf1", pi: "trf1",
-          rj: "trf2", es: "trf2",
-          sp: "trf3", ms: "trf3",
-          rs: "trf4", sc: "trf4", pr: "trf4",
-          pe: "trf5", ce: "trf5", al: "trf5", rn: "trf5", pb: "trf5", se: "trf5",
-        };
         const trf = trfMap[estadoOAB] || "trf1";
-        defaultTribs = [tEstado, trf, "stj"].filter((v, i, a) => a.indexOf(v) === i);
+        // Deduplicar: se tEstado === trf, só usa um
+        defaultTribs = [...new Set([tEstado, trf, "stj"])];
       } else {
-        defaultTribs = ["tjam", "tjsp", "stj", "trf1"];
+        defaultTribs = ["tjam", "trf1", "stj"];
       }
-      const tribunaisParaBuscar = (tribList?.length ? tribList : defaultTribs).slice(0, 4);
+      const tribunaisParaBuscar = (tribList && tribList.length > 0 ? tribList : defaultTribs).slice(0, 3);
+      console.log("[busca] tribunais:", tribunaisParaBuscar.join(","));
 
-      // ── Query Elasticsearch ──────────────────────────────────────────────────
-      let query: Record<string, unknown>;
+      // ── Query Elasticsearch — usa apenas query_string (sem nested) ────────────
+      // query_string é o mais seguro: não exige conhecer o mapping e lenient:true
+      // ignora erros de tipo. Funciona com qualquer estrutura de campos.
+      let esQuery: Record<string, unknown>;
       if (tipo === "oab") {
-        const oabNumero = valor.replace(/[^0-9]/g, ""); // só dígitos: "10099"
-        // DataJud armazena OAB em: partes[].advogados[].inscricaoOab  (campo principal CNJ)
-        // Alguns tribunais usam: partes[].advogados[].oab
-        query = {
-          bool: {
-            should: [
-              { nested: { path: "partes", query: { match: { "partes.advogados.inscricaoOab": oabNumero } } } },
-              { nested: { path: "partes", query: { match: { "partes.advogados.oab": oabNumero } } } },
-              { query_string: {
-                  query: oabNumero,
-                  fields: ["partes.advogados.inscricaoOab", "partes.advogados.oab", "advogados.inscricaoOab", "advogados.oab"],
-                  lenient: true,
-              }},
+        const oabNumero = valor.replace(/[^0-9]/g, "");
+        console.log("[busca] OAB número:", oabNumero);
+        esQuery = {
+          query_string: {
+            query: oabNumero,
+            fields: [
+              "partes.advogados.inscricaoOab",
+              "partes.advogados.oab",
+              "advogados.inscricaoOab",
+              "advogados.oab",
             ],
-            minimum_should_match: 1,
+            lenient: true,
+            default_operator: "AND",
           },
         };
       } else if (tipo === "cpf") {
         const cpfLimpo = valor.replace(/\D/g, "");
-        query = {
-          bool: {
-            should: [
-              { nested: { path: "partes", query: { match: { "partes.cpf": cpfLimpo } } } },
-              { query_string: { query: cpfLimpo, fields: ["partes.cpf", "advogados.cpf"], lenient: true } },
-            ],
-            minimum_should_match: 1,
+        esQuery = {
+          query_string: {
+            query: cpfLimpo,
+            fields: ["partes.cpf", "advogados.cpf", "partes.documento"],
+            lenient: true,
+            default_operator: "AND",
           },
         };
       } else {
-        query = {
-          bool: {
-            should: [
-              { nested: { path: "partes", query: { match_phrase: { "partes.nome": valor } } } },
-              { multi_match: { query: valor, fields: ["partes.nome", "advogados.nome"], type: "best_fields", fuzziness: "AUTO" } },
-            ],
-            minimum_should_match: 1,
+        esQuery = {
+          multi_match: {
+            query: valor,
+            fields: ["partes.nome", "advogados.nome"],
+            type: "best_fields",
+            fuzziness: "AUTO",
           },
         };
       }
 
-      // ── Busca paralela em todos os tribunais com timeout individual ──────────
+      // ── Busca paralela com timeout individual ─────────────────────────────────
       const SOURCE_FIELDS = ["numeroProcesso", "classe", "assuntos", "orgaoJulgador", "movimentos", "partes", "dataAjuizamento"];
 
-      const searchPromises = tribunaisParaBuscar.map(async (trib) => {
-        const endpoint = DATAJUD_ENDPOINTS[trib];
-        if (!endpoint) return [];
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const resp = await fetch(endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: DATAJUD_KEY },
-            body: JSON.stringify({ query, size: 10, _source: SOURCE_FIELDS }),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (!resp.ok) {
-            console.error(`${trib} HTTP ${resp.status}`);
-            return [];
-          }
-          const data = await resp.json();
-          const hits = (data.hits?.hits as Record<string, unknown>[]) || [];
-          return hits.map((hit) => {
-            const src = hit._source as Record<string, unknown>;
-            const movimentos = (src.movimentos as Record<string, unknown>[]) || [];
-            return {
-              tribunal: trib.toUpperCase(),
-              numero_processo: src.numeroProcesso || "",
-              classe: (src.classe as Record<string, unknown>)?.nome || "",
-              assuntos: ((src.assuntos as { nome: string }[]) || []).map((a) => a.nome).join(", "),
-              orgao: (src.orgaoJulgador as Record<string, unknown>)?.nome || trib.toUpperCase(),
-              data_ajuizamento: src.dataAjuizamento || null,
-              partes: ((src.partes as { nome: string; tipo: string }[]) || []).slice(0, 4),
-              ultimos_movimentos: movimentos.slice(0, 3).map((m) => ({
-                nome: m.nome,
-                data: m.dataHora,
-                tipo: classifyMovimento(m.nome as string),
-              })),
-              // raw para salvar como publicações
-              _raw: { src, trib },
-            };
-          });
-        } catch (e) {
-          clearTimeout(timeoutId);
-          console.error(`Erro buscando no ${trib}:`, e);
-          return [];
-        }
-      });
+      // rawSources: guarda dados completos para salvar depois, indexado por numeroProcesso
+      const rawSources: Record<string, { src: Record<string, unknown>; trib: string }> = {};
 
-      const resultados = (await Promise.all(searchPromises)).flat();
+      const searchResults = await Promise.all(
+        tribunaisParaBuscar.map(async (trib) => {
+          const endpoint = DATAJUD_ENDPOINTS[trib];
+          if (!endpoint) return [] as Record<string, unknown>[];
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 6000);
+          try {
+            const resp = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: DATAJUD_KEY },
+              body: JSON.stringify({ query: esQuery, size: 10, _source: SOURCE_FIELDS }),
+              signal: controller.signal,
+            });
+            clearTimeout(tid);
+            if (!resp.ok) {
+              const errBody = await resp.text().catch(() => "");
+              console.error(`[busca] ${trib} HTTP ${resp.status}:`, errBody.slice(0, 200));
+              return [] as Record<string, unknown>[];
+            }
+            const data = await resp.json() as Record<string, unknown>;
+            const hits = ((data.hits as Record<string, unknown>)?.hits as Record<string, unknown>[]) || [];
+            console.log(`[busca] ${trib}: ${hits.length} hits`);
+            return hits.map((hit) => {
+              const src = (hit._source || {}) as Record<string, unknown>;
+              const movimentos = (src.movimentos as Record<string, unknown>[]) || [];
+              const numProc = (src.numeroProcesso as string) || "";
+              // Guardar raw para save posterior
+              if (numProc) rawSources[numProc] = { src, trib };
+              return {
+                tribunal: trib.toUpperCase(),
+                numero_processo: numProc,
+                classe: ((src.classe as Record<string, unknown>)?.nome as string) || "",
+                assuntos: ((src.assuntos as { nome: string }[]) || []).map((a) => a.nome).join(", "),
+                orgao: ((src.orgaoJulgador as Record<string, unknown>)?.nome as string) || trib.toUpperCase(),
+                data_ajuizamento: (src.dataAjuizamento as string) || null,
+                partes: ((src.partes as { nome: string; tipo: string }[]) || []).slice(0, 4),
+                ultimos_movimentos: movimentos.slice(0, 3).map((m) => ({
+                  nome: m.nome as string,
+                  data: m.dataHora as string,
+                  tipo: classifyMovimento((m.nome as string) || ""),
+                })),
+              } as Record<string, unknown>;
+            });
+          } catch (e) {
+            clearTimeout(tid);
+            console.error(`[busca] ${trib} erro:`, String(e));
+            return [] as Record<string, unknown>[];
+          }
+        })
+      );
+
+      const resultados = searchResults.flat();
+      console.log("[busca] total resultados:", resultados.length);
 
       // ── Salvar publicações encontradas no banco (integração DJe) ────────────
       let publicacoesSalvas = 0;
       if (salvar && resultados.length > 0) {
-        const inserir: Record<string, unknown>[] = [];
-        const { data: existentes } = await supabase
-          .from("publicacoes")
-          .select("numero_processo, conteudo")
-          .eq("user_id", user.id);
-        const existentesSet = new Set(
-          (existentes || []).map((e: { numero_processo: string; conteudo?: string }) =>
-            `${e.numero_processo}::${e.conteudo?.slice(0, 80)}`
-          )
-        );
-
-        for (const r of resultados) {
-          const { src, trib } = r._raw as { src: Record<string, unknown>; trib: string };
-          const orgao = (src.orgaoJulgador as Record<string, unknown>)?.nome || trib.toUpperCase();
-          const movimentos = (src.movimentos as Record<string, unknown>[]) || [];
-          const recentes = movimentos.slice(0, 3);
-          for (const mov of recentes) {
-            const conteudo = buildConteudo(src, mov, orgao as string, trib, r.numero_processo as string);
-            const chave = `${r.numero_processo}::${conteudo.slice(0, 80)}`;
-            if (existentesSet.has(chave)) continue;
-            existentesSet.add(chave);
-            const tipo = classifyMovimento(mov.nome as string);
-            const complementosText = (mov.complementosTabelados as { nome: string; valor: string }[])
-              ?.map((c) => `${c.nome}: ${c.valor}`).join("; ") || "";
-            const prazo = extractPrazoDias(mov.nome as string, complementosText);
-            inserir.push({
-              user_id: user.id,
-              tipo,
-              tribunal: trib.toUpperCase(),
-              numero_processo: r.numero_processo,
-              cliente_nome: null,
-              data_publicacao: (mov.dataHora as string) || new Date().toISOString(),
-              conteudo,
-              conteudo_simplificado: null,
-              status: prazo !== null && prazo <= 5 ? "urgente" : "nova",
-              prazo_dias: prazo,
-              data_prazo: prazo ? new Date(Date.now() + prazo * 24 * 60 * 60 * 1000).toISOString() : null,
-              tarefa_gerada: false,
-            });
+        try {
+          const inserir: Record<string, unknown>[] = [];
+          const { data: existentes } = await supabase
+            .from("publicacoes")
+            .select("numero_processo, conteudo")
+            .eq("user_id", user.id);
+          const existentesSet = new Set(
+            (existentes || []).map((e: { numero_processo: string; conteudo?: string }) =>
+              `${e.numero_processo}::${(e.conteudo || "").slice(0, 80)}`
+            )
+          );
+          for (const r of resultados) {
+            const numProc = r.numero_processo as string;
+            const raw = rawSources[numProc];
+            if (!raw) continue;
+            const { src, trib } = raw;
+            const orgao = ((src.orgaoJulgador as Record<string, unknown>)?.nome as string) || trib.toUpperCase();
+            const movimentos = (src.movimentos as Record<string, unknown>[]) || [];
+            for (const mov of movimentos.slice(0, 3)) {
+              const conteudo = buildConteudo(src, mov, orgao, trib, numProc);
+              const chave = `${numProc}::${conteudo.slice(0, 80)}`;
+              if (existentesSet.has(chave)) continue;
+              existentesSet.add(chave);
+              const tipoMov = classifyMovimento((mov.nome as string) || "");
+              const complementosText = ((mov.complementosTabelados as { nome: string; valor: string }[]) || [])
+                .map((c) => `${c.nome}: ${c.valor}`).join("; ");
+              const prazo = extractPrazoDias((mov.nome as string) || "", complementosText);
+              inserir.push({
+                user_id: user.id,
+                tipo: tipoMov,
+                tribunal: trib.toUpperCase(),
+                numero_processo: numProc,
+                cliente_nome: null,
+                data_publicacao: (mov.dataHora as string) || new Date().toISOString(),
+                conteudo,
+                conteudo_simplificado: null,
+                status: prazo !== null && prazo <= 5 ? "urgente" : "nova",
+                prazo_dias: prazo,
+                data_prazo: prazo ? new Date(Date.now() + prazo * 24 * 60 * 60 * 1000).toISOString() : null,
+                tarefa_gerada: false,
+              });
+            }
           }
-        }
-        if (inserir.length > 0) {
-          const { error: insertErr } = await supabase.from("publicacoes").insert(inserir);
-          if (!insertErr) publicacoesSalvas = inserir.length;
+          if (inserir.length > 0) {
+            const { error: insertErr } = await supabase.from("publicacoes").insert(inserir);
+            if (!insertErr) publicacoesSalvas = inserir.length;
+            else console.error("[busca] insert error:", insertErr.message);
+          }
+        } catch (saveErr) {
+          console.error("[busca] save error:", String(saveErr));
         }
       }
 
-      // Remove _raw antes de retornar ao cliente
-      const resultadosLimpos = resultados.map(({ _raw: _removed, ...r }) => r);
-
       return new Response(
-        JSON.stringify({ resultados: resultadosLimpos, total: resultadosLimpos.length, publicacoesSalvas }),
+        JSON.stringify({ resultados, total: resultados.length, publicacoesSalvas }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
