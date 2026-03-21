@@ -155,6 +155,7 @@ const Publicacoes = () => {
   const [buscaTipo, setBuscaTipo] = useState<"oab" | "cpf" | "nome">("oab");
   const [buscaValor, setBuscaValor] = useState("");
   const [loadingBusca, setLoadingBusca] = useState(false);
+  const [salvandoBusca, setSalvandoBusca] = useState(false);
   const [buscaResultados, setBuscaResultados] = useState<ResultadoBusca[]>([]);
   const [buscaFeita, setBuscaFeita] = useState(false);
   const [perfisSalvos, setPerfisSalvos] = useState<PerfilMonitorado[]>([]);
@@ -219,6 +220,38 @@ const Publicacoes = () => {
       toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor.", variant: "destructive" });
     } finally {
       setLoadingBusca(false);
+    }
+  };
+
+  const salvarResultadosNoBanco = async () => {
+    const t = buscaTipo;
+    const v = buscaValor.trim();
+    if (!v || buscaResultados.length === 0) return;
+    setSalvandoBusca(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
+      const resp = await fetch(CAPTURAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ busca: { tipo: t, valor: v, salvar: true } }),
+      });
+      const result = await resp.json();
+      if (!resp.ok) {
+        toast({ title: "Erro ao salvar", description: result.error || "Tente novamente", variant: "destructive" });
+        return;
+      }
+      const salvos = result.publicacoesSalvas || 0;
+      toast({
+        title: salvos > 0 ? `${salvos} publicação(ões) salva(s)!` : "Publicações já registradas",
+        description: salvos > 0 ? "As movimentações foram adicionadas ao módulo Publicações." : "Não há publicações novas para salvar.",
+      });
+      if (salvos > 0) fetchPublicacoes();
+    } catch {
+      toast({ title: "Erro de conexão", variant: "destructive" });
+    } finally {
+      setSalvandoBusca(false);
     }
   };
 
@@ -571,9 +604,17 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
             {/* Resultados da busca */}
             {buscaFeita && (
               <div className="mt-4 pt-4 border-t">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  {buscaResultados.length > 0 ? `${buscaResultados.length} processo(s) encontrado(s) no DataJud` : "Nenhum processo encontrado"}
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {buscaResultados.length > 0 ? `${buscaResultados.length} processo(s) encontrado(s) no DataJud` : "Nenhum processo encontrado"}
+                  </p>
+                  {buscaResultados.length > 0 && (
+                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7" onClick={salvarResultadosNoBanco} disabled={salvandoBusca}>
+                      {salvandoBusca ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
+                      {salvandoBusca ? "Salvando..." : "Salvar publicações"}
+                    </Button>
+                  )}
+                </div>
                 {buscaResultados.length > 0 && (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {buscaResultados.map((r, i) => (
