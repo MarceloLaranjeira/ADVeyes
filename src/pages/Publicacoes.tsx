@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Bell, Search, RefreshCw, Bot, CheckCheck, AlertTriangle,
   Calendar, Scale, ChevronDown, ChevronUp, Sparkles, ListTodo,
-  FileText, Clock, Eye, Zap, Filter,
+  FileText, Clock, Eye, Zap, Filter, Trash2,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -286,59 +286,29 @@ const Publicacoes = () => {
         return;
       }
 
-      let result: Record<string, any> = {};
-      try {
-        const resp = await fetch(CAPTURAR_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({}),
-        });
-        result = await resp.json();
+      const resp = await fetch(CAPTURAR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      }).catch(() => null);
 
-        if (!resp.ok) {
-          // Função não deployada ou erro no servidor — fallback gracioso
-          if (publicacoes.length === 0) {
-            await inserirDadosDemo();
-          } else {
-            toast({
-              title: "Publicações já carregadas",
-              description: "Integração com DataJud requer configuração no servidor. Suas publicações atuais estão disponíveis.",
-            });
-          }
-          return;
-        }
-      } catch {
-        // Erro de rede ou função indisponível — fallback para dados demo
-        if (publicacoes.length === 0) {
-          await inserirDadosDemo();
-        } else {
-          toast({
-            title: "Publicações já carregadas",
-            description: "Não foi possível conectar ao servidor. Suas publicações atuais estão disponíveis.",
-          });
-        }
+      if (!resp) {
+        toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor DataJud.", variant: "destructive" });
+        return;
+      }
+
+      const result = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        toast({ title: "Erro ao capturar", description: result.error || result.message || "Tente novamente.", variant: "destructive" });
         return;
       }
 
       if (result.capturadas > 0) {
-        toast({
-          title: `${result.capturadas} movimentação(ões) capturada(s)!`,
-          description: result.message,
-        });
+        toast({ title: `${result.capturadas} movimentação(ões) capturada(s)!`, description: result.message });
         fetchPublicacoes();
-      } else if (result.message === "sem_processos") {
-        // Sem processos cadastrados → inserir dados de demonstração
-        await inserirDadosDemo();
       } else {
-        const semProcessos = result.processosBuscados === 0 || result.processosBuscados === undefined;
-        if (semProcessos && publicacoes.length === 0) {
-          await inserirDadosDemo();
-        } else {
-          toast({
-            title: "Consulta realizada",
-            description: result.message || "Nenhuma movimentação nova encontrada.",
-          });
-        }
+        toast({ title: "Consulta realizada", description: result.message || "Nenhuma movimentação nova encontrada. Cadastre processos no módulo Processos." });
       }
 
       if (result.erros?.length > 0) {
@@ -346,40 +316,22 @@ const Publicacoes = () => {
       }
     } catch (err) {
       console.error("Erro inesperado:", err);
+      toast({ title: "Erro inesperado", description: "Tente novamente.", variant: "destructive" });
     } finally {
       setLoadingCaptura(false);
     }
   };
 
-  const inserirDadosDemo = async () => {
-    // Verificar quais demos já existem
+  const limparDadosDemo = async () => {
+    const mockNumeros = MOCK_DATA.map((m) => m.numero_processo);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existentes } = await (supabase as any)
+    const { error } = await (supabase as any)
       .from("publicacoes")
-      .select("numero_processo")
-      .eq("user_id", user!.id);
-
-    const existentesSet = new Set((existentes || []).map((e: { numero_processo: string }) => e.numero_processo));
-    const novos = MOCK_DATA.filter((m) => !existentesSet.has(m.numero_processo));
-
-    if (novos.length === 0) {
-      toast({
-        title: "Publicações já carregadas",
-        description: "Cadastre seus processos no módulo Processos para capturar movimentações reais do DataJud/CNJ.",
-      });
-      return;
-    }
-
-    const inserts = novos.map((m) => ({
-      ...m,
-      user_id: user!.id,
-      tarefa_gerada: m.tarefa_gerada || false,
-      conteudo_simplificado: null,
-    }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from("publicacoes").insert(inserts);
+      .delete()
+      .eq("user_id", user!.id)
+      .in("numero_processo", mockNumeros);
     if (!error) {
-      toast({ title: `${novos.length} publicações de demonstração inseridas`, description: "Cadastre processos reais para capturar dados do DataJud/CNJ." });
+      toast({ title: "Dados de demonstração removidos." });
       fetchPublicacoes();
     }
   };
@@ -536,10 +488,17 @@ RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]
             <h1 className="text-4xl font-bold font-serif tracking-tight">Publicações</h1>
             <p className="text-muted-foreground text-sm mt-1">Captura e triagem automática de publicações e intimações dos Diários de Justiça</p>
           </div>
-          <Button onClick={capturarPublicacoes} disabled={loadingCaptura} className="gap-2">
-            {loadingCaptura ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            {loadingCaptura ? "Capturando..." : "Capturar Publicações"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {publicacoes.some(p => MOCK_DATA.map(m => m.numero_processo).includes(p.numero_processo ?? "")) && (
+              <Button variant="outline" size="sm" onClick={limparDadosDemo} className="gap-2 text-muted-foreground hover:text-destructive hover:border-destructive">
+                <Trash2 className="w-4 h-4" /> Limpar dados demo
+              </Button>
+            )}
+            <Button onClick={capturarPublicacoes} disabled={loadingCaptura} className="gap-2">
+              {loadingCaptura ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {loadingCaptura ? "Capturando..." : "Capturar Publicações"}
+            </Button>
+          </div>
         </div>
 
         {/* ─── Busca por OAB/CPF/Nome ─────────────────────────────────────────── */}
