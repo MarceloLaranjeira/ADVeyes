@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { JarvisProvider } from "@/contexts/JarvisContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import Index from "./pages/Index";
@@ -41,6 +42,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <JarvisProvider>
             <Routes>
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
@@ -71,6 +73,7 @@ const App = () => (
               <Route path="/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </JarvisProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>

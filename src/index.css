@@ -59,6 +59,72 @@
     --neural-purple: 260 80% 60%;
   }
 
+  /* ═══════════════════════════════════════════════
+     MODO JARVIS — Neural Dark (ADVeyes)
+     Ativado via classe .jarvis no <html>
+  ════════════════════════════════════════════════ */
+  .jarvis {
+    --background: 222 60% 4%;           /* #050d1a — preto azulado profundo */
+    --foreground: 200 80% 88%;          /* ciano claro */
+    --card: 222 55% 7%;                 /* cards escuros */
+    --card-foreground: 200 60% 85%;
+    --popover: 222 55% 6%;
+    --popover-foreground: 200 60% 85%;
+    --primary: 200 100% 55%;            /* ciano brilhante — #0CF */
+    --primary-foreground: 222 60% 4%;
+    --secondary: 222 45% 12%;
+    --secondary-foreground: 200 60% 80%;
+    --muted: 222 45% 10%;
+    --muted-foreground: 215 30% 50%;
+    --accent: 222 45% 12%;
+    --accent-foreground: 200 80% 88%;
+    --destructive: 0 80% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 200 60% 15%;              /* bordas ciano escuras */
+    --input: 222 45% 10%;
+    --ring: 200 100% 55%;
+    --radius: 0.5rem;
+    --sidebar-background: 222 60% 3%;
+    --sidebar-foreground: 200 50% 60%;
+    --sidebar-primary: 200 100% 55%;
+    --sidebar-primary-foreground: 222 60% 4%;
+    --sidebar-accent: 222 45% 10%;
+    --sidebar-accent-foreground: 200 80% 88%;
+    --sidebar-border: 200 60% 12%;
+    --sidebar-ring: 200 100% 55%;
+    --success: 142 80% 45%;
+    --warning: 38 100% 55%;
+    --info: 200 100% 55%;
+    --gold: 42 90% 55%;
+    --neural-blue: 200 100% 55%;
+    --neural-cyan: 186 100% 55%;
+    --neural-purple: 260 80% 65%;
+  }
+
+  /* Jarvis: grid de fundo + glow global */
+  .jarvis body {
+    background-image:
+      linear-gradient(hsla(200, 100%, 50%, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, hsla(200, 100%, 50%, 0.025) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Jarvis: cards com borda glow */
+  .jarvis .metric-card,
+  .jarvis [class*="rounded-xl border"],
+  .jarvis .stat-card {
+    border-color: hsla(200, 100%, 50%, 0.18) !important;
+    box-shadow: 0 0 20px hsla(200, 100%, 50%, 0.06), inset 0 0 30px hsla(200, 100%, 50%, 0.02);
+  }
+
+  /* Jarvis: nav item ativo */
+  .jarvis .nav-item-active {
+    background: hsla(200, 100%, 50%, 0.12);
+    color: hsl(200, 100%, 65%);
+    text-shadow: 0 0 12px hsla(200, 100%, 65%, 0.6);
+    box-shadow: inset 3px 0 0 hsl(200, 100%, 55%);
+  }
+
   .dark {
     --background: 222 47% 7%;
     --foreground: 210 40% 92%;

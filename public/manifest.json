@@ -1,19 +1,38 @@
 {
-  "name": "LEXIA — Gestão Jurídica",
-  "short_name": "LEXIA",
-  "description": "Sistema de Gestão Jurídica para Advogados e Escritórios de Advocacia",
+  "name": "ADVeyes — IA Jurídica para Advogados",
+  "short_name": "ADVeyes",
+  "description": "Plataforma de gestão jurídica com IA autônoma. Monitore tribunais, gerencie processos e use IA com voz.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f6fa",
-  "theme_color": "#1a2a5e",
+  "background_color": "#0F172A",
+  "theme_color": "#3B82F6",
   "orientation": "portrait-primary",
   "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" },
-    { "src": "/favicon.ico", "sizes": "192x192", "type": "image/x-icon", "purpose": "any maskable" },
-    { "src": "/favicon.ico", "sizes": "512x512", "type": "image/x-icon", "purpose": "any maskable" }
+    { "src": "/favicon.ico", "sizes": "192x192", "type": "image/x-icon", "purpose": "maskable" },
+    { "src": "/favicon.ico", "sizes": "512x512", "type": "image/x-icon", "purpose": "maskable" }
   ],
-  "categories": ["business", "productivity"],
+  "categories": ["business", "productivity", "legal"],
   "lang": "pt-BR",
   "scope": "/",
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Horus IA",
+      "short_name": "Horus",
+      "description": "Abrir assistente de IA jurídica",
+      "url": "/ia-juridica",
+      "icons": [{ "src": "/logo.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Publicações",
+      "short_name": "DJe",
+      "description": "Ver publicações do tribunal",
+      "url": "/publicacoes",
+      "icons": [{ "src": "/logo.svg", "sizes": "any" }]
+    }
+  ],
+  "screenshots": [],
+  "related_applications": []
 }

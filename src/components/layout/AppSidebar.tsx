@@ -6,6 +6,7 @@ import {
   MessageCircle, Timer, UserPlus, Users2, FileSignature,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useJarvis } from "@/contexts/JarvisContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useState } from "react";
 
@@ -64,6 +65,7 @@ const navSections = [
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const { jarvisMode, toggleJarvis } = useJarvis();
   const { permission, subscribe } = usePushNotifications();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -79,8 +81,8 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
             <Scale className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Georgia, serif' }}>LEXIA</h1>
-            <p className="text-[9px] text-muted-foreground tracking-widest uppercase">Albertino &amp; Advogados</p>
+            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Georgia, serif' }}>ADVeyes</h1>
+            <p className="text-[9px] text-muted-foreground tracking-widest uppercase">IA Jurídica Autônoma</p>
           </div>
         </div>
         {onClose && (
@@ -178,8 +180,21 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           Sair do Sistema
         </button>
         <div className="mt-3 px-3">
-          <p className="text-[9px] text-muted-foreground/40 uppercase tracking-wider">
-            LEXIA v4.0 · Horus IA
+          {/* Jarvis Mode Toggle */}
+        <button
+          onClick={toggleJarvis}
+          className={`w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-[10px] font-semibold transition-all duration-300 ${
+            jarvisMode
+              ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+              : "bg-muted/50 border border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-muted-foreground/40"}`} />
+          {jarvisMode ? "MODO JARVIS ATIVO" : "Ativar Modo Jarvis"}
+          <span className="ml-auto text-[8px] opacity-60">{jarvisMode ? "ON" : "OFF"}</span>
+        </button>
+        <p className="text-[9px] text-muted-foreground/40 uppercase tracking-wider">
+            ADVeyes v1.0 · Horus IA
           </p>
         </div>
       </div>

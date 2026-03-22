@@ -1,8 +1,11 @@
 User-agent: Googlebot
 Allow: /
+Allow: /landing
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Twitterbot
 Allow: /
@@ -12,3 +15,10 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /portal/dashboard
+Disallow: /api/
+
+Sitemap: https://adveyes.automatikus.com.br/sitemap.xml
+
+# ADVeyes — IA Jurídica Autônoma para Advogados
+# Software jurídico com IA, monitoramento de tribunais e gestão completa de escritório
