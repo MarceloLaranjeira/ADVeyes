@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Anon can read active portal access" ON public.portal_acessos;
