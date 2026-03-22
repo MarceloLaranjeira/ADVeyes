@@ -141,7 +141,10 @@ function detectTribunalFromCNJ(numero: string): string | null {
   return null;
 }
 
-const DATAJUD_KEY = "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+if (!DATAJUD_KEY) {
+  console.error("DATAJUD_API_KEY secret not configured");
+}
 
 function normalizeCNJ(numero: string): string {
   const digits = numero.replace(/\D/g, "");

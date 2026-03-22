@@ -731,6 +731,7 @@ export type Database = {
           created_at: string
           id: string
           numero_processo: string
+          oab_origem: string | null
           processo_id: string | null
           tribunal: string
           ultima_verificacao: string | null
@@ -742,6 +743,7 @@ export type Database = {
           created_at?: string
           id?: string
           numero_processo: string
+          oab_origem?: string | null
           processo_id?: string | null
           tribunal: string
           ultima_verificacao?: string | null
@@ -753,6 +755,7 @@ export type Database = {
           created_at?: string
           id?: string
           numero_processo?: string
+          oab_origem?: string | null
           processo_id?: string | null
           tribunal?: string
           ultima_verificacao?: string | null
@@ -776,10 +779,13 @@ export type Database = {
           cliente_id: string | null
           cliente_nome: string | null
           created_at: string
+          data_ajuizamento: string | null
           descricao: string | null
+          fonte: string | null
           id: string
           numero: string
           status: string
+          ultimo_andamento: string | null
           updated_at: string
           user_id: string
           vara: string | null
@@ -790,10 +796,13 @@ export type Database = {
           cliente_id?: string | null
           cliente_nome?: string | null
           created_at?: string
+          data_ajuizamento?: string | null
           descricao?: string | null
+          fonte?: string | null
           id?: string
           numero: string
           status?: string
+          ultimo_andamento?: string | null
           updated_at?: string
           user_id: string
           vara?: string | null
@@ -804,10 +813,13 @@ export type Database = {
           cliente_id?: string | null
           cliente_nome?: string | null
           created_at?: string
+          data_ajuizamento?: string | null
           descricao?: string | null
+          fonte?: string | null
           id?: string
           numero?: string
           status?: string
+          ultimo_andamento?: string | null
           updated_at?: string
           user_id?: string
           vara?: string | null
