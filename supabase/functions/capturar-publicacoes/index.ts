@@ -7,9 +7,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const DATAJUD_KEY =
-  Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+if (!DATAJUD_KEY) {
+  console.error("DATAJUD_API_KEY secret not configured");
+}
 
 const DATAJUD_ENDPOINTS: Record<string, string> = {
   tjac: "https://api-publica.datajud.cnj.jus.br/api_publica_tjac/_search",

@@ -201,7 +201,10 @@ function detectTribunalFromCNJ(numero: string): string | null {
   return null;
 }
 
-const DATAJUD_KEY = "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+if (!DATAJUD_KEY) {
+  console.error("DATAJUD_API_KEY secret not configured");
+}
 
 /**
  * Normaliza número CNJ para o formato canônico: NNNNNNN-DD.AAAA.J.TT.OOOO

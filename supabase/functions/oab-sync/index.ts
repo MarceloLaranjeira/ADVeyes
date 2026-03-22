@@ -6,9 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DATAJUD_KEY =
-  Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+if (!DATAJUD_KEY) {
+  console.error("DATAJUD_API_KEY secret not configured");
+}
 
 // Tribunais por seccional — prioriza os mais relevantes para cada estado
 const TRIBUNAIS_POR_SECCIONAL: Record<string, string[]> = {
