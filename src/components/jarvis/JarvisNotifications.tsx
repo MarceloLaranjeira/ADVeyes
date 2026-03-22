@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useJarvis } from "@/contexts/JarvisContext";
