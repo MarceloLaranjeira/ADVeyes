@@ -3,12 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
+import { ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2 } from "lucide-react";
 import {
-  Scale, Users, CalendarDays, AlertTriangle, Gavel, FileText,
-  Clock, Bell, Bot, Search, DollarSign, ListTodo, BarChart3,
-  ArrowRight, Zap, Shield, TrendingUp, BookOpen, UserPlus,
-  Timer, Receipt, Target, CheckCircle2, Wallet,
-} from "lucide-react";
+  IconProcessos, IconClientes, IconLeads, IconAgenda, IconAudiencias,
+  IconBusca, IconTarefas, IconFinanceiro, IconHoras, IconDocumentos,
+  IconJurisprudencia, IconRelatorios, IconHorusIA, IconBell, IconAlerta, IconSistema,
+} from "@/components/icons/AppIcons";
+// Icons used: IconProcessos, IconClientes, IconLeads, IconAgenda, IconAudiencias,
+// IconBusca, IconTarefas, IconFinanceiro, IconHoras, IconDocumentos,
+// IconJurisprudencia, IconRelatorios, IconHorusIA, IconBell, IconAlerta, IconSistema
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -106,14 +109,14 @@ const Index = () => {
   const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const quickActions = [
-    { label: "Busca Processual", icon: Search, path: "/busca" },
-    { label: "Nova Tarefa", icon: ListTodo, path: "/tarefas" },
-    { label: "Financeiro", icon: DollarSign, path: "/financeiro" },
-    { label: "Controle Horas", icon: Timer, path: "/time-tracking" },
-    { label: "Novo Lead (CRM)", icon: UserPlus, path: "/crm" },
-    { label: "Documentos", icon: FileText, path: "/documentos" },
-    { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
-    { label: "Relatórios", icon: BarChart3, path: "/relatorios" },
+    { label: "Busca Processual", icon: IconBusca, path: "/busca" },
+    { label: "Nova Tarefa", icon: IconTarefas, path: "/tarefas" },
+    { label: "Financeiro", icon: IconFinanceiro, path: "/financeiro" },
+    { label: "Controle Horas", icon: IconHoras, path: "/time-tracking" },
+    { label: "Novo Lead (CRM)", icon: IconLeads, path: "/crm" },
+    { label: "Documentos", icon: IconDocumentos, path: "/documentos" },
+    { label: "Jurisprudência", icon: IconJurisprudencia, path: "/jurisprudencia" },
+    { label: "Relatórios", icon: IconRelatorios, path: "/relatorios" },
   ];
 
   return (
@@ -131,7 +134,7 @@ const Index = () => {
             onClick={() => navigate("/ia-juridica")}
             className="gap-2"
           >
-            <Bot className="w-4 h-4" />
+            <IconHorusIA size={18} />
             Horus IA
           </Button>
         </div>
@@ -145,7 +148,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif">{stats.processos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Ativos</p>
               </div>
-              <div className="p-2 rounded-lg bg-primary/8"><Scale className="w-4 h-4 text-primary" /></div>
+              <div className="p-2 rounded-lg bg-primary/8"><IconProcessos size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/clientes")}>
@@ -155,7 +158,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif">{stats.clientes}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Cadastrados</p>
               </div>
-              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30"><Users className="w-4 h-4 text-blue-600" /></div>
+              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30"><IconClientes size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/crm")}>
@@ -165,7 +168,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif text-purple-600">{leadsNovos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Novos</p>
               </div>
-              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><UserPlus className="w-4 h-4 text-purple-600" /></div>
+              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconLeads size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/time-tracking")}>
@@ -175,7 +178,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif">{horasMes.toFixed(0)}h</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Trabalhadas</p>
               </div>
-              <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/30"><Timer className="w-4 h-4 text-teal-600" /></div>
+              <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/30"><IconHoras size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -185,7 +188,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif">{prazos.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">7 dias</p>
               </div>
-              <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30"><CalendarDays className="w-4 h-4 text-orange-600" /></div>
+              <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30"><IconAgenda size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 border-destructive/20 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -195,7 +198,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif text-destructive">{prazosUrgentes}</p>
                 <p className="text-[10px] text-destructive/70 mt-0.5">Atenção!</p>
               </div>
-              <div className="p-2 rounded-lg bg-destructive/8"><AlertTriangle className="w-4 h-4 text-destructive" /></div>
+              <div className="p-2 rounded-lg bg-destructive/8"><IconAlerta size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/audiencias")}>
@@ -205,7 +208,7 @@ const Index = () => {
                 <p className="text-2xl font-bold mt-1 font-serif">{audienciasProximas.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Esta semana</p>
               </div>
-              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><Gavel className="w-4 h-4 text-purple-600" /></div>
+              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconAudiencias size={20} /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -295,7 +298,7 @@ const Index = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-accent" />
+                <IconSistema size={18} />
                 <h3 className="font-serif font-semibold text-sm">Ações Rápidas</h3>
               </div>
             </div>
@@ -325,7 +328,7 @@ const Index = () => {
             <div className="relative flex items-center gap-4 p-4 bg-gradient-to-r from-primary/8 via-primary/4 to-transparent">
               <div className="relative shrink-0">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center animate-neural-pulse">
-                  <Bot className="w-6 h-6 text-primary" />
+                  <IconHorusIA size={28} />
                 </div>
                 <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-background animate-pulse" />
               </div>
@@ -406,7 +409,7 @@ const Index = () => {
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-3.5 h-3.5 text-primary" />
+                    <IconBell size={16} />
                     <h3 className="font-serif font-semibold text-xs">Notificações</h3>
                   </div>
                   {notificacoesRecentes.length > 0 && (
@@ -432,7 +435,7 @@ const Index = () => {
             <Card className="cursor-pointer" onClick={() => navigate("/audiencias")}>
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <Gavel className="w-3.5 h-3.5 text-primary" />
+                  <IconAudiencias size={16} />
                   <h3 className="font-serif font-semibold text-xs">Próximas Audiências</h3>
                 </div>
                 {audienciasProximas.length === 0 ? (
@@ -463,7 +466,7 @@ const Index = () => {
         <Card className="mb-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Shield className="w-4 h-4 text-[hsl(var(--success))]" />
+              <IconSistema size={18} />
               <h3 className="font-serif font-semibold text-sm">APIs dos Tribunais — Status</h3>
               <span className="text-xs text-muted-foreground ml-auto">via DataJud/CNJ</span>
             </div>

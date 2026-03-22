@@ -1,63 +1,65 @@
 import { Link, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard, Scale, Users, CalendarDays, FileText,
-  Search, Gavel, BookOpen, DollarSign, LogOut, Bell, ListTodo,
-  Bot, BarChart3, UserCircle, Settings, ChevronDown, Shield,
-  MessageCircle, Timer, UserPlus, Users2, FileSignature,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useJarvis } from "@/contexts/JarvisContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useState } from "react";
+import {
+  IconDashboard, IconProcessos, IconClientes, IconLeads, IconEquipe,
+  IconAgenda, IconTarefas, IconAudiencias, IconPublicacoes, IconBusca,
+  IconJurisprudencia, IconFinanceiro, IconHoras, IconContratos,
+  IconDocumentos, IconRelatorios, IconWhatsApp, IconPortalCliente,
+  IconConfiguracoes, IconHorusIA, IconBell, IconShield, IconLogout,
+} from "@/components/icons/AppIcons";
 
 const navSections = [
   {
     label: "Principal",
     items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-      { label: "Processos", icon: Scale, path: "/processos" },
-      { label: "Clientes", icon: Users, path: "/clientes" },
+      { label: "Dashboard", icon: IconDashboard, path: "/" },
+      { label: "Processos", icon: IconProcessos, path: "/processos" },
+      { label: "Clientes", icon: IconClientes, path: "/clientes" },
     ],
   },
   {
     label: "CRM & Captação",
     items: [
-      { label: "CRM — Leads", icon: UserPlus, path: "/crm" },
-      { label: "Equipe", icon: Users2, path: "/equipe" },
+      { label: "CRM — Leads", icon: IconLeads, path: "/crm" },
+      { label: "Equipe", icon: IconEquipe, path: "/equipe" },
     ],
   },
   {
     label: "Rotina Jurídica",
     items: [
-      { label: "Agenda", icon: CalendarDays, path: "/agenda" },
-      { label: "Tarefas", icon: ListTodo, path: "/tarefas" },
-      { label: "Audiências", icon: Gavel, path: "/audiencias" },
-      { label: "Publicações", icon: Bell, path: "/publicacoes" },
+      { label: "Agenda", icon: IconAgenda, path: "/agenda" },
+      { label: "Tarefas", icon: IconTarefas, path: "/tarefas" },
+      { label: "Audiências", icon: IconAudiencias, path: "/audiencias" },
+      { label: "Publicações", icon: IconPublicacoes, path: "/publicacoes" },
     ],
   },
   {
     label: "Pesquisa",
     items: [
-      { label: "Busca Processual", icon: Search, path: "/busca" },
-      { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
+      { label: "Busca Processual", icon: IconBusca, path: "/busca" },
+      { label: "Jurisprudência", icon: IconJurisprudencia, path: "/jurisprudencia" },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { label: "Financeiro", icon: DollarSign, path: "/financeiro" },
-      { label: "Controle de Horas", icon: Timer, path: "/time-tracking" },
-      { label: "Contratos & Templates", icon: FileSignature, path: "/contratos" },
-      { label: "Documentos", icon: FileText, path: "/documentos" },
-      { label: "Relatórios", icon: BarChart3, path: "/relatorios" },
+      { label: "Financeiro", icon: IconFinanceiro, path: "/financeiro" },
+      { label: "Controle de Horas", icon: IconHoras, path: "/time-tracking" },
+      { label: "Contratos & Templates", icon: IconContratos, path: "/contratos" },
+      { label: "Documentos", icon: IconDocumentos, path: "/documentos" },
+      { label: "Relatórios", icon: IconRelatorios, path: "/relatorios" },
     ],
   },
   {
     label: "Ferramentas",
     items: [
-      { label: "WhatsApp", icon: MessageCircle, path: "/whatsapp" },
-      { label: "Portal do Cliente", icon: UserCircle, path: "/portal-cliente" },
-      { label: "Configurações", icon: Settings, path: "/configuracoes" },
+      { label: "WhatsApp", icon: IconWhatsApp, path: "/whatsapp" },
+      { label: "Portal do Cliente", icon: IconPortalCliente, path: "/portal-cliente" },
+      { label: "Configurações", icon: IconConfiguracoes, path: "/configuracoes" },
     ],
   },
 ];
@@ -78,7 +80,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       <div className="px-5 py-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <Scale className="w-4.5 h-4.5 text-white" />
+            <IconProcessos size={20} className="brightness-0 invert" />
           </div>
           <div>
             <h1 className="text-sm font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Georgia, serif' }}>ADVeyes</h1>
@@ -102,7 +104,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
               : "bg-primary/8 text-primary hover:bg-primary/12 border border-primary/20"
           }`}
         >
-          <Bot className="w-4 h-4 shrink-0" />
+          <IconHorusIA size={18} className="shrink-0" />
           <span className="flex-1">Horus — IA</span>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
         </Link>
@@ -132,7 +134,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                         className={`nav-item ${isActive ? "nav-item-active" : ""}`}
                         onClick={onClose}
                       >
-                        <item.icon className="w-4 h-4 shrink-0" />
+                        <item.icon size={18} className="shrink-0" />
                         {item.label}
                       </Link>
                     );
@@ -150,7 +152,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           to="/busca"
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
         >
-          <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <IconShield size={16} className="shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold text-foreground/60">APIs Ativas</p>
             <p className="text-[9px] text-muted-foreground">85+ Tribunais • SEEU • Projudi</p>
@@ -166,7 +168,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
             onClick={subscribe}
             className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-colors text-[10px] font-semibold"
           >
-            <Bell className="w-3.5 h-3.5 shrink-0" />
+            <IconBell size={16} className="shrink-0" />
             Ativar notificações
           </button>
         )}
@@ -176,7 +178,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           </div>
         )}
         <button onClick={signOut} className="nav-item w-full text-left hover:text-red-500">
-          <LogOut className="w-4 h-4 shrink-0" />
+          <IconLogout size={18} className="shrink-0" />
           Sair do Sistema
         </button>
         <div className="mt-3 px-3">

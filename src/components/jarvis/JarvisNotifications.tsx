@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Bell, X, Zap, Scale, AlertTriangle, CheckCircle2, BotMessageSquare } from "lucide-react";
+import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useJarvis } from "@/contexts/JarvisContext";
+import {
+  IconMovimentacao, IconAlerta, IconSistema, IconPublicacaoNotif, IconBell,
+} from "@/components/icons/AppIcons";
 
 interface Notif {
   id: string;
@@ -14,11 +17,11 @@ interface Notif {
 }
 
 const tipoIcon: Record<string, React.ReactNode> = {
-  movimentacao: <Scale className="w-3.5 h-3.5 text-cyan-400" />,
-  alerta: <AlertTriangle className="w-3.5 h-3.5 text-yellow-400" />,
-  sistema: <Zap className="w-3.5 h-3.5 text-blue-400" />,
-  publicacao: <BotMessageSquare className="w-3.5 h-3.5 text-purple-400" />,
-  default: <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />,
+  movimentacao: <IconMovimentacao size={14} />,
+  alerta: <IconAlerta size={14} />,
+  sistema: <IconSistema size={14} />,
+  publicacao: <IconPublicacaoNotif size={14} />,
+  default: <IconSistema size={14} />,
 };
 
 const JARVIS_LINES = [
@@ -152,7 +155,7 @@ export const JarvisNotifications = () => {
               : "hover:bg-muted text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Bell className="w-4 h-4" />
+          <IconBell size={18} />
           {newCount > 0 && (
             <span className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
               jarvisMode ? "bg-cyan-500 text-slate-950 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-primary text-white"
