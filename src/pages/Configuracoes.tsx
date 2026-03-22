@@ -5,7 +5,7 @@ import {
   User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
   CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
-  SlidersHorizontal,
+  SlidersHorizontal, RefreshCcw, Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { PLANS, asaas } from "@/lib/asaas";
@@ -23,18 +23,51 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-// ─── Perfil do Advogado (salvo em localStorage) ───────────────────────────────
+// ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
 const PERFIL_KEY = "lexia_perfil_advogado";
+const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const OAB_SYNC_URL = `${SUPABASE_BASE_URL}/functions/v1/oab-sync`;
 
 const PerfilAdvogadoForm = () => {
   const { toast } = useToast();
   const [form, setForm] = useState(() => {
     try { return JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}"); } catch { return {}; }
   });
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(() => localStorage.getItem("adveyes_last_oab_sync"));
 
-  const salvar = () => {
+  const sincronizarOAB = async (oab: string, seccional: string) => {
+    setSyncing(true);
+    try {
+      const { data: { session } } = await (await import("@/integrations/supabase/client")).supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("Sem sessão");
+
+      const resp = await fetch(OAB_SYNC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ oab_numero: oab, seccional }),
+      });
+      const result = await resp.json();
+
+      const agora = new Date().toLocaleString("pt-BR");
+      localStorage.setItem("adveyes_last_oab_sync", agora);
+      setLastSync(agora);
+
+      toast({
+        title: result.novos > 0 || result.atualizados > 0
+          ? `Sync concluído — ${result.novos} novo(s) + ${result.atualizados} atualizado(s)`
+          : "Sync concluído — tudo atualizado",
+        description: result.message,
+      });
+    } catch (e) {
+      toast({ title: "Erro no sync OAB", description: (e as Error).message, variant: "destructive" });
+    }
+    setSyncing(false);
+  };
+
+  const salvar = async () => {
     localStorage.setItem(PERFIL_KEY, JSON.stringify(form));
-    // Sincroniza com os perfis monitorados do módulo Publicações
     if (form.numero_oab && form.seccional) {
       const valor = `${form.numero_oab}/${form.seccional}`.toUpperCase();
       const perfis = JSON.parse(localStorage.getItem("lexia_perfis_monitorados") || "[]");
@@ -43,8 +76,11 @@ const PerfilAdvogadoForm = () => {
         perfis.unshift({ id: "perfil-principal", tipo: "oab", valor, tribunais: [], criadoEm: new Date().toISOString() });
         localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(perfis));
       }
+      // Auto-trigger OAB sync
+      await sincronizarOAB(form.numero_oab, form.seccional);
+    } else {
+      toast({ title: "Perfil salvo!" });
     }
-    toast({ title: "Perfil salvo!", description: "Seus dados serão usados automaticamente no módulo Publicações." });
   };
 
   return (
@@ -87,9 +123,26 @@ const PerfilAdvogadoForm = () => {
       <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
         OAB e CPF são usados automaticamente no módulo <strong>Publicações</strong> para monitorar o Diário de Justiça. Nenhum token é necessário para a consulta básica.
       </p>
-      <Button onClick={salvar} className="gap-2 w-full sm:w-auto">
-        <CheckCircle className="w-4 h-4" /> Salvar Perfil
-      </Button>
+      <div className="flex flex-wrap gap-2 items-center">
+        <Button onClick={salvar} disabled={syncing} className="gap-2">
+          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          {syncing ? "Sincronizando tribunais..." : "Salvar & Sincronizar"}
+        </Button>
+        {form.numero_oab && form.seccional && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={syncing}
+            onClick={() => sincronizarOAB(form.numero_oab, form.seccional)}
+            className="gap-2"
+          >
+            <RefreshCcw className="w-3.5 h-3.5" /> Sync Manual
+          </Button>
+        )}
+        {lastSync && (
+          <span className="text-xs text-muted-foreground">Último sync: {lastSync}</span>
+        )}
+      </div>
     </div>
   );
 };
