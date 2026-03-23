@@ -135,7 +135,7 @@ export const JarvisNotifications = () => {
                 {toast.mensagem}
               </p>
             </div>
-            <button onClick={() => setToast(null)} className="text-slate-500 hover:text-white shrink-0">
+            <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground shrink-0">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
