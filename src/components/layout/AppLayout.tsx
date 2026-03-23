@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from "react";
 import { AppSidebar } from "./AppSidebar";
-import { JarvisNotifications } from "@/components/jarvis/JarvisNotifications";
+import { NotificationPanel } from "@/components/notifications/NotificationPanel";
 import { useJarvis } from "@/contexts/JarvisContext";
 import { Menu } from "lucide-react";
 
@@ -54,8 +54,8 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           }`}>
             {jarvisMode ? "⬡ ADVeyes" : "ADVeyes"}
           </span>
-          {/* Jarvis real-time notifications */}
-          <JarvisNotifications />
+          {/* 🦅 Horus real-time notifications */}
+          <NotificationPanel />
         </div>
 
         {/* Desktop topbar — notifications always visible */}
@@ -72,7 +72,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
               </span>
             </div>
           )}
-          <JarvisNotifications />
+          <NotificationPanel />
         </div>
 
         {/* Page content */}

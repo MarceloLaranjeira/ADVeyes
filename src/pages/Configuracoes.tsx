@@ -7,6 +7,7 @@ import {
   CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
 } from "lucide-react";
+import { horusDiscovery } from "@/services/horus";
 import { Textarea } from "@/components/ui/textarea";
 import { PLANS, asaas } from "@/lib/asaas";
 import { googleCalendar } from "@/lib/google-calendar";
@@ -39,27 +40,31 @@ const PerfilAdvogadoForm = () => {
   const sincronizarOAB = async (oab: string, seccional: string) => {
     setSyncing(true);
     try {
-      const { data: { session } } = await (await import("@/integrations/supabase/client")).supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("Sem sessão");
-
-      const resp = await fetch(OAB_SYNC_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ oab_numero: oab, seccional }),
+      // 🦅 HORUS DISCOVERY ENGINE — Descoberta automática de processos
+      const status = await horusDiscovery.discover({
+        numero: oab,
+        seccional: seccional,
+        nomeCompleto: form.nome || "Advogado",
+        email: form.email || "",
       });
-      const result = await resp.json();
 
       const agora = new Date().toLocaleString("pt-BR");
       localStorage.setItem("adveyes_last_oab_sync", agora);
       setLastSync(agora);
 
-      toast({
-        title: result.novos > 0 || result.atualizados > 0
-          ? `Sync concluído — ${result.novos} novo(s) + ${result.atualizados} atualizado(s)`
-          : "Sync concluído — tudo atualizado",
-        description: result.message,
-      });
+      // Notificação aparece via HorusNotifier automaticamente
+      // Aqui só mostramos resumo adicional se quiser
+      if (status.processosEncontrados > 0) {
+        toast({
+          title: `🦅 Horus concluiu a descoberta!`,
+          description: `${status.processosEncontrados} processo(s) encontrado(s) em ${status.tribunaisConsultados} tribunal(is).`,
+        });
+      } else {
+        toast({
+          title: "🦅 Horus concluiu a varredura",
+          description: "Nenhum processo encontrado vinculado a essa OAB.",
+        });
+      }
     } catch (e) {
       toast({ title: "Erro no sync OAB", description: (e as Error).message, variant: "destructive" });
     }
@@ -120,13 +125,22 @@ const PerfilAdvogadoForm = () => {
           onChange={(e) => setForm({ ...form, nome: e.target.value })}
         />
       </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">E-mail</Label>
+        <Input
+          type="email"
+          placeholder="seu@email.com"
+          value={form.email || ""}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+      </div>
       <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-        OAB e CPF são usados automaticamente no módulo <strong>Publicações</strong> para monitorar o Diário de Justiça. Nenhum token é necessário para a consulta básica.
+        <strong>🦅 Horus</strong> usa seus dados para descobrir automaticamente todos os processos vinculados à sua OAB em TODOS os tribunais brasileiros. Nenhum cadastro manual necessário!
       </p>
       <div className="flex flex-wrap gap-2 items-center">
         <Button onClick={salvar} disabled={syncing} className="gap-2">
           {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          {syncing ? "Sincronizando tribunais..." : "Salvar & Sincronizar"}
+          {syncing ? "🦅 Horus buscando processos..." : "🦅 Salvar & Descobrir Processos"}
         </Button>
         {form.numero_oab && form.seccional && (
           <Button
@@ -136,7 +150,7 @@ const PerfilAdvogadoForm = () => {
             onClick={() => sincronizarOAB(form.numero_oab, form.seccional)}
             className="gap-2"
           >
-            <RefreshCcw className="w-3.5 h-3.5" /> Sync Manual
+            <RefreshCcw className="w-3.5 h-3.5" /> 🦅 Redescobrir Processos
           </Button>
         )}
         {lastSync && (

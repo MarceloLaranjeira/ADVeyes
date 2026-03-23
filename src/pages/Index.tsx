@@ -37,12 +37,44 @@ const Index = () => {
   const [horasMes, setHorasMes] = useState(0);
   const [metaMes, setMetaMes] = useState<Record<string, any> | null>(null);
   const [tarefasHoje, setTarefasHoje] = useState(0);
+  const [nomeAdvogado, setNomeAdvogado] = useState("");
+  const [horusMetrics, setHorusMetrics] = useState({
+    processosMonitorados: 0,
+    tribunaisAtivos: 6,
+    ultimaVerificacao: new Date(),
+  });
 
   useEffect(() => {
     const now = new Date();
     const em7dias = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const hoje = now.toISOString().slice(0, 10);
+
+    // Carregar nome do advogado do perfil
+    const perfilData = localStorage.getItem("adveyes_perfil");
+    if (perfilData) {
+      try {
+        const perfil = JSON.parse(perfilData);
+        setNomeAdvogado(perfil.nome || "");
+      } catch (e) {
+        console.error("Erro ao carregar perfil:", e);
+      }
+    }
+
+    // Carregar métricas do Horus
+    const processosData = localStorage.getItem("adveyes_processos");
+    if (processosData) {
+      try {
+        const processos = JSON.parse(processosData);
+        setHorusMetrics({
+          processosMonitorados: Array.isArray(processos) ? processos.length : 0,
+          tribunaisAtivos: 6, // STF, STJ, TST, TJAM, TRF1, TRT11
+          ultimaVerificacao: new Date(),
+        });
+      } catch (e) {
+        console.error("Erro ao carregar processos:", e);
+      }
+    }
 
     Promise.all([
       supabase.from("processos").select("id", { count: "exact", head: true }),
@@ -93,6 +125,20 @@ const Index = () => {
   const resultadoLiquido = financeiro.recebido - financeiro.despesas;
   const progressoMeta = metaMes?.meta_receita > 0 ? Math.min(100, Math.round((financeiro.recebido / metaMes.meta_receita) * 100)) : 0;
 
+  // Saudação inteligente baseada no horário
+  const getGreeting = () => {
+    const hora = new Date().getHours();
+    if (hora >= 5 && hora < 12) return "☀️ Bom dia";
+    if (hora >= 12 && hora < 18) return "☀️ Boa tarde";
+    return "🌙 Boa noite";
+  };
+
+  const getSaudacao = () => {
+    const greeting = getGreeting();
+    const nome = nomeAdvogado ? `, Dr. ${nomeAdvogado.split(' ')[0]}!` : "!";
+    return `${greeting}${nome}`;
+  };
+
   const getDiasColor = (dias: number) => {
     if (dias < 0) return "text-destructive font-bold";
     if (dias <= 1) return "text-destructive";
@@ -122,21 +168,56 @@ const Index = () => {
   return (
     <AppLayout>
       <div className="animate-fade-in">
-        {/* Header */}
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h1 className="text-4xl font-bold font-serif tracking-tight text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-1.5">
-              Sistema de Gestão — <span className="font-medium text-foreground/70">Albertino e Advogados Associados</span>
-            </p>
+        {/* Header - Intelligent Greeting */}
+        <div className="mb-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold font-serif tracking-tight text-foreground">
+                {getSaudacao()}
+              </h1>
+              <p className="text-muted-foreground text-sm mt-1.5">
+                Sistema de Gestão — <span className="font-medium text-foreground/70">ADVeyes</span>
+              </p>
+            </div>
+            <Button
+              onClick={() => navigate("/ia-juridica")}
+              className="gap-2"
+            >
+              <IconHorusIA size={18} />
+              Horus IA
+            </Button>
           </div>
-          <Button
-            onClick={() => navigate("/ia-juridica")}
-            className="gap-2"
-          >
-            <IconHorusIA size={18} />
-            Horus IA
-          </Button>
+
+          {/* 🦅 Horus Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-gradient-to-r from-primary/5 via-primary/3 to-transparent border border-primary/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <IconHorusIA size={20} className="text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">🦅 Horus — Processos Monitorados</p>
+                <p className="text-xl font-bold font-serif">{horusMetrics.processosMonitorados}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Tribunais Ativos</p>
+                <p className="text-xl font-bold font-serif text-green-600">{horusMetrics.tribunaisAtivos}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Última Verificação</p>
+                <p className="text-sm font-semibold">{horusMetrics.ultimaVerificacao.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Row 1: Processos + Operacional */}
@@ -288,6 +369,47 @@ const Index = () => {
                   className={`h-full rounded-full transition-all duration-500 ${progressoMeta >= 100 ? "bg-green-500" : progressoMeta >= 70 ? "bg-yellow-500" : "bg-primary"}`}
                   style={{ width: `${progressoMeta}%` }}
                 />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 🦅 Horus Proactive Suggestions */}
+        {(prazosUrgentes > 0 || tarefasHoje > 0 || audienciasProximas.length > 0) && (
+          <Card className="mb-4 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <h3 className="font-serif font-semibold text-sm">🦅 Horus — Sugestões Proativas</h3>
+              </div>
+              <div className="space-y-2">
+                {prazosUrgentes > 0 && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/5 border border-destructive/10">
+                    <IconAlerta size={16} className="text-destructive mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-destructive">Atenção: {prazosUrgentes} prazo(s) urgente(s)</p>
+                      <p className="text-xs text-muted-foreground">Recomendo revisar imediatamente os prazos vencendo em até 2 dias.</p>
+                    </div>
+                  </div>
+                )}
+                {tarefasHoje > 0 && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                    <CheckCircle2 size={16} className="text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-blue-600">Você tem {tarefasHoje} tarefa(s) para hoje</p>
+                      <p className="text-xs text-muted-foreground">Organize sua agenda para concluir todas as pendências do dia.</p>
+                    </div>
+                  </div>
+                )}
+                {audienciasProximas.length > 0 && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+                    <IconAudiencias size={16} className="text-purple-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-purple-600">{audienciasProximas.length} audiência(s) agendada(s)</p>
+                      <p className="text-xs text-muted-foreground">Prepare a documentação e confirme a pauta com antecedência.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
