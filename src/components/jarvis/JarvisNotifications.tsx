@@ -114,33 +114,33 @@ export const JarvisNotifications = () => {
         <div
           className={`fixed bottom-6 right-6 z-[9999] max-w-sm animate-fade-in ${
             jarvisMode
-              ? "bg-slate-950/95 border border-cyan-500/40 shadow-[0_0_30px_rgba(6,182,212,0.25)]"
-              : "bg-slate-900/95 border border-slate-700 shadow-xl"
+              ? "bg-background/95 border border-neural-cyan/40 shadow-[0_0_30px_hsl(var(--neural-cyan)/0.25)]"
+              : "bg-card/95 border border-border shadow-xl"
           } rounded-xl backdrop-blur-md`}
         >
           <div className="flex items-start gap-3 p-4">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${jarvisMode ? "bg-cyan-500/15 border border-cyan-500/30" : "bg-primary/20"}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${jarvisMode ? "bg-neural-cyan/15 border border-neural-cyan/30" : "bg-primary/20"}`}>
               {tipoIcon[toast.tipo] || tipoIcon.default}
             </div>
             <div className="flex-1 min-w-0">
               {jarvisMode && (
-                <p className="text-[9px] font-bold tracking-widest text-cyan-500/70 uppercase mb-0.5">
+                <p className="text-[9px] font-bold tracking-widest text-neural-cyan/70 uppercase mb-0.5">
                   HORUS · {toast.tipo.toUpperCase()}
                 </p>
               )}
-              <p className={`text-sm font-semibold leading-tight ${jarvisMode ? "text-cyan-100" : "text-white"}`}>
+              <p className={`text-sm font-semibold leading-tight ${jarvisMode ? "text-foreground" : "text-foreground"}`}>
                 {toast.titulo}
               </p>
-              <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-cyan-300/70" : "text-slate-300"}`}>
+              <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-neural-cyan/70" : "text-muted-foreground"}`}>
                 {toast.mensagem}
               </p>
             </div>
-            <button onClick={() => setToast(null)} className="text-slate-500 hover:text-white shrink-0">
+            <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground shrink-0">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
           {jarvisMode && (
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500 to-transparent animate-pulse" />
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-neural-cyan to-transparent animate-pulse" />
           )}
         </div>
       )}
@@ -151,14 +151,14 @@ export const JarvisNotifications = () => {
           onClick={() => { setOpen((o) => !o); if (!open) marcarLidas(); }}
           className={`relative p-2 rounded-lg transition-all ${
             jarvisMode
-              ? "hover:bg-cyan-500/10 text-cyan-400/70 hover:text-cyan-300"
+              ? "hover:bg-neural-cyan/10 text-neural-cyan/70 hover:text-neural-cyan"
               : "hover:bg-muted text-muted-foreground hover:text-foreground"
           }`}
         >
           <IconBell size={18} />
           {newCount > 0 && (
             <span className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
-              jarvisMode ? "bg-cyan-500 text-slate-950 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-primary text-white"
+              jarvisMode ? "bg-neural-cyan text-background shadow-[0_0_8px_hsl(var(--neural-cyan)/0.6)]" : "bg-primary text-primary-foreground"
             }`}>
               {newCount > 9 ? "9+" : newCount}
             </span>
@@ -169,20 +169,20 @@ export const JarvisNotifications = () => {
         {open && (
           <div className={`absolute right-0 top-full mt-2 w-80 z-50 rounded-xl overflow-hidden shadow-2xl ${
             jarvisMode
-              ? "bg-slate-950/98 border border-cyan-500/25 shadow-[0_0_40px_rgba(6,182,212,0.12)]"
+              ? "bg-background/98 border border-neural-cyan/25 shadow-[0_0_40px_hsl(var(--neural-cyan)/0.12)]"
               : "bg-card border border-border"
           }`}>
             {/* Header */}
-            <div className={`px-4 py-3 flex items-center justify-between ${jarvisMode ? "border-b border-cyan-500/15" : "border-b border-border"}`}>
+            <div className={`px-4 py-3 flex items-center justify-between ${jarvisMode ? "border-b border-neural-cyan/15" : "border-b border-border"}`}>
               {jarvisMode ? (
                 <div>
-                  <p className="text-[9px] tracking-widest text-cyan-500/60 font-bold uppercase">HORUS · CENTRAL DE ALERTAS</p>
-                  <p className="text-xs font-semibold text-cyan-100 mt-0.5 animate-pulse">{JARVIS_LINES[jarvisLine]}</p>
+                  <p className="text-[9px] tracking-widest text-neural-cyan/60 font-bold uppercase">HORUS · CENTRAL DE ALERTAS</p>
+                  <p className="text-xs font-semibold text-foreground mt-0.5 animate-pulse">{JARVIS_LINES[jarvisLine]}</p>
                 </div>
               ) : (
                 <p className="text-sm font-semibold">Notificações</p>
               )}
-              <button onClick={() => setOpen(false)} className={`p-1 rounded hover:bg-muted ${jarvisMode ? "text-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-400" : "text-muted-foreground"}`}>
+              <button onClick={() => setOpen(false)} className={`p-1 rounded hover:bg-muted ${jarvisMode ? "text-neural-cyan/50 hover:bg-neural-cyan/10 hover:text-neural-cyan" : "text-muted-foreground"}`}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -191,8 +191,8 @@ export const JarvisNotifications = () => {
             <div className="max-h-80 overflow-y-auto">
               {notifs.length === 0 ? (
                 <div className="py-8 text-center">
-                  <CheckCircle2 className={`w-8 h-8 mx-auto mb-2 ${jarvisMode ? "text-cyan-500/30" : "text-muted-foreground/30"}`} />
-                  <p className={`text-xs ${jarvisMode ? "text-cyan-500/50" : "text-muted-foreground"}`}>
+                  <CheckCircle2 className={`w-8 h-8 mx-auto mb-2 ${jarvisMode ? "text-neural-cyan/30" : "text-muted-foreground/30"}`} />
+                  <p className={`text-xs ${jarvisMode ? "text-neural-cyan/50" : "text-muted-foreground"}`}>
                     {jarvisMode ? "SISTEMAS EM STANDBY" : "Nenhuma notificação"}
                   </p>
                 </div>
@@ -202,7 +202,7 @@ export const JarvisNotifications = () => {
                     key={n.id}
                     className={`flex gap-3 px-4 py-3 transition-colors ${
                       jarvisMode
-                        ? `border-b border-cyan-500/8 ${!n.lida ? "bg-cyan-500/5" : "hover:bg-cyan-500/5"}`
+                        ? `border-b border-neural-cyan/10 ${!n.lida ? "bg-neural-cyan/5" : "hover:bg-neural-cyan/5"}`
                         : `border-b border-border ${!n.lida ? "bg-primary/5" : "hover:bg-muted/50"}`
                     }`}
                   >
@@ -211,19 +211,19 @@ export const JarvisNotifications = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-xs font-semibold leading-tight ${jarvisMode ? "text-cyan-100" : "text-foreground"}`}>
+                        <p className={`text-xs font-semibold leading-tight ${jarvisMode ? "text-foreground" : "text-foreground"}`}>
                           {n.titulo}
                         </p>
-                        <span className={`text-[10px] shrink-0 ${jarvisMode ? "text-cyan-500/50" : "text-muted-foreground"}`}>
+                        <span className={`text-[10px] shrink-0 ${jarvisMode ? "text-neural-cyan/50" : "text-muted-foreground"}`}>
                           {formatTime(n.created_at)}
                         </span>
                       </div>
-                      <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-cyan-300/60" : "text-muted-foreground"}`}>
+                      <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-neural-cyan/60" : "text-muted-foreground"}`}>
                         {n.mensagem}
                       </p>
                     </div>
                     {!n.lida && (
-                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${jarvisMode ? "bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-primary"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${jarvisMode ? "bg-neural-cyan shadow-[0_0_6px_hsl(var(--neural-cyan)/0.8)]" : "bg-primary"}`} />
                     )}
                   </div>
                 ))
@@ -231,7 +231,7 @@ export const JarvisNotifications = () => {
             </div>
 
             {jarvisMode && (
-              <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+              <div className="h-px bg-gradient-to-r from-transparent via-neural-cyan/40 to-transparent" />
             )}
           </div>
         )}
