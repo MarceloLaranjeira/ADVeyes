@@ -119,7 +119,7 @@ export const JarvisNotifications = () => {
           } rounded-xl backdrop-blur-md`}
         >
           <div className="flex items-start gap-3 p-4">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${jarvisMode ? "bg-cyan-500/15 border border-cyan-500/30" : "bg-primary/20"}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${jarvisMode ? "bg-neural-cyan/15 border border-neural-cyan/30" : "bg-primary/20"}`}>
               {tipoIcon[toast.tipo] || tipoIcon.default}
             </div>
             <div className="flex-1 min-w-0">
