@@ -151,7 +151,7 @@ export const JarvisNotifications = () => {
           onClick={() => { setOpen((o) => !o); if (!open) marcarLidas(); }}
           className={`relative p-2 rounded-lg transition-all ${
             jarvisMode
-              ? "hover:bg-cyan-500/10 text-cyan-400/70 hover:text-cyan-300"
+              ? "hover:bg-neural-cyan/10 text-neural-cyan/70 hover:text-neural-cyan"
               : "hover:bg-muted text-muted-foreground hover:text-foreground"
           }`}
         >
