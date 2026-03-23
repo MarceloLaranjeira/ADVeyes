@@ -182,7 +182,7 @@ export const JarvisNotifications = () => {
               ) : (
                 <p className="text-sm font-semibold">Notificações</p>
               )}
-              <button onClick={() => setOpen(false)} className={`p-1 rounded hover:bg-muted ${jarvisMode ? "text-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-400" : "text-muted-foreground"}`}>
+              <button onClick={() => setOpen(false)} className={`p-1 rounded hover:bg-muted ${jarvisMode ? "text-neural-cyan/50 hover:bg-neural-cyan/10 hover:text-neural-cyan" : "text-muted-foreground"}`}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
