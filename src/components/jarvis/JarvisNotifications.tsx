@@ -202,7 +202,7 @@ export const JarvisNotifications = () => {
                     key={n.id}
                     className={`flex gap-3 px-4 py-3 transition-colors ${
                       jarvisMode
-                        ? `border-b border-cyan-500/8 ${!n.lida ? "bg-cyan-500/5" : "hover:bg-cyan-500/5"}`
+                        ? `border-b border-neural-cyan/10 ${!n.lida ? "bg-neural-cyan/5" : "hover:bg-neural-cyan/5"}`
                         : `border-b border-border ${!n.lida ? "bg-primary/5" : "hover:bg-muted/50"}`
                     }`}
                   >
