@@ -158,7 +158,7 @@ export const JarvisNotifications = () => {
           <IconBell size={18} />
           {newCount > 0 && (
             <span className={`absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${
-              jarvisMode ? "bg-cyan-500 text-slate-950 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-primary text-white"
+              jarvisMode ? "bg-neural-cyan text-background shadow-[0_0_8px_hsl(var(--neural-cyan)/0.6)]" : "bg-primary text-primary-foreground"
             }`}>
               {newCount > 9 ? "9+" : newCount}
             </span>
