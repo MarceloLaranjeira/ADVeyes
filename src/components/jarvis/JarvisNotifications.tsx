@@ -218,7 +218,7 @@ export const JarvisNotifications = () => {
                           {formatTime(n.created_at)}
                         </span>
                       </div>
-                      <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-cyan-300/60" : "text-muted-foreground"}`}>
+                      <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-neural-cyan/60" : "text-muted-foreground"}`}>
                         {n.mensagem}
                       </p>
                     </div>
