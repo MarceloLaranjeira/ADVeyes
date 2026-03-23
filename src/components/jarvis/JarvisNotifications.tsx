@@ -124,14 +124,14 @@ export const JarvisNotifications = () => {
             </div>
             <div className="flex-1 min-w-0">
               {jarvisMode && (
-                <p className="text-[9px] font-bold tracking-widest text-cyan-500/70 uppercase mb-0.5">
+                <p className="text-[9px] font-bold tracking-widest text-neural-cyan/70 uppercase mb-0.5">
                   HORUS · {toast.tipo.toUpperCase()}
                 </p>
               )}
-              <p className={`text-sm font-semibold leading-tight ${jarvisMode ? "text-cyan-100" : "text-white"}`}>
+              <p className={`text-sm font-semibold leading-tight ${jarvisMode ? "text-foreground" : "text-foreground"}`}>
                 {toast.titulo}
               </p>
-              <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-cyan-300/70" : "text-slate-300"}`}>
+              <p className={`text-xs mt-0.5 leading-relaxed ${jarvisMode ? "text-neural-cyan/70" : "text-muted-foreground"}`}>
                 {toast.mensagem}
               </p>
             </div>
