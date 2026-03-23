@@ -214,7 +214,7 @@ export const JarvisNotifications = () => {
                         <p className={`text-xs font-semibold leading-tight ${jarvisMode ? "text-foreground" : "text-foreground"}`}>
                           {n.titulo}
                         </p>
-                        <span className={`text-[10px] shrink-0 ${jarvisMode ? "text-cyan-500/50" : "text-muted-foreground"}`}>
+                        <span className={`text-[10px] shrink-0 ${jarvisMode ? "text-neural-cyan/50" : "text-muted-foreground"}`}>
                           {formatTime(n.created_at)}
                         </span>
                       </div>
