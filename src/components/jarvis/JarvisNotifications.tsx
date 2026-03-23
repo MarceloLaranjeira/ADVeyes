@@ -223,7 +223,7 @@ export const JarvisNotifications = () => {
                       </p>
                     </div>
                     {!n.lida && (
-                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${jarvisMode ? "bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-primary"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${jarvisMode ? "bg-neural-cyan shadow-[0_0_6px_hsl(var(--neural-cyan)/0.8)]" : "bg-primary"}`} />
                     )}
                   </div>
                 ))
