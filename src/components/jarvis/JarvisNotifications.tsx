@@ -140,7 +140,7 @@ export const JarvisNotifications = () => {
             </button>
           </div>
           {jarvisMode && (
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500 to-transparent animate-pulse" />
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-neural-cyan to-transparent animate-pulse" />
           )}
         </div>
       )}
