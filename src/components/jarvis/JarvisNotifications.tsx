@@ -191,8 +191,8 @@ export const JarvisNotifications = () => {
             <div className="max-h-80 overflow-y-auto">
               {notifs.length === 0 ? (
                 <div className="py-8 text-center">
-                  <CheckCircle2 className={`w-8 h-8 mx-auto mb-2 ${jarvisMode ? "text-cyan-500/30" : "text-muted-foreground/30"}`} />
-                  <p className={`text-xs ${jarvisMode ? "text-cyan-500/50" : "text-muted-foreground"}`}>
+                  <CheckCircle2 className={`w-8 h-8 mx-auto mb-2 ${jarvisMode ? "text-neural-cyan/30" : "text-muted-foreground/30"}`} />
+                  <p className={`text-xs ${jarvisMode ? "text-neural-cyan/50" : "text-muted-foreground"}`}>
                     {jarvisMode ? "SISTEMAS EM STANDBY" : "Nenhuma notificação"}
                   </p>
                 </div>
