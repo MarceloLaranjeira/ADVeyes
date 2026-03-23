@@ -169,7 +169,7 @@ export const JarvisNotifications = () => {
         {open && (
           <div className={`absolute right-0 top-full mt-2 w-80 z-50 rounded-xl overflow-hidden shadow-2xl ${
             jarvisMode
-              ? "bg-slate-950/98 border border-cyan-500/25 shadow-[0_0_40px_rgba(6,182,212,0.12)]"
+              ? "bg-background/98 border border-neural-cyan/25 shadow-[0_0_40px_hsl(var(--neural-cyan)/0.12)]"
               : "bg-card border border-border"
           }`}>
             {/* Header */}
