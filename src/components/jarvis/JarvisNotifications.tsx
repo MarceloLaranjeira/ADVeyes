@@ -114,8 +114,8 @@ export const JarvisNotifications = () => {
         <div
           className={`fixed bottom-6 right-6 z-[9999] max-w-sm animate-fade-in ${
             jarvisMode
-              ? "bg-slate-950/95 border border-cyan-500/40 shadow-[0_0_30px_rgba(6,182,212,0.25)]"
-              : "bg-slate-900/95 border border-slate-700 shadow-xl"
+              ? "bg-background/95 border border-neural-cyan/40 shadow-[0_0_30px_hsl(var(--neural-cyan)/0.25)]"
+              : "bg-card/95 border border-border shadow-xl"
           } rounded-xl backdrop-blur-md`}
         >
           <div className="flex items-start gap-3 p-4">
