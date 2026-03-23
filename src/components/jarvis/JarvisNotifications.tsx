@@ -231,7 +231,7 @@ export const JarvisNotifications = () => {
             </div>
 
             {jarvisMode && (
-              <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+              <div className="h-px bg-gradient-to-r from-transparent via-neural-cyan/40 to-transparent" />
             )}
           </div>
         )}
