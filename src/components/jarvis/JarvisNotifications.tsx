@@ -173,11 +173,11 @@ export const JarvisNotifications = () => {
               : "bg-card border border-border"
           }`}>
             {/* Header */}
-            <div className={`px-4 py-3 flex items-center justify-between ${jarvisMode ? "border-b border-cyan-500/15" : "border-b border-border"}`}>
+            <div className={`px-4 py-3 flex items-center justify-between ${jarvisMode ? "border-b border-neural-cyan/15" : "border-b border-border"}`}>
               {jarvisMode ? (
                 <div>
-                  <p className="text-[9px] tracking-widest text-cyan-500/60 font-bold uppercase">HORUS · CENTRAL DE ALERTAS</p>
-                  <p className="text-xs font-semibold text-cyan-100 mt-0.5 animate-pulse">{JARVIS_LINES[jarvisLine]}</p>
+                  <p className="text-[9px] tracking-widest text-neural-cyan/60 font-bold uppercase">HORUS · CENTRAL DE ALERTAS</p>
+                  <p className="text-xs font-semibold text-foreground mt-0.5 animate-pulse">{JARVIS_LINES[jarvisLine]}</p>
                 </div>
               ) : (
                 <p className="text-sm font-semibold">Notificações</p>
