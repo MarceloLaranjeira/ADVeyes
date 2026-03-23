@@ -211,7 +211,7 @@ export const JarvisNotifications = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-xs font-semibold leading-tight ${jarvisMode ? "text-cyan-100" : "text-foreground"}`}>
+                        <p className={`text-xs font-semibold leading-tight ${jarvisMode ? "text-foreground" : "text-foreground"}`}>
                           {n.titulo}
                         </p>
                         <span className={`text-[10px] shrink-0 ${jarvisMode ? "text-cyan-500/50" : "text-muted-foreground"}`}>
