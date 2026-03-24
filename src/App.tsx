@@ -47,6 +47,7 @@ const App = () => (
             <Routes>
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               {/* Portal do Cliente (public, token-based) */}
               <Route path="/portal" element={<PortalLogin />} />
               <Route path="/portal/dashboard" element={<PortalDashboard />} />
