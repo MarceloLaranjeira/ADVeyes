@@ -28,6 +28,7 @@ import CRM from "./pages/CRM";
 import Equipe from "./pages/Equipe";
 import Contratos from "./pages/Contratos";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
 import PortalDashboard from "./pages/portal/PortalDashboard";
