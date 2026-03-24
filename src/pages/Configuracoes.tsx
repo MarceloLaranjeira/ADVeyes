@@ -40,29 +40,25 @@ const PerfilAdvogadoForm = () => {
   const sincronizarOAB = async (oab: string, seccional: string) => {
     setSyncing(true);
     try {
-      // 🦅 HORUS DISCOVERY ENGINE — Descoberta automática de processos
-      const status = await horusDiscovery.discover({
-        numero: oab,
-        seccional: seccional,
-        nomeCompleto: form.nome || "Advogado",
-        email: form.email || "",
+      const { data, error } = await supabase.functions.invoke("oab-sync", {
+        body: { oab_numero: oab, seccional },
       });
+
+      if (error) throw error;
 
       const agora = new Date().toLocaleString("pt-BR");
       localStorage.setItem("adveyes_last_oab_sync", agora);
       setLastSync(agora);
 
-      // Notificação aparece via HorusNotifier automaticamente
-      // Aqui só mostramos resumo adicional se quiser
-      if (status.processosEncontrados > 0) {
+      if ((data?.novos ?? 0) > 0 || (data?.atualizados ?? 0) > 0) {
         toast({
-          title: `🦅 Horus concluiu a descoberta!`,
-          description: `${status.processosEncontrados} processo(s) encontrado(s) em ${status.tribunaisConsultados} tribunal(is).`,
+          title: "🦅 Horus concluiu a descoberta!",
+          description: `${data.novos} novo(s) e ${data.atualizados} atualizado(s) de ${data.sincronizados} processos encontrados.`,
         });
       } else {
         toast({
           title: "🦅 Horus concluiu a varredura",
-          description: "Nenhum processo encontrado vinculado a essa OAB.",
+          description: data?.message ?? "Nenhum processo encontrado vinculado a essa OAB.",
         });
       }
     } catch (e) {
