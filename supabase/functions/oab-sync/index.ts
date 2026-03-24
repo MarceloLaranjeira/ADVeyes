@@ -65,19 +65,17 @@ async function fetchWithRetry(endpoint: string, body: object, apiKey: string, ma
 
 async function fetchAllPages(endpoint: string, baseBody: object, apiKey: string): Promise<any[]> {
   const hits: any[] = [];
-  let searchAfter: any[] | undefined;
-  const body: any = { ...baseBody, size: 100, sort: [{ dataAjuizamento: { order: "desc" } }, { _id: { order: "asc" } }] };
+  const PAGE_SIZE = 100;
 
-  while (true) {
-    if (searchAfter) body.search_after = searchAfter;
+  for (let from = 0; from < 1000; from += PAGE_SIZE) {
+    const body: any = { ...baseBody, size: PAGE_SIZE, from, sort: [{ dataAjuizamento: { order: "desc" } }] };
     const data = await fetchWithRetry(endpoint, body, apiKey);
     const page: any[] = data?.hits?.hits ?? [];
     hits.push(...page);
-    if (page.length < 100) break;
-    const last = page[page.length - 1];
-    searchAfter = last.sort;
-    if (!searchAfter) break;
+    if (page.length < PAGE_SIZE) break;
+    await new Promise(r => setTimeout(r, 200));
   }
+
   return hits;
 }
 
