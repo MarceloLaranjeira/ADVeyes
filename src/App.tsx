@@ -28,6 +28,7 @@ import CRM from "./pages/CRM";
 import Equipe from "./pages/Equipe";
 import Contratos from "./pages/Contratos";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
 import PortalDashboard from "./pages/portal/PortalDashboard";
@@ -46,6 +47,7 @@ const App = () => (
             <Routes>
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               {/* Portal do Cliente (public, token-based) */}
               <Route path="/portal" element={<PortalLogin />} />
               <Route path="/portal/dashboard" element={<PortalDashboard />} />

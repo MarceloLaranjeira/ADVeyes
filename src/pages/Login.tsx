@@ -73,6 +73,23 @@ const Login = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({ title: "Informe o e-mail", description: "Digite seu e-mail no campo acima para receber o link de redefinição.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      toast({ title: "Erro ao enviar e-mail", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "E-mail enviado!", description: "Verifique sua caixa de entrada para redefinir a senha." });
+    }
+    setLoading(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -129,7 +146,19 @@ const Login = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:text-primary/80 transition-colors"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
