@@ -45,6 +45,42 @@ const TRIBUNAIS_POR_SECCIONAL: Record<string, string[]> = {
 const getEndpoint = (t: string) =>
   `https://api-publica.datajud.cnj.jus.br/api_publica_${t.toLowerCase()}/_search`;
 
+async function fetchWithRetry(endpoint: string, body: object, apiKey: string, maxRetries = 2): Promise<any> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: apiKey },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (resp.status === 429 && attempt < maxRetries) {
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
+    if (!resp.ok) return null;
+    return await resp.json();
+  }
+  return null;
+}
+
+async function fetchAllPages(endpoint: string, baseBody: object, apiKey: string): Promise<any[]> {
+  const hits: any[] = [];
+  let searchAfter: any[] | undefined;
+  const body: any = { ...baseBody, size: 100, sort: [{ dataAjuizamento: { order: "desc" } }, { _id: { order: "asc" } }] };
+
+  while (true) {
+    if (searchAfter) body.search_after = searchAfter;
+    const data = await fetchWithRetry(endpoint, body, apiKey);
+    const page: any[] = data?.hits?.hits ?? [];
+    hits.push(...page);
+    if (page.length < 100) break;
+    const last = page[page.length - 1];
+    searchAfter = last.sort;
+    if (!searchAfter) break;
+  }
+  return hits;
+}
+
 function normalizeCNJ(numero: string): string {
   const d = numero.replace(/\D/g, "");
   if (d.length === 20) {
@@ -106,41 +142,25 @@ serve(async (req) => {
     for (let i = 0; i < tribunais.length; i += MAX_PARALLEL) {
       const batch = tribunais.slice(i, i + MAX_PARALLEL);
       const results = await Promise.all(batch.map(async (trib) => {
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 8000);
         try {
-          const resp = await fetch(getEndpoint(trib), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: DATAJUD_KEY,
-            },
-            signal: controller.signal,
-            body: JSON.stringify({
-              size: 50,
-              query: {
-                query_string: {
-                  query: oabNumero,
-                  fields: [
-                    "partes.advogados.inscricaoOab",
-                    "partes.advogados.oab",
-                    "advogados.inscricaoOab",
-                    "advogados.oab",
-                    "representantePartes.inscricaoOab",
-                  ],
-                  lenient: true,
-                  default_operator: "AND",
-                },
+          const hits = await fetchAllPages(getEndpoint(trib), {
+            query: {
+              query_string: {
+                query: oabNumero,
+                fields: [
+                  "partes.advogados.inscricaoOab",
+                  "partes.advogados.oab",
+                  "advogados.inscricaoOab",
+                  "advogados.oab",
+                  "representantePartes.inscricaoOab",
+                ],
+                lenient: true,
+                default_operator: "AND",
               },
-              sort: [{ "dataAjuizamento": { order: "desc" } }],
-            }),
-          });
-          clearTimeout(tid);
-          if (!resp.ok) return [];
-          const data = await resp.json();
-          return (data.hits?.hits || []).map((h: any) => ({ ...h._source, _tribunal: trib }));
+            },
+          }, DATAJUD_KEY);
+          return hits.map((h: any) => ({ ...h._source, _tribunal: trib }));
         } catch {
-          clearTimeout(tid);
           erros.push(trib);
           return [];
         }

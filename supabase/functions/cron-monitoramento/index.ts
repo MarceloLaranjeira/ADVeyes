@@ -35,57 +35,87 @@ serve(async (req) => {
       return `https://api-publica.datajud.cnj.jus.br/api_publica_${key}/_search`;
     };
 
+    const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
     let totalUpdates = 0;
 
-    for (const mon of monitored) {
-      try {
-        const endpoint = getEndpoint(mon.tribunal);
-        const resp = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `APIKey ${Deno.env.get("DATAJUD_API_KEY")}`,
-          },
-          body: JSON.stringify({
-            query: { match: { numeroProcesso: mon.numero_processo.replace(/[.\-/]/g, "") } },
-            size: 1,
-          }),
-        });
-
-        if (!resp.ok) { await resp.text(); continue; }
-
-        const data = await resp.json();
-        const hit = data.hits?.hits?.[0]?._source;
-        if (!hit) continue;
-
-        const lastMov = hit.movimentos?.[0]?.nome || "";
-        const now = new Date().toISOString();
-
-        if (lastMov && lastMov !== mon.ultimo_movimento) {
-          totalUpdates++;
-
-          await supabase.from("processo_monitoramento")
-            .update({ ultimo_movimento: lastMov, ultima_verificacao: now })
-            .eq("id", mon.id);
-
-          await supabase.from("notificacoes").insert({
-            user_id: mon.user_id,
-            titulo: `Nova movimentação - ${mon.numero_processo}`,
-            mensagem: `${lastMov} (${mon.tribunal.toUpperCase()})`,
-            tipo: "movimentacao",
-            processo_numero: mon.numero_processo,
-            tribunal: mon.tribunal,
+    // Processar em lotes de 10 para evitar timeout da Edge Function
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < monitored.length; i += BATCH_SIZE) {
+      const batch = monitored.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(batch.map(async (mon) => {
+        try {
+          const endpoint = getEndpoint(mon.tribunal);
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": DATAJUD_KEY,
+            },
+            body: JSON.stringify({
+              query: { match: { numeroProcesso: mon.numero_processo.replace(/[.\-/]/g, "") } },
+              size: 1,
+            }),
+            signal: AbortSignal.timeout(8000),
           });
-        } else {
-          await supabase.from("processo_monitoramento")
-            .update({ ultima_verificacao: now })
-            .eq("id", mon.id);
-        }
 
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 200));
-      } catch (e) {
-        console.error(`Error checking ${mon.numero_processo}:`, e);
+          if (!resp.ok) return;
+
+          const data = await resp.json();
+          const hit = data.hits?.hits?.[0]?._source;
+          if (!hit) return;
+
+          const lastMov = hit.movimentos?.[0]?.nome || "";
+          const now = new Date().toISOString();
+
+          if (lastMov && lastMov !== mon.ultimo_movimento) {
+            totalUpdates++;
+
+            await supabase.from("processo_monitoramento")
+              .update({ ultimo_movimento: lastMov, ultima_verificacao: now })
+              .eq("id", mon.id);
+
+            await supabase.from("notificacoes").insert({
+              user_id: mon.user_id,
+              titulo: `Nova movimentação - ${mon.numero_processo}`,
+              mensagem: `${lastMov} (${mon.tribunal.toUpperCase()})`,
+              tipo: "movimentacao",
+              processo_numero: mon.numero_processo,
+              tribunal: mon.tribunal,
+            });
+
+            // Registrar no histórico de andamentos
+            const { data: proc } = await supabase
+              .from("processos")
+              .select("id")
+              .eq("numero", mon.numero_processo)
+              .eq("user_id", mon.user_id)
+              .maybeSingle();
+
+            if (proc?.id) {
+              await (supabase.from as any)("andamentos").insert({
+                user_id: mon.user_id,
+                processo_id: proc.id,
+                numero_processo: mon.numero_processo,
+                tipo: "Movimentação",
+                descricao: lastMov,
+                data_andamento: now,
+                tribunal: mon.tribunal,
+                origem: "datajud_cron",
+              }).catch(() => null);
+            }
+          } else {
+            await supabase.from("processo_monitoramento")
+              .update({ ultima_verificacao: now })
+              .eq("id", mon.id);
+          }
+        } catch (e) {
+          console.error(`Error checking ${mon.numero_processo}:`, e);
+        }
+      }));
+
+      // Delay entre lotes para respeitar rate limit
+      if (i + BATCH_SIZE < monitored.length) {
+        await new Promise(r => setTimeout(r, 500));
       }
     }
 

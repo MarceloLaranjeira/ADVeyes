@@ -5,7 +5,7 @@
  * Todas as notificações são assinadas com 🦅 Horus.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bell, CheckCircle, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,16 +16,32 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { NotificacaoHorus } from "@/services/horus/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
 
 export const NotificationPanel = () => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificacaoHorus[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
-  // Carregar notificações (por enquanto do localStorage)
+  // Carregar notificações do localStorage
   useEffect(() => {
     loadNotifications();
   }, []);
+
+  // Receber novas notificações via Supabase Realtime
+  const handleNova = useCallback((n: NotificacaoHorus) => {
+    setNotifications(prev => {
+      if (prev.some(p => p.id === n.id)) return prev;
+      const updated = [n, ...prev];
+      localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
+      return updated;
+    });
+    setUnreadCount(c => c + 1);
+  }, []);
+
+  useNotificacoesRealtime(user?.id, handleNova);
 
   const loadNotifications = () => {
     try {

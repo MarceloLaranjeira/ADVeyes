@@ -5,7 +5,7 @@ import {
   Search, Plus, Pencil, Trash2, Filter, Download,
   DollarSign, ChevronRight, X, Clock, FileText,
   Gavel, ListTodo, TrendingUp, Calendar, CircleDot,
-  CheckCircle2, AlertCircle, Layers,
+  CheckCircle2, AlertCircle, Layers, RefreshCw, Loader2,
 } from "lucide-react";
 import { exportProcessosPDF } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
@@ -452,6 +452,30 @@ const Processos = () => {
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo]     = useState("");
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
+  const [syncOab, setSyncOab]               = useState("");
+  const [syncSeccional, setSyncSeccional]   = useState("");
+  const [syncing, setSyncing]               = useState(false);
+
+  const sincronizarOAB = async () => {
+    if (!syncOab || !syncSeccional) { toast({ title: "Informe OAB e seccional", variant: "destructive" }); return; }
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("oab-sync", {
+        body: { oab_numero: syncOab, seccional: syncSeccional },
+      });
+      if (error) throw error;
+      toast({
+        title: "Sincronização concluída",
+        description: data?.message ?? `${data?.novos ?? 0} novo(s) + ${data?.atualizados ?? 0} atualizado(s)`,
+      });
+      setShowSyncDialog(false);
+      fetchProcessos();
+    } catch (e) {
+      toast({ title: "Erro ao sincronizar", description: (e as Error).message, variant: "destructive" });
+    }
+    setSyncing(false);
+  };
 
   const fetchProcessos = async () => {
     const { data } = await supabase.from("processos").select("*").order("created_at", { ascending: false });
@@ -492,6 +516,9 @@ const Processos = () => {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => exportProcessosPDF(filtered)} className="gap-2">
               <Download className="w-4 h-4" /> PDF
+            </Button>
+            <Button variant="outline" onClick={() => setShowSyncDialog(true)} className="gap-2">
+              <RefreshCw className="w-4 h-4" /> Sincronizar OAB
             </Button>
             <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
               <Plus className="w-4 h-4" /> Novo Processo
@@ -609,6 +636,33 @@ const Processos = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* OAB Sync Dialog */}
+        <Dialog open={showSyncDialog} onOpenChange={o => !o && setShowSyncDialog(false)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>Sincronizar processos via OAB</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              🦅 Horus irá buscar todos os processos vinculados à sua OAB em todos os tribunais da seccional.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="space-y-1.5">
+                <Label>Número OAB</Label>
+                <Input placeholder="Ex: 12345" value={syncOab} onChange={e => setSyncOab(e.target.value.replace(/\D/g, ""))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Seccional</Label>
+                <Input placeholder="Ex: AM" maxLength={2} value={syncSeccional} onChange={e => setSyncSeccional(e.target.value.toUpperCase())} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <Button variant="outline" onClick={() => setShowSyncDialog(false)}>Cancelar</Button>
+              <Button onClick={sincronizarOAB} disabled={syncing} className="gap-2">
+                {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {syncing ? "Sincronizando..." : "Sincronizar"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={!!honorarioProcesso} onOpenChange={o => !o && setHonorarioProcesso(null)}>
           <DialogContent className="max-w-lg">
