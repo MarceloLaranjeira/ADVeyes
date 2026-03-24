@@ -129,7 +129,19 @@ const Login = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:text-primary/80 transition-colors"
+                    onClick={handleForgotPassword}
+                    disabled={loading}
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
