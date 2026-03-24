@@ -54,7 +54,7 @@ type Publicacao = {
   created_at: string;
 };
 
-const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
 const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
 const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
 

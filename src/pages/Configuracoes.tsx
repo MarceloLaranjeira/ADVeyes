@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 
 // ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
 const PERFIL_KEY = "lexia_perfil_advogado";
-const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
 const OAB_SYNC_URL = `${SUPABASE_BASE_URL}/functions/v1/oab-sync`;
 
 const PerfilAdvogadoForm = () => {

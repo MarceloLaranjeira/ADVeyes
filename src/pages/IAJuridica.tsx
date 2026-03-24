@@ -14,7 +14,7 @@ type Msg = { role: "user" | "assistant"; content: string; timestamp?: number };
 type TtsProvider = "browser" | "elevenlabs" | "openai" | "google";
 type VoiceState = "idle" | "listening" | "speaking" | "processing";
 
-const SUPABASE_BASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
+const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
 const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
 
 const modes = [
