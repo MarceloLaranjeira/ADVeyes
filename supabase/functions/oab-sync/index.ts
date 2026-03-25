@@ -6,104 +6,86 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
-if (!DATAJUD_KEY) {
-  console.error("DATAJUD_API_KEY secret not configured");
-}
-
-// Tribunais por seccional — prioriza os mais relevantes para cada estado
-const TRIBUNAIS_POR_SECCIONAL: Record<string, string[]> = {
-  AC: ["tjac", "trf1", "tst", "stj"],
-  AL: ["tjal", "trf5", "tst", "stj"],
-  AM: ["tjam", "trf1", "tst", "stj"],
-  AP: ["tjap", "trf1", "tst", "stj"],
-  BA: ["tjba", "trf1", "tst", "stj"],
-  CE: ["tjce", "trf5", "tst", "stj"],
-  DF: ["tjdft", "trf1", "tst", "stj"],
-  ES: ["tjes", "trf2", "tst", "stj"],
-  GO: ["tjgo", "trf1", "tst", "stj"],
-  MA: ["tjma", "trf1", "tst", "stj"],
-  MG: ["tjmg", "trf1", "tst", "stj"],
-  MS: ["tjms", "trf3", "tst", "stj"],
-  MT: ["tjmt", "trf1", "tst", "stj"],
-  PA: ["tjpa", "trf1", "tst", "stj"],
-  PB: ["tjpb", "trf5", "tst", "stj"],
-  PE: ["tjpe", "trf5", "tst", "stj"],
-  PI: ["tjpi", "trf1", "tst", "stj"],
-  PR: ["tjpr", "trf4", "tst", "stj"],
-  RJ: ["tjrj", "trf2", "tst", "stj"],
-  RN: ["tjrn", "trf5", "tst", "stj"],
-  RO: ["tjro", "trf1", "tst", "stj"],
-  RR: ["tjrr", "trf1", "tst", "stj"],
-  RS: ["tjrs", "trf4", "tst", "stj"],
-  SC: ["tjsc", "trf4", "tst", "stj"],
-  SE: ["tjse", "trf5", "tst", "stj"],
-  SP: ["tjsp", "trf3", "tst", "stj"],
-  TO: ["tjto", "trf1", "tst", "stj"],
+const ESCAVADOR_TOKEN = Deno.env.get("ESCAVADOR_API_TOKEN") ?? "";
+const ESC_HEADERS = {
+  "Authorization": `Bearer ${ESCAVADOR_TOKEN}`,
+  "X-Requested-With": "XMLHttpRequest",
 };
 
-const getEndpoint = (t: string) =>
-  `https://api-publica.datajud.cnj.jus.br/api_publica_${t.toLowerCase()}/_search`;
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-async function fetchWithRetry(endpoint: string, body: object, apiKey: string, maxRetries = 2): Promise<any> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: apiKey },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (resp.status === 429 && attempt < maxRetries) {
-      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-      continue;
+function normalizeCNJ(n: string): string {
+  const d = n.replace(/\D/g, "");
+  if (d.length === 20)
+    return `${d.slice(0,7)}-${d.slice(7,9)}.${d.slice(9,13)}.${d.slice(13,14)}.${d.slice(14,16)}.${d.slice(16)}`;
+  return n.trim();
+}
+
+function detectArea(texto: string): string {
+  const t = texto.toLowerCase();
+  if (t.match(/criminal|penal|tráfico|homicídio/)) return "penal";
+  if (t.match(/trabalhista|emprego|rescisão|clt/)) return "trabalhista";
+  if (t.match(/família|divórcio|alimentos|guarda/)) return "familia";
+  if (t.match(/execução|cumprimento|penhora/)) return "execucao";
+  if (t.match(/administrativo|federal|previdenci/)) return "administrativo";
+  return "civel";
+}
+
+async function escGet(url: string): Promise<Record<string, unknown> | null> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const resp = await fetch(url, {
+        headers: ESC_HEADERS,
+        signal: AbortSignal.timeout(20000),
+      });
+      if (resp.status === 429) { await new Promise(r => setTimeout(r, 2000 * (i + 1))); continue; }
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        console.error(`escavador GET ${url} → ${resp.status}: ${txt.slice(0, 200)}`);
+        return null;
+      }
+      return await resp.json() as Record<string, unknown>;
+    } catch (e) {
+      console.error(`escavador fetch attempt ${i}:`, e);
+      if (i === 2) return null;
+      await new Promise(r => setTimeout(r, 1000));
     }
-    if (!resp.ok) return null;
-    return await resp.json();
   }
   return null;
 }
 
-async function fetchAllPages(endpoint: string, baseBody: object, apiKey: string): Promise<any[]> {
-  const hits: any[] = [];
-  const PAGE_SIZE = 100;
+/** Busca todos os processos de um envolvido pelo nome — segue paginação via links.next */
+async function buscarProcessosPorNome(nome: string): Promise<Record<string, unknown>[]> {
+  const processos: Record<string, unknown>[] = [];
+  let url: string | null =
+    `https://api.escavador.com/api/v2/envolvido/processos?nome=${encodeURIComponent(nome)}&limit=100`;
 
-  for (let from = 0; from < 1000; from += PAGE_SIZE) {
-    const body: any = { ...baseBody, size: PAGE_SIZE, from, sort: [{ dataAjuizamento: { order: "desc" } }] };
-    const data = await fetchWithRetry(endpoint, body, apiKey);
-    const page: any[] = data?.hits?.hits ?? [];
-    hits.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    await new Promise(r => setTimeout(r, 200));
+  let paginas = 0;
+  while (url && paginas < 20) {
+    const data = await escGet(url);
+    if (!data) break;
+
+    const items = (data.items as Record<string, unknown>[]) || [];
+    processos.push(...items);
+    console.log(`escavador v2: página ${++paginas} → ${items.length} processos`);
+
+    // Seguir próxima página via links.next (cursor-based ou page-based)
+    const next = (data.links as Record<string, unknown>)?.next as string | null;
+    url = next && next !== url ? next : null;
+
+    if (items.length < 100) break; // última página
+    await new Promise(r => setTimeout(r, 300));
   }
 
-  return hits;
+  return processos;
 }
 
-function normalizeCNJ(numero: string): string {
-  const d = numero.replace(/\D/g, "");
-  if (d.length === 20) {
-    return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13, 14)}.${d.slice(14, 16)}.${d.slice(16)}`;
-  }
-  return numero.trim();
-}
-
-function detectArea(classes: string[], assuntos: string[]): string {
-  const all = [...classes, ...assuntos].join(" ").toLowerCase();
-  if (all.includes("criminal") || all.includes("penal") || all.includes("tráfico") || all.includes("homicídio")) return "penal";
-  if (all.includes("trabalhista") || all.includes("emprego") || all.includes("rescisão") || all.includes("trt")) return "trabalhista";
-  if (all.includes("família") || all.includes("divórcio") || all.includes("alimentos") || all.includes("guarda")) return "familia";
-  if (all.includes("execução") || all.includes("cumprimento") || all.includes("penhora")) return "execucao";
-  if (all.includes("recurso") || all.includes("apelação") || all.includes("agravo")) return "recurso";
-  if (all.includes("administrativo") || all.includes("federal") || all.includes("previdenc")) return "administrativo";
-  if (all.includes("consumidor") || all.includes("indenização") || all.includes("dano")) return "civel";
-  return "civel";
-}
+// ── main ──────────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Auth via JWT (verify_jwt: false — validamos aqui)
     const authHeader = req.headers.get("Authorization") || "";
     const token = authHeader.replace("Bearer ", "");
 
@@ -115,7 +97,7 @@ serve(async (req) => {
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
     if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+      return new Response(JSON.stringify({ error: "Não autenticado", detail: authErr?.message }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -123,98 +105,76 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const oabNumero: string = (body.oab_numero || "").replace(/\D/g, "");
     const seccional: string = (body.seccional || "AM").toUpperCase();
-    const modo: string = body.modo || "sync"; // "sync" | "monitor-check"
+    const nomeAdvogado: string = (body.nome_advogado || "").trim();
 
     if (!oabNumero) {
       return new Response(JSON.stringify({ error: "Número OAB obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const tribunais = TRIBUNAIS_POR_SECCIONAL[seccional] || TRIBUNAIS_POR_SECCIONAL["AM"];
-    const processosEncontrados: Record<string, any>[] = [];
-    const erros: string[] = [];
-
-    // Busca paralela nos tribunais (máx 4 simultâneos, timeout 8s cada)
-    const MAX_PARALLEL = 4;
-    for (let i = 0; i < tribunais.length; i += MAX_PARALLEL) {
-      const batch = tribunais.slice(i, i + MAX_PARALLEL);
-      const results = await Promise.all(batch.map(async (trib) => {
-        try {
-          const hits = await fetchAllPages(getEndpoint(trib), {
-            query: {
-              query_string: {
-                query: oabNumero,
-                fields: [
-                  "partes.advogados.inscricaoOab",
-                  "partes.advogados.oab",
-                  "advogados.inscricaoOab",
-                  "advogados.oab",
-                  "representantePartes.inscricaoOab",
-                ],
-                lenient: true,
-                default_operator: "AND",
-              },
-            },
-          }, DATAJUD_KEY);
-          return hits.map((h: any) => ({ ...h._source, _tribunal: trib }));
-        } catch {
-          erros.push(trib);
-          return [];
-        }
-      }));
-      processosEncontrados.push(...results.flat());
+    if (!nomeAdvogado) {
+      return new Response(JSON.stringify({
+        sincronizados: 0, novos: 0, atualizados: 0,
+        message: "Preencha o campo Nome completo no perfil e clique em Salvar & Descobrir Processos novamente.",
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!ESCAVADOR_TOKEN) {
+      return new Response(JSON.stringify({ error: "ESCAVADOR_API_TOKEN não configurado" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (processosEncontrados.length === 0) {
+    console.log(`oab-sync: OAB=${oabNumero}/${seccional} nome="${nomeAdvogado}" user=${user.id}`);
+
+    // ── 1. Busca processos pelo nome do advogado ──────────────────────────────
+    const processosRaw = await buscarProcessosPorNome(nomeAdvogado);
+    console.log(`escavador: total bruto = ${processosRaw.length}`);
+
+    if (processosRaw.length === 0) {
       return new Response(JSON.stringify({
-        sincronizados: 0,
-        novos: 0,
-        atualizados: 0,
-        message: `Nenhum processo encontrado para OAB ${oabNumero}/${seccional} nos tribunais consultados.`,
-        tribunais_com_erro: erros,
+        sincronizados: 0, novos: 0, atualizados: 0,
+        message: `Nenhum processo encontrado para "${nomeAdvogado}" no Escavador.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Deduplicar por número CNJ
-    const vistos = new Set<string>();
-    const unicos = processosEncontrados.filter((p) => {
-      const key = (p.numeroProcesso || p.id || "").replace(/\D/g, "");
-      if (!key || vistos.has(key)) return false;
-      vistos.add(key);
-      return true;
-    });
-
-    let novos = 0;
-    let atualizados = 0;
-
-    // Usar service_role para upsert (via supabase service)
+    // ── 2. Salva no banco ─────────────────────────────────────────────────────
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    for (const proc of unicos) {
-      const numero = normalizeCNJ(proc.numeroProcesso || "");
-      if (!numero) continue;
+    let novos = 0, atualizados = 0;
+    const vistos = new Set<string>();
 
-      const tribunal = proc._tribunal?.toUpperCase() || seccional;
-      const classe = proc.classe?.nome || proc.classeProcessual || "";
-      const assuntos = (proc.assuntos || []).map((a: any) => a.nome || a).filter(Boolean);
-      const area = detectArea([classe], assuntos);
-      const ultimoMovimento = proc.movimentos?.[0]?.nome || "";
-      const dataAjuizamento = proc.dataAjuizamento?.slice(0, 10) || null;
+    for (const proc of processosRaw) {
+      const numero = normalizeCNJ((proc.numero_cnj as string) || "");
+      if (!numero || vistos.has(numero)) continue;
+      vistos.add(numero);
 
-      // Dados do cliente (parte contrária ou nome genérico)
-      const partes = proc.partes || [];
-      const parteAtiva = partes.find((p: any) =>
-        (p.tipoParte || "").toLowerCase().includes("ativo") ||
-        (p.tipoParte || "").toLowerCase().includes("autor")
-      );
-      const nomeCliente = parteAtiva?.nome || partes[0]?.nome || "Cliente via OAB";
+      // Tribunal — vem de unidade_origem.tribunal_sigla ou estado_origem
+      const unidade = proc.unidade_origem as Record<string, unknown> | undefined;
+      const tribunal = ((unidade?.tribunal_sigla as string) ||
+        (proc.estado_origem as Record<string, unknown>)?.sigla as string ||
+        "").toUpperCase();
 
-      // Upsert na tabela processos
-      const { error: upsertErr, data: existing } = await supabaseAdmin
+      const vara = (unidade?.nome as string) || "";
+      const dataAj = (proc.data_inicio as string)?.slice(0, 10) || null;
+
+      // Detalhes vêm em fontes[]
+      const fontes = (proc.fontes as Record<string, unknown>[]) || [];
+      const fonte0 = fontes[0] || {};
+      const classe = (fonte0.classe as string) || "";
+      const assunto = (fonte0.assunto as string) ||
+        ((fonte0.assuntos_normalizados as string[]) || []).join(", ") || "";
+      const area = detectArea(classe + " " + assunto);
+
+      // Última movimentação
+      const ultimoMov = (proc.data_ultima_movimentacao as string)
+        ? `Atualizado em ${(proc.data_ultima_movimentacao as string).slice(0, 10)}`
+        : "";
+
+      // Verifica existência
+      const { data: existing } = await supabaseAdmin
         .from("processos")
         .select("id, ultimo_andamento")
         .eq("numero", numero)
@@ -222,70 +182,67 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!existing) {
-        // Novo processo
-        const { error: insertErr } = await supabaseAdmin.from("processos").insert({
+        const { error: insErr } = await supabaseAdmin.from("processos").insert({
           user_id: user.id,
           numero,
           tribunal,
-          vara: proc.orgaoJulgador?.nome || "",
+          vara,
           area,
           status: "ativo",
-          descricao: assuntos.join(", ") || classe,
-          data_ajuizamento: dataAjuizamento,
-          ultimo_andamento: ultimoMovimento,
-          fonte: "datajud_oab_sync",
+          descricao: assunto || classe || "Importado via Escavador",
+          data_ajuizamento: dataAj,
+          ultimo_andamento: ultimoMov,
+          fonte: "escavador_v2",
         });
-        if (!insertErr) novos++;
-      } else if (ultimoMovimento && ultimoMovimento !== existing.ultimo_andamento) {
-        // Processo existente com nova movimentação
+        if (!insErr) novos++;
+        else console.error(`insert erro ${numero}:`, insErr.message);
+      } else if (ultimoMov && ultimoMov !== existing.ultimo_andamento) {
         await supabaseAdmin.from("processos").update({
-          ultimo_andamento: ultimoMovimento,
+          ultimo_andamento: ultimoMov,
           updated_at: new Date().toISOString(),
         }).eq("id", existing.id);
 
-        // Notificação Jarvis
         await supabaseAdmin.from("notificacoes").insert({
           user_id: user.id,
           titulo: `Nova movimentação — ${numero}`,
-          mensagem: `${ultimoMovimento} · ${tribunal}`,
+          mensagem: `${ultimoMov} · ${tribunal}`,
           tipo: "movimentacao",
           lida: false,
         });
         atualizados++;
       }
 
-      // Garantir entrada no monitoramento contínuo
+      // Monitoramento contínuo
       await supabaseAdmin.from("processo_monitoramento").upsert({
         user_id: user.id,
         numero_processo: numero,
         tribunal: tribunal.toLowerCase(),
-        ultimo_movimento: ultimoMovimento,
+        ultimo_movimento: ultimoMov,
         ultima_verificacao: new Date().toISOString(),
         ativo: true,
         oab_origem: `${oabNumero}/${seccional}`,
       }, { onConflict: "user_id,numero_processo" }).catch(() => null);
     }
 
-    // Notificação de conclusão do sync
-    if (novos > 0 || atualizados > 0) {
+    // Notificação de conclusão
+    if (novos > 0) {
       await supabaseAdmin.from("notificacoes").insert({
         user_id: user.id,
-        titulo: "ADVeyes — Sincronização OAB concluída",
-        mensagem: `${novos} processo(s) novo(s) e ${atualizados} atualizado(s) para OAB ${oabNumero}/${seccional}.`,
+        titulo: "🦅 Horus — Descoberta concluída",
+        mensagem: `${novos} processo(s) novo(s) encontrado(s) para ${nomeAdvogado}.`,
         tipo: "sistema",
         lida: false,
       });
     }
 
     return new Response(JSON.stringify({
-      sincronizados: unicos.length,
+      sincronizados: vistos.size,
       novos,
       atualizados,
-      tribunais_consultados: tribunais,
-      tribunais_com_erro: erros,
+      advogado: nomeAdvogado,
       message: novos === 0 && atualizados === 0
         ? "Todos os processos já estão atualizados."
-        : `${novos} novo(s) + ${atualizados} atualizado(s) de ${unicos.length} processos encontrados.`,
+        : `${novos} novo(s) + ${atualizados} atualizado(s) de ${vistos.size} processos encontrados.`,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (e) {

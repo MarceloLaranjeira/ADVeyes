@@ -10,7 +10,7 @@ interface GoogleCalendarEvent {
 // Required scopes: https://www.googleapis.com/auth/calendar
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-const REDIRECT_URI = "https://albertino-law-boost.lovable.app/configuracoes";
+const REDIRECT_URI = `${window.location.origin}/configuracoes`;
 const SCOPES = "https://www.googleapis.com/auth/calendar";
 
 export const googleCalendar = {

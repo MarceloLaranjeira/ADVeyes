@@ -41,7 +41,7 @@ const PerfilAdvogadoForm = () => {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("oab-sync", {
-        body: { oab_numero: oab, seccional },
+        body: { oab_numero: oab, seccional, nome_advogado: form.nome || "" },
       });
 
       if (error) throw error;
@@ -153,6 +153,80 @@ const PerfilAdvogadoForm = () => {
           <span className="text-xs text-muted-foreground">Último sync: {lastSync}</span>
         )}
       </div>
+    </div>
+  );
+};
+
+// ─── Importar Processos Manualmente ─────────────────────────────────────────
+const ImportarProcessos = () => {
+  const { toast } = useToast();
+  const [numeros, setNumeros] = useState("");
+  const [tribunal, setTribunal] = useState("TJAM");
+  const [importing, setImporting] = useState(false);
+
+  const importar = async () => {
+    const lista = numeros
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (lista.length === 0) {
+      toast({ title: "Informe ao menos um número de processo", variant: "destructive" });
+      return;
+    }
+    setImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("dje-discovery", {
+        body: { modo: "import", tribunal, numeros: lista },
+      });
+      if (error) throw error;
+      toast({
+        title: "✅ Processos importados",
+        description: data?.message ?? `${data?.novos ?? 0} processo(s) adicionado(s).`,
+      });
+      setNumeros("");
+    } catch (e) {
+      toast({ title: "Erro ao importar", description: (e as Error).message, variant: "destructive" });
+    }
+    setImporting(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        O TJAM não disponibiliza dados de advogados no DataJud. Acesse{" "}
+        <a
+          href="https://consultasaj.tjam.jus.br"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline"
+        >
+          consultasaj.tjam.jus.br
+        </a>{" "}
+        com seu login, copie os números dos seus processos e cole abaixo.
+      </p>
+      <div className="flex gap-2">
+        <select
+          className="border rounded-md px-2 py-1.5 text-sm bg-background"
+          value={tribunal}
+          onChange={(e) => setTribunal(e.target.value)}
+        >
+          <option value="TJAM">TJAM</option>
+          <option value="STJ">STJ</option>
+          <option value="TRF1">TRF1</option>
+          <option value="TRT11">TRT11</option>
+        </select>
+      </div>
+      <Textarea
+        placeholder={"Cole os números CNJ aqui, um por linha:\n0000000-00.0000.8.04.0001\n0000001-00.0000.8.04.0001"}
+        value={numeros}
+        onChange={(e) => setNumeros(e.target.value)}
+        rows={5}
+        className="font-mono text-xs"
+      />
+      <Button onClick={importar} disabled={importing} className="gap-2">
+        {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        {importing ? "Importando..." : "Importar & Monitorar"}
+      </Button>
     </div>
   );
 };
@@ -426,6 +500,17 @@ const Configuracoes = () => {
                   Usuário: <span className="font-medium text-foreground">{user?.email}</span>
                 </p>
                 <PerfilAdvogadoForm />
+              </CardContent>
+            </Card>
+
+            {/* Importação manual de processos */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <RefreshCw className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">Importar Processos Manualmente</h3>
+                </div>
+                <ImportarProcessos />
               </CardContent>
             </Card>
           </TabsContent>

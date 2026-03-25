@@ -1,4 +1,13 @@
-project_id = "qawfrmuitdiqmdjezyly"
+project_id = "yjfhuuovxhqpcpheivgv"
 
 [functions.process-email-queue]
 verify_jwt = true
+
+[functions.oab-sync]
+verify_jwt = false
+
+[functions.cron-monitoramento]
+verify_jwt = false
+
+[functions.dje-discovery]
+verify_jwt = false
