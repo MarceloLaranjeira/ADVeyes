@@ -54,6 +54,40 @@ async function escGet(url: string): Promise<Record<string, unknown> | null> {
   return null;
 }
 
+/** Resolve nome do advogado via Escavador V1 buscando pelo número OAB/seccional */
+async function resolverNomePorOAB(oab: string, seccional: string): Promise<string | null> {
+  const q = `${oab}/${seccional}`;
+  const data = await escGet(
+    `https://api.escavador.com/api/v1/busca?q=${encodeURIComponent(q)}&qo=en&limit=10`
+  );
+  if (!data) return null;
+
+  const items = (data.items as Record<string, unknown>[]) || [];
+  console.log(`escavador v1 busca OAB "${q}": ${items.length} resultado(s)`);
+
+  // Procura Pessoa com OAB exatamente correspondente
+  for (const item of items) {
+    if ((item.tipo_resultado as string) !== "Pessoa") continue;
+    const oabs = (item.oabs as { numero: string | number; uf: string }[]) || [];
+    const match = oabs.some(
+      o => String(o.numero) === oab && o.uf?.toUpperCase() === seccional
+    );
+    if (match) {
+      console.log(`escavador: nome resolvido = "${item.nome}"`);
+      return item.nome as string;
+    }
+  }
+
+  // Fallback: primeira Pessoa da lista
+  const primeira = items.find(i => (i.tipo_resultado as string) === "Pessoa");
+  if (primeira) {
+    console.log(`escavador: nome (fallback) = "${primeira.nome}"`);
+    return primeira.nome as string;
+  }
+
+  return null;
+}
+
 /** Busca todos os processos de um envolvido pelo nome — segue paginação via links.next */
 async function buscarProcessosPorNome(nome: string): Promise<Record<string, unknown>[]> {
   const processos: Record<string, unknown>[] = [];
@@ -95,28 +129,25 @@ serve(async (req) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Não autenticado", detail: authErr?.message }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const { data: { user } } = await supabase.auth.getUser(token);
 
     const body = await req.json().catch(() => ({}));
     const oabNumero: string = (body.oab_numero || "").replace(/\D/g, "");
     const seccional: string = (body.seccional || "AM").toUpperCase();
     const nomeAdvogado: string = (body.nome_advogado || "").trim();
 
+    // Aceita user_id do body como fallback (sessão expirada ou anon token)
+    const userId: string = user?.id || (body.user_id as string) || "";
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Não autenticado. Faça logout e login novamente." }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!oabNumero) {
       return new Response(JSON.stringify({ error: "Número OAB obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-    if (!nomeAdvogado) {
-      return new Response(JSON.stringify({
-        sincronizados: 0, novos: 0, atualizados: 0,
-        message: "Preencha o campo Nome completo no perfil e clique em Salvar & Descobrir Processos novamente.",
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (!ESCAVADOR_TOKEN) {
       return new Response(JSON.stringify({ error: "ESCAVADOR_API_TOKEN não configurado" }), {
@@ -124,16 +155,32 @@ serve(async (req) => {
       });
     }
 
-    console.log(`oab-sync: OAB=${oabNumero}/${seccional} nome="${nomeAdvogado}" user=${user.id}`);
+    console.log(`oab-sync: OAB=${oabNumero}/${seccional} nome_recebido="${nomeAdvogado}" user=${userId}`);
 
-    // ── 1. Busca processos pelo nome do advogado ──────────────────────────────
-    const processosRaw = await buscarProcessosPorNome(nomeAdvogado);
+    // ── 1. Resolve o nome: usa o enviado pelo frontend ou busca no Escavador V1 ─
+    let nomeParaBusca = nomeAdvogado;
+    if (!nomeParaBusca) {
+      console.log("oab-sync: nome vazio, resolvendo via Escavador V1...");
+      nomeParaBusca = await resolverNomePorOAB(oabNumero, seccional) ?? "";
+    }
+
+    if (!nomeParaBusca) {
+      return new Response(JSON.stringify({
+        sincronizados: 0, novos: 0, atualizados: 0,
+        message: `Advogado OAB ${oabNumero}/${seccional} não encontrado no Escavador. Verifique o número e a seccional.`,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    console.log(`oab-sync: buscando processos para "${nomeParaBusca}"`);
+
+    // ── 2. Busca processos pelo nome via Escavador V2 ─────────────────────────
+    const processosRaw = await buscarProcessosPorNome(nomeParaBusca);
     console.log(`escavador: total bruto = ${processosRaw.length}`);
 
     if (processosRaw.length === 0) {
       return new Response(JSON.stringify({
         sincronizados: 0, novos: 0, atualizados: 0,
-        message: `Nenhum processo encontrado para "${nomeAdvogado}" no Escavador.`,
+        message: `Nenhum processo encontrado para "${nomeParaBusca}" no Escavador.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -178,12 +225,12 @@ serve(async (req) => {
         .from("processos")
         .select("id, ultimo_andamento")
         .eq("numero", numero)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .maybeSingle();
 
       if (!existing) {
         const { error: insErr } = await supabaseAdmin.from("processos").insert({
-          user_id: user.id,
+          user_id: userId,
           numero,
           tribunal,
           vara,
@@ -203,7 +250,7 @@ serve(async (req) => {
         }).eq("id", existing.id);
 
         await supabaseAdmin.from("notificacoes").insert({
-          user_id: user.id,
+          user_id: userId,
           titulo: `Nova movimentação — ${numero}`,
           mensagem: `${ultimoMov} · ${tribunal}`,
           tipo: "movimentacao",
@@ -214,7 +261,7 @@ serve(async (req) => {
 
       // Monitoramento contínuo
       await supabaseAdmin.from("processo_monitoramento").upsert({
-        user_id: user.id,
+        user_id: userId,
         numero_processo: numero,
         tribunal: tribunal.toLowerCase(),
         ultimo_movimento: ultimoMov,
@@ -227,9 +274,9 @@ serve(async (req) => {
     // Notificação de conclusão
     if (novos > 0) {
       await supabaseAdmin.from("notificacoes").insert({
-        user_id: user.id,
+        user_id: userId,
         titulo: "🦅 Horus — Descoberta concluída",
-        mensagem: `${novos} processo(s) novo(s) encontrado(s) para ${nomeAdvogado}.`,
+        mensagem: `${novos} processo(s) novo(s) encontrado(s) para ${nomeParaBusca}.`,
         tipo: "sistema",
         lida: false,
       });

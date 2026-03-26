@@ -31,6 +31,7 @@ const OAB_SYNC_URL = `${SUPABASE_BASE_URL}/functions/v1/oab-sync`;
 
 const PerfilAdvogadoForm = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [form, setForm] = useState(() => {
     try { return JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}"); } catch { return {}; }
   });
@@ -41,7 +42,12 @@ const PerfilAdvogadoForm = () => {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("oab-sync", {
-        body: { oab_numero: oab, seccional, nome_advogado: form.nome || "" },
+        body: {
+          oab_numero: oab,
+          seccional,
+          nome_advogado: form.nome || "",
+          user_id: user?.id || "",
+        },
       });
 
       if (error) throw error;
