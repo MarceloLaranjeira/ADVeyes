@@ -54,43 +54,40 @@ async function escGet(url: string): Promise<Record<string, unknown> | null> {
   return null;
 }
 
-/** Resolve nome do advogado via Escavador V1 buscando pelo número OAB/seccional */
-async function resolverNomePorOAB(oab: string, seccional: string): Promise<string | null> {
-  const q = `${oab}/${seccional}`;
-  const data = await escGet(
-    `https://api.escavador.com/api/v1/busca?q=${encodeURIComponent(q)}&qo=en&limit=10`
-  );
-  if (!data) return null;
+/** Busca todos os processos de um advogado pela OAB usando a API V2 */
+async function buscarProcessosPorOAB(oab: string, seccional: string): Promise<Record<string, unknown>[]> {
+  const processos: Record<string, unknown>[] = [];
+  
+  // Endpoint correto da V2 para busca por OAB
+  let url: string | null =
+    `https://api.escavador.com/api/v2/advogado/processos?oab_numero=${encodeURIComponent(oab)}&oab_estado=${encodeURIComponent(seccional)}&limit=100`;
 
-  const items = (data.items as Record<string, unknown>[]) || [];
-  console.log(`escavador v1 busca OAB "${q}": ${items.length} resultado(s)`);
+  let paginas = 0;
+  while (url && paginas < 20) {
+    const data = await escGet(url);
+    if (!data) break;
 
-  // Procura Pessoa com OAB exatamente correspondente
-  for (const item of items) {
-    if ((item.tipo_resultado as string) !== "Pessoa") continue;
-    const oabs = (item.oabs as { numero: string | number; uf: string }[]) || [];
-    const match = oabs.some(
-      o => String(o.numero) === oab && o.uf?.toUpperCase() === seccional
-    );
-    if (match) {
-      console.log(`escavador: nome resolvido = "${item.nome}"`);
-      return item.nome as string;
-    }
+    // A resposta tem os processos dentro de data.items
+    const items = (data.items as Record<string, unknown>[]) || [];
+    processos.push(...items);
+    console.log(`escavador v2 oab: página ${++paginas} → ${items.length} processos`);
+
+    // Seguir próxima página via links.next
+    const next = (data.links as Record<string, unknown>)?.next as string | null;
+    url = next && next !== url ? next : null;
+
+    if (items.length < 100) break; // última página
+    await new Promise(r => setTimeout(r, 300));
   }
 
-  // Fallback: primeira Pessoa da lista
-  const primeira = items.find(i => (i.tipo_resultado as string) === "Pessoa");
-  if (primeira) {
-    console.log(`escavador: nome (fallback) = "${primeira.nome}"`);
-    return primeira.nome as string;
-  }
-
-  return null;
+  return processos;
 }
 
-/** Busca todos os processos de um envolvido pelo nome — segue paginação via links.next */
+/** Busca todos os processos de um envolvido pelo nome usando a API V2 */
 async function buscarProcessosPorNome(nome: string): Promise<Record<string, unknown>[]> {
   const processos: Record<string, unknown>[] = [];
+  
+  // Endpoint correto da V2 para busca por nome
   let url: string | null =
     `https://api.escavador.com/api/v2/envolvido/processos?nome=${encodeURIComponent(nome)}&limit=100`;
 
@@ -101,9 +98,9 @@ async function buscarProcessosPorNome(nome: string): Promise<Record<string, unkn
 
     const items = (data.items as Record<string, unknown>[]) || [];
     processos.push(...items);
-    console.log(`escavador v2: página ${++paginas} → ${items.length} processos`);
+    console.log(`escavador v2 nome: página ${++paginas} → ${items.length} processos`);
 
-    // Seguir próxima página via links.next (cursor-based ou page-based)
+    // Seguir próxima página via links.next
     const next = (data.links as Record<string, unknown>)?.next as string | null;
     url = next && next !== url ? next : null;
 
@@ -157,34 +154,25 @@ serve(async (req) => {
 
     console.log(`oab-sync: OAB=${oabNumero}/${seccional} nome_recebido="${nomeAdvogado}" user=${userId}`);
 
-    // ── 1. Resolve o nome: usa o enviado pelo frontend ou busca no Escavador V1 ─
-    let nomeParaBusca = nomeAdvogado;
-    if (!nomeParaBusca) {
-      console.log("oab-sync: nome vazio, resolvendo via Escavador V1...");
-      nomeParaBusca = await resolverNomePorOAB(oabNumero, seccional) ?? "";
+    // ── 1. Tenta buscar processos diretamente pela OAB na API V2 ───────────────
+    let processosRaw = await buscarProcessosPorOAB(oabNumero, seccional);
+    console.log(`escavador por OAB: total bruto = ${processosRaw.length}`);
+
+    // ── 2. Fallback: Se não encontrou por OAB, tenta por nome ─────────────────
+    if (processosRaw.length === 0 && nomeAdvogado) {
+      console.log(`oab-sync: Nenhum processo encontrado por OAB. Tentando por nome: "${nomeAdvogado}"`);
+      processosRaw = await buscarProcessosPorNome(nomeAdvogado);
+      console.log(`escavador por nome: total bruto = ${processosRaw.length}`);
     }
-
-    if (!nomeParaBusca) {
-      return new Response(JSON.stringify({
-        sincronizados: 0, novos: 0, atualizados: 0,
-        message: `Advogado OAB ${oabNumero}/${seccional} não encontrado no Escavador. Verifique o número e a seccional.`,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    console.log(`oab-sync: buscando processos para "${nomeParaBusca}"`);
-
-    // ── 2. Busca processos pelo nome via Escavador V2 ─────────────────────────
-    const processosRaw = await buscarProcessosPorNome(nomeParaBusca);
-    console.log(`escavador: total bruto = ${processosRaw.length}`);
 
     if (processosRaw.length === 0) {
       return new Response(JSON.stringify({
         sincronizados: 0, novos: 0, atualizados: 0,
-        message: `Nenhum processo encontrado para "${nomeParaBusca}" no Escavador.`,
+        message: `Nenhum processo encontrado para OAB ${oabNumero}/${seccional}${nomeAdvogado ? ` ou nome "${nomeAdvogado}"` : ""} no Escavador.`,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ── 2. Salva no banco ─────────────────────────────────────────────────────
+    // ── 3. Salva no banco ─────────────────────────────────────────────────────
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -276,7 +264,7 @@ serve(async (req) => {
       await supabaseAdmin.from("notificacoes").insert({
         user_id: userId,
         titulo: "🦅 Horus — Descoberta concluída",
-        mensagem: `${novos} processo(s) novo(s) encontrado(s) para ${nomeParaBusca}.`,
+        mensagem: `${novos} processo(s) novo(s) encontrado(s).`,
         tipo: "sistema",
         lida: false,
       });
