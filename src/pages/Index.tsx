@@ -226,7 +226,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Processos</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{stats.processos}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{stats.processos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Ativos</p>
               </div>
               <div className="p-2 rounded-lg bg-primary/8"><IconProcessos size={20} /></div>
@@ -236,7 +236,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Clientes</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{stats.clientes}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{stats.clientes}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Cadastrados</p>
               </div>
               <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30"><IconClientes size={20} /></div>
@@ -246,7 +246,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Leads</p>
-                <p className="text-2xl font-bold mt-1 font-serif text-purple-600">{leadsNovos}</p>
+                <p className="text-3xl font-bold mt-1 leading-none text-purple-600" style={{fontFamily:"'Rajdhani',sans-serif"}}>{leadsNovos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Novos</p>
               </div>
               <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconLeads size={20} /></div>
@@ -256,7 +256,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Horas/Mês</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{horasMes.toFixed(0)}h</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{horasMes.toFixed(0)}h</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Trabalhadas</p>
               </div>
               <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/30"><IconHoras size={20} /></div>
@@ -266,7 +266,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prazos</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{prazos.length}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{prazos.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">7 dias</p>
               </div>
               <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30"><IconAgenda size={20} /></div>
@@ -276,7 +276,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Urgentes</p>
-                <p className="text-2xl font-bold mt-1 font-serif text-destructive">{prazosUrgentes}</p>
+                <p className="text-3xl font-bold mt-1 leading-none text-destructive" style={{fontFamily:"'Rajdhani',sans-serif"}}>{prazosUrgentes}</p>
                 <p className="text-[10px] text-destructive/70 mt-0.5">Atenção!</p>
               </div>
               <div className="p-2 rounded-lg bg-destructive/8"><IconAlerta size={20} /></div>
@@ -286,7 +286,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Audiências</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{audienciasProximas.length}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{audienciasProximas.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Esta semana</p>
               </div>
               <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconAudiencias size={20} /></div>
@@ -296,7 +296,7 @@ const Index = () => {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Hoje</p>
-                <p className="text-2xl font-bold mt-1 font-serif">{tarefasHoje}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Rajdhani',sans-serif"}}>{tarefasHoje}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Tarefas</p>
               </div>
               <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/30"><CheckCircle2 className="w-4 h-4 text-green-600" /></div>
@@ -313,7 +313,7 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Recebido</p>
-                <p className="font-bold text-green-600">{formatCurrency(financeiro.recebido)}</p>
+                <p className="text-lg font-bold text-green-600 leading-tight" style={{fontFamily:"'Rajdhani',sans-serif"}}>{formatCurrency(financeiro.recebido)}</p>
               </div>
             </CardContent>
           </Card>
@@ -324,7 +324,7 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">A Receber</p>
-                <p className="font-bold text-yellow-600">{formatCurrency(financeiro.pendente)}</p>
+                <p className="text-lg font-bold text-yellow-600 leading-tight" style={{fontFamily:"'Rajdhani',sans-serif"}}>{formatCurrency(financeiro.pendente)}</p>
               </div>
             </CardContent>
           </Card>
@@ -335,7 +335,7 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Atrasado</p>
-                <p className="font-bold text-destructive">{formatCurrency(financeiro.atrasado)}</p>
+                <p className="text-lg font-bold text-destructive leading-tight" style={{fontFamily:"'Rajdhani',sans-serif"}}>{formatCurrency(financeiro.atrasado)}</p>
               </div>
             </CardContent>
           </Card>
@@ -346,7 +346,7 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Resultado Líquido</p>
-                <p className={`font-bold ${resultadoLiquido >= 0 ? "text-green-600" : "text-destructive"}`}>{formatCurrency(resultadoLiquido)}</p>
+                <p className={`text-lg font-bold leading-tight ${resultadoLiquido >= 0 ? "text-green-600" : "text-destructive"}`} style={{fontFamily:"'Rajdhani',sans-serif"}}>{formatCurrency(resultadoLiquido)}</p>
               </div>
             </CardContent>
           </Card>
