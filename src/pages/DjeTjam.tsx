@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
-const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
+const DJE_BUSCA_URL = `${SUPABASE_BASE_URL}/functions/v1/dje-tjam-busca`;
 
 type PublicacaoDJE = {
   id: string;
@@ -77,23 +77,21 @@ const DjeTjam = () => {
     setResultados([]);
 
     try {
-      const token = localStorage.getItem("sb-yjfhuuovxhqpcpheivgv-auth-token");
-      const parsedToken = token ? JSON.parse(token) : null;
-      const accessToken = parsedToken?.access_token;
+      // Obtém token de sessão do Supabase
+      const tokenRaw = localStorage.getItem("sb-yjfhuuovxhqpcpheivgv-auth-token");
+      const accessToken = tokenRaw ? JSON.parse(tokenRaw)?.access_token : null;
 
-      const resp = await fetch(CAPTURAR_URL, {
+      const resp = await fetch(DJE_BUSCA_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          acao: "buscar-dje-tjam",
           dataInicio,
           dataFim,
           palavraChave: palavraChave || undefined,
           oab: numeroOAB || undefined,
-          tribunal: "TJAM",
         }),
       });
 
@@ -102,24 +100,33 @@ const DjeTjam = () => {
         const lista: PublicacaoDJE[] = data.publicacoes ?? [];
         setResultados(lista);
         toast({
-          title: lista.length > 0 ? `${lista.length} publicação(ões) encontrada(s)` : "Nenhuma publicação encontrada",
-          description: lista.length === 0 ? "Tente ampliar o período ou alterar a busca." : undefined,
+          title: lista.length > 0
+            ? `${lista.length} publicação(ões) encontrada(s) no DJE TJAM`
+            : "Nenhuma publicação encontrada",
+          description: lista.length === 0
+            ? "Tente ampliar o período ou usar outros termos."
+            : `Fonte: ${data.fonte ?? "DJE TJAM"}`,
         });
       } else {
-        // Fallback: mostra resultado simulado para demonstração
+        const err = await resp.json().catch(() => ({}));
+        console.error("[DJE TJAM]", err);
+        // Fallback mock para demonstração
         const mock = gerarMockResultados(palavraChave || numeroOAB);
         setResultados(mock);
         toast({
-          title: `${mock.length} publicação(ões) encontrada(s) (demo)`,
-          description: "Conecte a Edge Function para dados reais do DJE TJAM.",
+          title: `Modo demonstração — ${mock.length} publicação(ões)`,
+          description: err.error ?? "A Edge Function retornou um erro. Verifique o deploy no Supabase.",
+          variant: "destructive",
         });
       }
-    } catch {
+    } catch (e) {
+      console.error("[DJE TJAM] fetch error:", e);
       const mock = gerarMockResultados(palavraChave || numeroOAB);
       setResultados(mock);
       toast({
-        title: `${mock.length} publicação(ões) (demo)`,
-        description: "Configure a Edge Function capturar-publicacoes para dados reais.",
+        title: "Modo demonstração",
+        description: "Não foi possível conectar à Edge Function dje-tjam-busca. Faça o deploy no Supabase.",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);

@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.dje-discovery]
 verify_jwt = false
+
+[functions.dje-tjam-busca]
+verify_jwt = false
