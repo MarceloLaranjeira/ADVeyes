@@ -35,6 +35,7 @@ const navSections = [
       { label: "Tarefas", icon: IconTarefas, path: "/tarefas" },
       { label: "Audiências", icon: IconAudiencias, path: "/audiencias" },
       { label: "Publicações", icon: IconPublicacoes, path: "/publicacoes" },
+      { label: "DJE — TJAM", icon: IconPublicacoes, path: "/dje-tjam" },
     ],
   },
   {

@@ -13,8 +13,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['"Palatino Linotype"', 'Palatino', '"Book Antiqua"', 'Georgia', 'serif'],
-        sans: ['Source Sans 3', 'system-ui', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
         rajdhani: ['Rajdhani', 'sans-serif'],
       },
       colors: {
