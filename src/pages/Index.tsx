@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
+import { TrialBanner } from "@/components/TrialBanner";
 import { ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2 } from "lucide-react";
 import {
   IconProcessos, IconClientes, IconLeads, IconAgenda, IconAudiencias,
@@ -168,6 +169,7 @@ const Index = () => {
   return (
     <AppLayout>
       <div className="animate-fade-in">
+        <TrialBanner />
         {/* Header - Intelligent Greeting */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
