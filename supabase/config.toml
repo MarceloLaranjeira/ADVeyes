@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.dje-tjam-busca]
 verify_jwt = false
+
+[functions.busca-oab]
+verify_jwt = false

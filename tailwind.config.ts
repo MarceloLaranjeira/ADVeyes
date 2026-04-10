@@ -13,8 +13,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
-        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        serif: ['Rajdhani', 'sans-serif'],
+        sans: ['Rajdhani', 'sans-serif'],
         rajdhani: ['Rajdhani', 'sans-serif'],
       },
       colors: {

@@ -57,6 +57,7 @@ type Publicacao = {
 const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
 const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
 const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
+const BUSCA_OAB_URL = `${SUPABASE_BASE_URL}/functions/v1/busca-oab`;
 
 const tipoLabels: Record<string, { label: string; color: string }> = {
   intimacao: { label: "Intimação", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
@@ -198,13 +199,11 @@ const Publicacoes = () => {
     setBuscaFeita(false);
     setBuscaResultados([]);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
-      const resp = await fetch(CAPTURAR_URL, {
+      // Usa a Edge Function busca-oab (verify_jwt=false — sem necessidade de token)
+      const resp = await fetch(BUSCA_OAB_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ busca: { tipo: t, valor: v } }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: t, valor: v }),
       });
       const result = await resp.json();
       if (!resp.ok) {
@@ -215,6 +214,8 @@ const Publicacoes = () => {
       setBuscaFeita(true);
       if ((result.resultados || []).length === 0) {
         toast({ title: "Nenhum processo encontrado", description: `Sem resultados para ${t.toUpperCase()}: ${v}` });
+      } else {
+        toast({ title: `${result.total} processo(s) encontrado(s)`, description: `Fonte: ${result.fonte || "DataJud/CNJ"}` });
       }
     } catch {
       toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor.", variant: "destructive" });
