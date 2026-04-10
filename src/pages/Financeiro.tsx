@@ -142,9 +142,14 @@ const Financeiro = () => {
     }
     setLoading(true);
     const payload = { ...form, valor: parseFloat(form.valor), user_id: user!.id, data_vencimento: form.data_vencimento || null };
+    let insertedId: string | null = null;
     const { error } = editItem
       ? await supabase.from("financeiro").update(payload).eq("id", editItem.id)
-      : await supabase.from("financeiro").insert(payload);
+      : await (async () => {
+          const { data, error } = await supabase.from("financeiro").insert(payload).select("id").single();
+          if (data?.id) insertedId = data.id;
+          return { error };
+        })();
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
     else {
       if (gcalConnected && form.data_vencimento) {
@@ -163,18 +168,8 @@ const Financeiro = () => {
             colorId: "2",
             allDay: true,
           });
-          if (gcalResult?.id) {
-            const { data: inserted } = await supabase
-              .from("financeiro")
-              .select("id")
-              .eq("user_id", user!.id)
-              .eq("descricao", form.descricao)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .single();
-            if (inserted?.id) {
-              await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
-            }
+          if (gcalResult?.id && insertedId) {
+            await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", insertedId);
           }
         }
       }
