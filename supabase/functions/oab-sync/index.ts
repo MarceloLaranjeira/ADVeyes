@@ -17,7 +17,7 @@ const corsHeaders = {
 // Chave pública DataJud/CNJ — gratuita, sem limite de saldo
 const DATAJUD_KEY =
   Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendFbXNpT1NiU3A1";
+  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
 // Tribunais por estado OAB
 const OAB_ESTADO_TRIBUNAIS: Record<string, string[]> = {

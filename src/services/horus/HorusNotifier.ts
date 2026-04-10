@@ -169,7 +169,7 @@ export class HorusNotifier {
       audiencias: number;
     }
   ): Promise<void> {
-    const mensagem = `☀️ Bom dia, Dr(a). ${nomeAdvogado}! Horus preparou seu resumo:
+    const mensagem = `Bom dia, ${nomeAdvogado}! Horus preparou seu resumo:
 
 Hoje você tem:
 • ${dados.prazosHoje} prazo${dados.prazosHoje !== 1 ? "s" : ""} vencendo

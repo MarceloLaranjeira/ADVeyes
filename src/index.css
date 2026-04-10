@@ -2,7 +2,7 @@
   display: none !important;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap');
+/* Microsoft Sans Serif is a system font — no import needed */
 
 @tailwind base;
 @tailwind components;
@@ -169,7 +169,8 @@
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground font-sans antialiased; }
-  h1, h2, h3, h4 { font-family: 'Rajdhani', sans-serif; letter-spacing: 0.02em; font-weight: 700; }
+  * { font-family: 'Microsoft Sans Serif', sans-serif; }
+  h1, h2, h3, h4 { font-family: 'Microsoft Sans Serif', sans-serif; letter-spacing: 0.02em; font-weight: 700; }
 }
 
 @layer components {

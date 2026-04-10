@@ -13,9 +13,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['Rajdhani', 'sans-serif'],
-        sans: ['Rajdhani', 'sans-serif'],
-        rajdhani: ['Rajdhani', 'sans-serif'],
+        serif: ['Microsoft Sans Serif', 'sans-serif'],
+        sans: ['Microsoft Sans Serif', 'sans-serif'],
+        rajdhani: ['Microsoft Sans Serif', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

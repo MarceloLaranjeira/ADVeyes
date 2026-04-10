@@ -15,7 +15,7 @@ export const StatCard = ({ title, value, subtitle, icon: Icon, trend, variant = 
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">{title}</p>
-          <p className="text-3xl font-bold mt-0.5 leading-none" style={{ fontFamily: "'Rajdhani', sans-serif", letterSpacing: '-0.01em' }}>
+          <p className="text-3xl font-bold mt-0.5 leading-none" style={{ fontFamily: "'Microsoft Sans Serif', sans-serif", letterSpacing: '-0.01em' }}>
             {value}
           </p>
           {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
