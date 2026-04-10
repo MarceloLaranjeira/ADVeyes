@@ -16,6 +16,7 @@ import {
   CheckCircle2, Receipt, Wallet, Edit, Trash2,
 } from "lucide-react";
 import { exportFinanceiroPDF } from "@/lib/pdf-export";
+import { googleCalendar } from "@/lib/google-calendar";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Legend, PieChart, Pie, Cell, AreaChart, Area,
@@ -38,6 +39,7 @@ const Financeiro = () => {
   const [showMetaForm, setShowMetaForm] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
   const [filterTipo, setFilterTipo] = useState("Todos");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -144,7 +146,44 @@ const Financeiro = () => {
       ? await supabase.from("financeiro").update(payload).eq("id", editItem.id)
       : await supabase.from("financeiro").insert(payload);
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-    else { toast({ title: "Lançamento registrado!" }); setForm({ tipo: "honorario", descricao: "", valor: "", data_vencimento: "", status: "pendente" }); setShowForm(false); setEditItem(null); fetchData(); }
+    else {
+      if (gcalConnected && form.data_vencimento) {
+        const titulo = `Vencimento — ${form.descricao} R$ ${parseFloat(form.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${form.status})`;
+        if (editItem?.google_event_id) {
+          await googleCalendar.updateEvent(editItem.google_event_id as string, {
+            titulo,
+            data_inicio: form.data_vencimento,
+            colorId: "2",
+            allDay: true,
+          });
+        } else {
+          const gcalResult = await googleCalendar.createEvent({
+            titulo,
+            data_inicio: form.data_vencimento,
+            colorId: "2",
+            allDay: true,
+          });
+          if (gcalResult?.id) {
+            const { data: inserted } = await supabase
+              .from("financeiro")
+              .select("id")
+              .eq("user_id", user!.id)
+              .eq("descricao", form.descricao)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single();
+            if (inserted?.id) {
+              await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
+            }
+          }
+        }
+      }
+      toast({ title: "Lançamento registrado!" });
+      setForm({ tipo: "honorario", descricao: "", valor: "", data_vencimento: "", status: "pendente" });
+      setShowForm(false);
+      setEditItem(null);
+      fetchData();
+    }
     setLoading(false);
   };
 
@@ -184,6 +223,10 @@ const Financeiro = () => {
 
   const deleteItem = async (id: string) => {
     if (!confirm("Excluir este lançamento?")) return;
+    const registro = registros.find(r => r.id === id);
+    if (gcalConnected && registro?.google_event_id) {
+      await googleCalendar.deleteEvent(registro.google_event_id as string);
+    }
     await supabase.from("financeiro").delete().eq("id", id);
     fetchData();
   };
