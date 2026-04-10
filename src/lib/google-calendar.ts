@@ -1,4 +1,7 @@
 // Google Calendar Integration
+// Setup: Create OAuth 2.0 credentials at console.cloud.google.com
+// Required scopes: https://www.googleapis.com/auth/calendar
+
 interface GoogleCalendarEvent {
   id?: string;
   summary?: string;
@@ -6,15 +9,22 @@ interface GoogleCalendarEvent {
   end?: { dateTime?: string; date?: string };
   htmlLink?: string;
 }
-// Setup: Create OAuth 2.0 credentials at console.cloud.google.com
-// Required scopes: https://www.googleapis.com/auth/calendar
+
+interface CreateEventInput {
+  titulo: string;
+  descricao?: string;
+  data_inicio: string;   // ISO string ou "YYYY-MM-DD"
+  local?: string;
+  colorId?: string;      // "2"=verde, "7"=petróleo, "9"=azul, "11"=vermelho
+  allDay?: boolean;      // true = evento de dia inteiro (prazo/vencimento)
+}
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const REDIRECT_URI = `${window.location.origin}/configuracoes`;
 const SCOPES = "https://www.googleapis.com/auth/calendar";
+const GCAL_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
 export const googleCalendar = {
-  /** Open Google OAuth consent screen */
   authorize() {
     if (!GOOGLE_CLIENT_ID) {
       console.warn("VITE_GOOGLE_CLIENT_ID not set");
@@ -30,7 +40,6 @@ export const googleCalendar = {
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   },
 
-  /** Extract access token from URL hash after redirect */
   extractToken(): string | null {
     const hash = window.location.hash.slice(1);
     const params = new URLSearchParams(hash);
@@ -42,7 +51,6 @@ export const googleCalendar = {
         const expiry = Date.now() + parseInt(expiresIn) * 1000;
         localStorage.setItem("google_calendar_expiry", expiry.toString());
       }
-      // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     return token;
@@ -69,44 +77,95 @@ export const googleCalendar = {
     localStorage.removeItem("google_calendar_expiry");
   },
 
-  /** Sync a local event to Google Calendar */
-  async createEvent(evento: {
-    titulo: string;
-    descricao?: string;
-    data_inicio: string;
-    local?: string;
-  }): Promise<{ id: string } | null> {
+  async createEvent(input: CreateEventInput): Promise<{ id: string } | null> {
     const token = this.getToken();
     if (!token) return null;
 
-    const start = new Date(evento.data_inicio);
-    const end = new Date(start.getTime() + 60 * 60 * 1000); // +1h default
+    let startField: { dateTime?: string; date?: string; timeZone?: string };
+    let endField: { dateTime?: string; date?: string; timeZone?: string };
 
-    const body = {
-      summary: evento.titulo,
-      description: evento.descricao || "",
-      location: evento.local || "",
-      start: { dateTime: start.toISOString(), timeZone: "America/Manaus" },
-      end: { dateTime: end.toISOString(), timeZone: "America/Manaus" },
+    if (input.allDay) {
+      const dateStr = input.data_inicio.slice(0, 10);
+      const nextDay = new Date(dateStr);
+      nextDay.setDate(nextDay.getDate() + 1);
+      startField = { date: dateStr };
+      endField = { date: nextDay.toISOString().slice(0, 10) };
+    } else {
+      const start = new Date(input.data_inicio);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      startField = { dateTime: start.toISOString(), timeZone: "America/Manaus" };
+      endField = { dateTime: end.toISOString(), timeZone: "America/Manaus" };
+    }
+
+    const body: Record<string, unknown> = {
+      summary: input.titulo,
+      description: input.descricao || "",
+      location: input.local || "",
+      start: startField,
+      end: endField,
     };
+    if (input.colorId) body.colorId = input.colorId;
 
-    const res = await fetch(
-      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const res = await fetch(GCAL_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
     if (!res.ok) return null;
     return res.json();
   },
 
-  /** List upcoming events from Google Calendar */
+  async updateEvent(googleEventId: string, input: CreateEventInput): Promise<boolean> {
+    const token = this.getToken();
+    if (!token) return false;
+
+    let startField: { dateTime?: string; date?: string; timeZone?: string };
+    let endField: { dateTime?: string; date?: string; timeZone?: string };
+
+    if (input.allDay) {
+      const dateStr = input.data_inicio.slice(0, 10);
+      const nextDay = new Date(dateStr);
+      nextDay.setDate(nextDay.getDate() + 1);
+      startField = { date: dateStr };
+      endField = { date: nextDay.toISOString().slice(0, 10) };
+    } else {
+      const start = new Date(input.data_inicio);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      startField = { dateTime: start.toISOString(), timeZone: "America/Manaus" };
+      endField = { dateTime: end.toISOString(), timeZone: "America/Manaus" };
+    }
+
+    const body: Record<string, unknown> = {
+      summary: input.titulo,
+      description: input.descricao || "",
+      location: input.local || "",
+      start: startField,
+      end: endField,
+    };
+    if (input.colorId) body.colorId = input.colorId;
+
+    const res = await fetch(`${GCAL_URL}/${googleEventId}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return res.ok;
+  },
+
+  async deleteEvent(googleEventId: string): Promise<boolean> {
+    const token = this.getToken();
+    if (!token) return false;
+
+    const res = await fetch(`${GCAL_URL}/${googleEventId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    return res.status === 204;
+  },
+
   async listEvents(maxResults = 20): Promise<GoogleCalendarEvent[]> {
     const token = this.getToken();
     if (!token) return [];
@@ -118,26 +177,12 @@ export const googleCalendar = {
       timeMin: new Date().toISOString(),
     });
 
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const res = await fetch(`${GCAL_URL}?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!res.ok) return [];
     const data = await res.json();
     return data.items || [];
-  },
-
-  /** Delete an event from Google Calendar */
-  async deleteEvent(googleEventId: string): Promise<boolean> {
-    const token = this.getToken();
-    if (!token) return false;
-
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    return res.status === 204;
   },
 };
