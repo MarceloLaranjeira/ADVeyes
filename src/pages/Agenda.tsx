@@ -180,6 +180,8 @@ const Agenda = () => {
   const [editData, setEditData]   = useState<Evento | null>(null);
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
+  const [showGcalDisconnectDialog, setShowGcalDisconnectDialog] = useState(false);
+  const [gcalDisconnecting, setGcalDisconnecting] = useState(false);
   const [form, setForm] = useState({
     titulo: "", descricao: "", tipo: "reunião", data_inicio: "", hora_inicio: "09:00", local: "",
   });
@@ -201,18 +203,83 @@ const Agenda = () => {
     }
     googleCalendar.authorize();
   };
-  const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
+  const handleGcalDisconnect = async (deletarEventos: boolean) => {
+    setGcalDisconnecting(true);
+    if (deletarEventos) {
+      for (const e of eventos.filter(ev => ev.google_event_id)) {
+        await googleCalendar.deleteEvent(e.google_event_id!);
+        await supabase.from("eventos").update({ google_event_id: null }).eq("id", e.id);
+      }
+      for (const a of audiencias.filter(au => au.google_event_id)) {
+        await googleCalendar.deleteEvent(a.google_event_id!);
+        await supabase.from("audiencias").update({ google_event_id: null }).eq("id", a.id);
+      }
+      for (const t of tarefas.filter(ta => ta.google_event_id)) {
+        await googleCalendar.deleteEvent(t.google_event_id!);
+        await supabase.from("tarefas").update({ google_event_id: null }).eq("id", t.id);
+      }
+    }
+    googleCalendar.disconnect();
+    setGcalConnected(false);
+    setShowGcalDisconnectDialog(false);
+    setGcalDisconnecting(false);
+    toast({ title: "Google Calendar desconectado" });
+    fetchAll();
+  };
 
   const syncAllToGcal = async () => {
     if (!gcalConnected) return;
     setGcalSyncing(true);
     let ok = 0;
-    for (const e of eventos) {
-      const result = await googleCalendar.createEvent({ titulo: e.titulo, descricao: e.descricao, data_inicio: e.data_inicio, local: e.local });
-      if (result) ok++;
+
+    // Eventos sem google_event_id
+    for (const e of eventos.filter(ev => !ev.google_event_id)) {
+      const result = await googleCalendar.createEvent({
+        titulo: `${e.tipo.charAt(0).toUpperCase() + e.tipo.slice(1)} — ${e.titulo}`,
+        descricao: e.descricao,
+        data_inicio: e.data_inicio,
+        local: e.local,
+        colorId: "7",
+      });
+      if (result?.id) {
+        await supabase.from("eventos").update({ google_event_id: result.id }).eq("id", e.id);
+        ok++;
+      }
     }
-    toast({ title: `${ok} evento(s) sincronizado(s) com Google Calendar!` });
+
+    // Audiências sem google_event_id
+    for (const a of audiencias.filter(au => !au.google_event_id)) {
+      const clienteNome = a.processos?.cliente_nome || "";
+      const numero = a.processos?.numero || "";
+      const result = await googleCalendar.createEvent({
+        titulo: `Audiência — ${clienteNome}${numero ? ` (${numero})` : ""}`,
+        descricao: a.vara ? `Vara: ${a.vara}` : undefined,
+        data_inicio: a.data_hora,
+        colorId: "9",
+      });
+      if (result?.id) {
+        await supabase.from("audiencias").update({ google_event_id: result.id }).eq("id", a.id);
+        ok++;
+      }
+    }
+
+    // Tarefas com prazo sem google_event_id
+    for (const t of tarefas.filter(ta => ta.data_limite && !ta.google_event_id)) {
+      const result = await googleCalendar.createEvent({
+        titulo: `Prazo — ${t.titulo}`,
+        data_inicio: t.data_limite!,
+        colorId: "11",
+        allDay: true,
+      });
+      if (result?.id) {
+        await supabase.from("tarefas").update({ google_event_id: result.id }).eq("id", t.id);
+        ok++;
+      }
+    }
+
+    toast({ title: `${ok} item(ns) sincronizado(s) com Google Calendar!` });
     setGcalSyncing(false);
+    fetchAll();
   };
 
   const fetchAll = async () => {
@@ -353,7 +420,7 @@ const Agenda = () => {
                 <RefreshCw className={`w-3 h-3 ${gcalSyncing ? "animate-spin" : ""}`} />
                 {gcalSyncing ? "Sincronizando..." : "Sincronizar tudo"}
               </Button>
-              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={handleGcalDisconnect}>
+              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={() => setShowGcalDisconnectDialog(true)}>
                 <Link2Off className="w-3 h-3" /> Desconectar
               </Button>
             </div>
@@ -660,6 +727,25 @@ const Agenda = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      <AlertDialog open={showGcalDisconnectDialog} onOpenChange={setShowGcalDisconnectDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desconectar Google Calendar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja remover os eventos criados pelo ADVeyes do seu Google Calendar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleGcalDisconnect(false)} disabled={gcalDisconnecting}>
+              Não, manter eventos
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleGcalDisconnect(true)} disabled={gcalDisconnecting}>
+              {gcalDisconnecting ? "Removendo..." : "Sim, remover eventos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };
