@@ -27,6 +27,7 @@ interface Evento {
   tipo: string;
   data_inicio: string;
   local?: string;
+  google_event_id?: string | null;
 }
 
 interface Tarefa {
@@ -36,6 +37,7 @@ interface Tarefa {
   data_limite?: string | null;
   status: string;
   prioridade?: string;
+  google_event_id?: string | null;
 }
 
 interface Audiencia {
@@ -45,6 +47,7 @@ interface Audiencia {
   vara?: string;
   status?: string;
   processos?: { numero?: string; cliente_nome?: string } | null;
+  google_event_id?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -243,15 +246,36 @@ const Agenda = () => {
     const data_inicio = `${form.data_inicio}T${form.hora_inicio}:00`;
     if (editData) {
       const { error } = await supabase.from("eventos").update({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null }).eq("id", editData.id);
-      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else { toast({ title: "Evento atualizado!" }); setShowForm(false); fetchAll(); }
+      if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
+      else {
+        if (gcalConnected && editData.google_event_id) {
+          await googleCalendar.updateEvent(editData.google_event_id, {
+            titulo: `${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)} — ${form.titulo}`,
+            descricao: form.descricao,
+            data_inicio,
+            local: form.local,
+            colorId: "7",
+          });
+        }
+        toast({ title: "Evento atualizado!" });
+        setShowForm(false);
+        fetchAll();
+      }
     } else {
       const { data: inserted, error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id }).select().single();
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else {
-        // Sync to Google Calendar if connected and toggle is on
         if (gcalConnected && syncToGcal && inserted) {
-          await googleCalendar.createEvent({ titulo: form.titulo, descricao: form.descricao, data_inicio, local: form.local });
+          const gcalResult = await googleCalendar.createEvent({
+            titulo: `${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)} — ${form.titulo}`,
+            descricao: form.descricao,
+            data_inicio,
+            local: form.local,
+            colorId: "7",
+          });
+          if (gcalResult?.id) {
+            await supabase.from("eventos").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
+          }
         }
         toast({ title: gcalConnected && syncToGcal ? "Evento criado e sincronizado com Google!" : "Evento criado!" });
         setShowForm(false);
@@ -263,6 +287,10 @@ const Agenda = () => {
 
   const handleDelete = async () => {
     if (!deleteId) return;
+    const evento = eventos.find(e => e.id === deleteId);
+    if (gcalConnected && evento?.google_event_id) {
+      await googleCalendar.deleteEvent(evento.google_event_id);
+    }
     await supabase.from("eventos").delete().eq("id", deleteId);
     toast({ title: "Evento excluído!" });
     setDeleteId(null);
