@@ -27,6 +27,7 @@ import TimeTracking from "./pages/TimeTracking";
 import CRM from "./pages/CRM";
 import Equipe from "./pages/Equipe";
 import Contratos from "./pages/Contratos";
+import Checkout from "./pages/Checkout";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -73,6 +74,7 @@ const App = () => (
               <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
               <Route path="/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
               <Route path="/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
+              <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </JarvisProvider>

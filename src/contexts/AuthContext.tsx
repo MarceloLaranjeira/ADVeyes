@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 
 interface AuthContextType {
   session: Session | null;
@@ -50,7 +50,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ session, user, loading, signOut }}>
-      {children}
+      <SubscriptionProvider>
+        {children}
+      </SubscriptionProvider>
     </AuthContext.Provider>
   );
 };
