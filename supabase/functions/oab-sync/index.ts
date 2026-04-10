@@ -1,7 +1,8 @@
 /**
  * oab-sync — Edge Function
- * Sincroniza processos do advogado via API pública DataJud/CNJ
- * Substituição do Escavador (saldo bloqueado) por API gratuita do CNJ
+ * Sincroniza processos do advogado
+ * Fonte primária: Escavador API v2
+ * Fallback: DataJud/CNJ (API pública)
  *
  * verify_jwt = false — aceita user_id no body como fallback
  */
@@ -14,7 +15,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Chave pública DataJud/CNJ — gratuita, sem limite de saldo
+// Escavador
+const ESCAVADOR_TOKEN = Deno.env.get("ESCAVADOR_API_TOKEN") ?? "";
+const ESC_BASE = "https://api.escavador.com";
+const ESC_HEADERS = {
+  "Authorization": `Bearer ${ESCAVADOR_TOKEN}`,
+  "X-Requested-With": "XMLHttpRequest",
+  "Accept": "application/json",
+};
+
+// DataJud/CNJ — fallback gratuito
 const DATAJUD_KEY =
   Deno.env.get("DATAJUD_API_KEY") ||
   "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
@@ -117,13 +127,119 @@ function detectArea(texto: string): string {
   return "civel";
 }
 
-/** Busca processos por OAB em um tribunal DataJud */
+// ── Escavador ─────────────────────────────────────────────────────────────────
+
+interface EscavadorItem {
+  numero_cnj?: string;
+  titulo_polo_ativo?: string;
+  titulo_polo_passivo?: string;
+  tribunal?: { sigla?: string; nome?: string };
+  classe_processual?: { nome?: string };
+  assuntos?: { nome: string }[];
+  data_inicio?: string;
+  data_ajuizamento?: string;
+  ultima_movimentacao?: { tipo?: string; data?: string; conteudo?: string };
+  fontes?: { nome?: string; tipo?: string; grau?: string }[];
+  fonte?: string;
+}
+
+/** Busca todos os processos de um advogado via Escavador (com paginação) */
+async function buscarProcessosEscavador(
+  oabNumero: string,
+  seccional: string,
+): Promise<EscavadorItem[]> {
+  if (!ESCAVADOR_TOKEN) {
+    console.warn("ESCAVADOR_API_TOKEN não configurado");
+    return [];
+  }
+
+  const items: EscavadorItem[] = [];
+  let url: string | null = `${ESC_BASE}/api/v2/advogado/processos?oab_numero=${oabNumero}&oab_estado=${seccional}&limit=100`;
+
+  while (url) {
+    try {
+      const resp = await fetch(url, {
+        headers: ESC_HEADERS,
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        console.warn(`escavador processos HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+        break;
+      }
+
+      const data = await resp.json() as { items?: EscavadorItem[]; links?: { next?: string } };
+      const page = data.items || [];
+      items.push(...page);
+      console.log(`escavador processos página: ${page.length} itens (total acumulado: ${items.length})`);
+
+      url = (page.length >= 100 && data.links?.next) ? data.links.next : null;
+    } catch (e) {
+      console.warn(`escavador processos erro: ${e}`);
+      break;
+    }
+  }
+
+  return items;
+}
+
+/** Busca processos por nome via Escavador */
+async function buscarProcessosNomeEscavador(
+  nome: string,
+): Promise<EscavadorItem[]> {
+  if (!ESCAVADOR_TOKEN) return [];
+
+  const items: EscavadorItem[] = [];
+  const url = `${ESC_BASE}/api/v2/envolvido/processos?nome=${encodeURIComponent(nome)}&limit=100`;
+
+  try {
+    const resp = await fetch(url, {
+      headers: ESC_HEADERS,
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!resp.ok) return [];
+
+    const data = await resp.json() as { items?: EscavadorItem[] };
+    items.push(...(data.items || []));
+    console.log(`escavador envolvido processos: ${items.length} itens`);
+  } catch (e) {
+    console.warn(`escavador nome erro: ${e}`);
+  }
+
+  return items;
+}
+
+/** Normaliza item do Escavador para o formato do banco */
+function normalizarItemEscavador(item: EscavadorItem) {
+  const tribunalSigla = item.tribunal?.sigla || item.fonte || "desconhecido";
+  const classe = item.classe_processual?.nome || "";
+  const assuntos = (item.assuntos || []).map(a => a.nome).join(", ");
+  const ultimaMov = item.ultima_movimentacao;
+  const ultimoAndamento = ultimaMov
+    ? `${ultimaMov.tipo || ""} — ${(ultimaMov.data || "").slice(0, 10)}`
+    : "";
+
+  return {
+    numero: normalizeCNJ(item.numero_cnj || ""),
+    tribunal: tribunalSigla.toUpperCase(),
+    vara: tribunalSigla.toUpperCase(),
+    area: detectArea(classe + " " + assuntos),
+    descricao: assuntos || classe || "Importado via Escavador",
+    data_ajuizamento: item.data_ajuizamento?.slice(0, 10) || item.data_inicio?.slice(0, 10) || null,
+    ultimo_andamento: ultimoAndamento,
+    fonte: "escavador",
+  };
+}
+
+// ── DataJud fallback ──────────────────────────────────────────────────────────
+
 async function buscarPorOABTribunal(
   oabNumero: string,
   seccional: string,
   endpoint: string,
 ): Promise<Record<string, unknown>[]> {
-  // Múltiplas variações do número OAB para aumentar chance de match
   const variantes = [
     oabNumero,
     `${oabNumero}/${seccional}`,
@@ -173,7 +289,6 @@ async function buscarPorOABTribunal(
   }
 }
 
-/** Busca processos por Nome em um tribunal DataJud */
 async function buscarPorNomeTribunal(
   nome: string,
   endpoint: string,
@@ -213,8 +328,7 @@ async function buscarPorNomeTribunal(
   }
 }
 
-/** Normaliza um hit DataJud para o formato de banco */
-function normalizarHit(hit: Record<string, unknown>, trib: string) {
+function normalizarHitDataJud(hit: Record<string, unknown>, trib: string) {
   const src = (hit._source || {}) as Record<string, unknown>;
   const movimentos = (src.movimentos as Record<string, unknown>[]) || [];
   const classe = ((src.classe as Record<string, unknown>)?.nome as string) || "";
@@ -270,40 +384,69 @@ serve(async (req) => {
       });
     }
 
-    console.log(`oab-sync (DataJud): OAB=${oabNumero}/${seccional} nome="${nomeAdvogado}" user=${userId}`);
+    console.log(`oab-sync: OAB=${oabNumero}/${seccional} nome="${nomeAdvogado}" user=${userId}`);
 
-    // Determina tribunais para consultar
-    const tribunais = OAB_ESTADO_TRIBUNAIS[seccional] || ["tjam", "trf1", "trt11"];
-    const endpoints = tribunais.map(t => ({ trib: t, url: DATAJUD_ENDPOINTS[t] })).filter(e => e.url);
+    // ── Fonte primária: Escavador ─────────────────────────────────────────────
+    let processosNormalizados: ReturnType<typeof normalizarItemEscavador>[] = [];
+    let fonte = "Escavador";
 
-    // Busca em paralelo por OAB em todos os tribunais do estado
-    const hitsRaw = (
-      await Promise.all(
-        endpoints.map(e => buscarPorOABTribunal(oabNumero, seccional, e.url).then(hits =>
-          hits.map(h => ({ hit: h, trib: e.trib }))
-        ))
-      )
-    ).flat();
+    const escavadorItems = await buscarProcessosEscavador(oabNumero, seccional);
 
-    // Fallback por nome se não achou por OAB
-    let hitsFinal = hitsRaw;
-    if (hitsFinal.length === 0 && nomeAdvogado) {
-      console.log(`Nenhum resultado por OAB — tentando por nome: "${nomeAdvogado}"`);
-      const hitsPorNome = (
+    if (escavadorItems.length > 0) {
+      processosNormalizados = escavadorItems
+        .map(normalizarItemEscavador)
+        .filter(p => p.numero);
+      console.log(`escavador: ${processosNormalizados.length} processos normalizados`);
+    } else if (nomeAdvogado && ESCAVADOR_TOKEN) {
+      // Fallback por nome no Escavador
+      const nomeItems = await buscarProcessosNomeEscavador(nomeAdvogado);
+      if (nomeItems.length > 0) {
+        processosNormalizados = nomeItems
+          .map(normalizarItemEscavador)
+          .filter(p => p.numero);
+        console.log(`escavador por nome: ${processosNormalizados.length} processos`);
+      }
+    }
+
+    // ── Fallback: DataJud/CNJ ─────────────────────────────────────────────────
+    if (processosNormalizados.length === 0) {
+      console.log("Escavador sem resultados — usando DataJud/CNJ como fallback");
+      fonte = "DataJud/CNJ";
+
+      const tribunais = OAB_ESTADO_TRIBUNAIS[seccional] || ["tjam", "trf1", "trt11"];
+      const endpoints = tribunais.map(t => ({ trib: t, url: DATAJUD_ENDPOINTS[t] })).filter(e => e.url);
+
+      const hitsRaw = (
         await Promise.all(
-          endpoints.slice(0, 2).map(e => buscarPorNomeTribunal(nomeAdvogado, e.url).then(hits =>
+          endpoints.map(e => buscarPorOABTribunal(oabNumero, seccional, e.url).then(hits =>
             hits.map(h => ({ hit: h, trib: e.trib }))
           ))
         )
       ).flat();
-      hitsFinal = hitsPorNome;
+
+      let hitsFinal = hitsRaw;
+      if (hitsFinal.length === 0 && nomeAdvogado) {
+        console.log(`DataJud fallback por nome: "${nomeAdvogado}"`);
+        const hitsPorNome = (
+          await Promise.all(
+            endpoints.slice(0, 2).map(e => buscarPorNomeTribunal(nomeAdvogado, e.url).then(hits =>
+              hits.map(h => ({ hit: h, trib: e.trib }))
+            ))
+          )
+        ).flat();
+        hitsFinal = hitsPorNome;
+      }
+
+      processosNormalizados = hitsFinal
+        .map(({ hit, trib }) => normalizarHitDataJud(hit, trib))
+        .filter(p => p.numero);
     }
 
-    if (hitsFinal.length === 0) {
+    if (processosNormalizados.length === 0) {
       return new Response(JSON.stringify({
         sincronizados: 0, novos: 0, atualizados: 0,
-        message: `Nenhum processo encontrado para OAB ${oabNumero}/${seccional} no DataJud/CNJ.`,
-        fonte: "DataJud/CNJ",
+        message: `Nenhum processo encontrado para OAB ${oabNumero}/${seccional}.`,
+        fonte,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -316,8 +459,7 @@ serve(async (req) => {
     let novos = 0, atualizados = 0;
     const vistos = new Set<string>();
 
-    for (const { hit, trib } of hitsFinal) {
-      const proc = normalizarHit(hit, trib);
+    for (const proc of processosNormalizados) {
       if (!proc.numero || vistos.has(proc.numero)) continue;
       vistos.add(proc.numero);
 
@@ -356,7 +498,7 @@ serve(async (req) => {
       await supabaseAdmin.from("processo_monitoramento").upsert({
         user_id: userId,
         numero_processo: proc.numero,
-        tribunal: trib,
+        tribunal: proc.tribunal,
         ultimo_movimento: proc.ultimo_andamento,
         ultima_verificacao: new Date().toISOString(),
         ativo: true,
@@ -367,8 +509,8 @@ serve(async (req) => {
     if (novos > 0) {
       await supabaseAdmin.from("notificacoes").insert({
         user_id: userId,
-        titulo: "🦅 Horus — Sincronização concluída",
-        mensagem: `${novos} processo(s) novo(s) via DataJud/CNJ.`,
+        titulo: "Horus — Sincronização concluída",
+        mensagem: `${novos} processo(s) novo(s) via ${fonte}.`,
         tipo: "sistema",
         lida: false,
       });
@@ -378,8 +520,7 @@ serve(async (req) => {
       sincronizados: vistos.size,
       novos,
       atualizados,
-      tribunais_consultados: tribunais,
-      fonte: "DataJud/CNJ — API Pública (gratuita)",
+      fonte,
       message: novos === 0 && atualizados === 0
         ? `Todos os ${vistos.size} processo(s) já estão atualizados.`
         : `${novos} novo(s) + ${atualizados} atualizado(s) de ${vistos.size} processos encontrados.`,

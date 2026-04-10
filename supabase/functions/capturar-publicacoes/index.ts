@@ -7,10 +7,19 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
-if (!DATAJUD_KEY) {
-  console.error("DATAJUD_API_KEY secret not configured");
-}
+// Escavador — fonte primária para DJe e publicações
+const ESCAVADOR_TOKEN = Deno.env.get("ESCAVADOR_API_TOKEN") ?? "";
+const ESC_BASE = "https://api.escavador.com";
+const ESC_HEADERS = {
+  "Authorization": `Bearer ${ESCAVADOR_TOKEN}`,
+  "X-Requested-With": "XMLHttpRequest",
+  "Accept": "application/json",
+};
+
+// DataJud — fallback gratuito
+const DATAJUD_KEY =
+  Deno.env.get("DATAJUD_API_KEY") ||
+  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
 
 const DATAJUD_ENDPOINTS: Record<string, string> = {
   tjac: "https://api-publica.datajud.cnj.jus.br/api_publica_tjac/_search",
@@ -155,6 +164,61 @@ function buildConteudo(
   texto += `\n\n[Dados obtidos via API pública DataJud/CNJ — ${tribunal.toUpperCase()}]`;
 
   return texto;
+}
+
+// ── Escavador DJe ─────────────────────────────────────────────────────────────
+
+interface EscavadorDiario {
+  id?: number;
+  tipo?: string;
+  data_publicacao?: string;
+  conteudo?: string;
+  conteudo_simplificado?: string;
+  numero_processo?: string;
+  tribunal?: { sigla?: string; nome?: string };
+  vara?: string;
+  prazo?: number;
+}
+
+/** Busca publicações do DJe via Escavador para um advogado */
+async function buscarDiariosEscavador(
+  oabNumero: string,
+  seccional: string,
+  paginas = 3,
+): Promise<EscavadorDiario[]> {
+  if (!ESCAVADOR_TOKEN) return [];
+
+  const items: EscavadorDiario[] = [];
+
+  for (let page = 1; page <= paginas; page++) {
+    try {
+      const url = `${ESC_BASE}/api/v2/advogado/diarios?oab_numero=${oabNumero}&oab_estado=${seccional}&page=${page}`;
+      const resp = await fetch(url, {
+        headers: ESC_HEADERS,
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        console.warn(`[capturar] escavador diários HTTP ${resp.status}: ${txt.slice(0, 200)}`);
+        break;
+      }
+
+      const data = await resp.json() as { items?: EscavadorDiario[]; meta?: { last_page?: number } };
+      const page_items = data.items || [];
+      items.push(...page_items);
+      console.log(`[capturar] escavador diários página ${page}: ${page_items.length} itens`);
+
+      // Parar se chegou na última página
+      const lastPage = data.meta?.last_page || 1;
+      if (page >= lastPage) break;
+    } catch (e) {
+      console.warn(`[capturar] escavador diários erro: ${e}`);
+      break;
+    }
+  }
+
+  return items;
 }
 
 serve(async (req) => {
@@ -403,6 +467,10 @@ serve(async (req) => {
     }
     // ─── FIM MODO BUSCA ────────────────────────────────────────────────────────
 
+    // OAB do advogado (opcional — ativa Escavador DJe se fornecido)
+    const oabNumero: string = ((body.oab_numero as string) || "").replace(/\D/g, "");
+    const seccional: string = ((body.seccional as string) || "AM").toUpperCase();
+
     // Buscar processos cadastrados do usuário
     const { data: processos, error: procError } = await supabase
       .from("processos")
@@ -447,8 +515,57 @@ serve(async (req) => {
     const inserir: Record<string, unknown>[] = [];
     const erros: string[] = [];
     let processosBuscados = 0;
+    const fonteUsada: string[] = [];
 
-    for (const proc of processos) {
+    // ── Escavador DJe — publicações do diário (primária) ──────────────────────
+    if (oabNumero && ESCAVADOR_TOKEN) {
+      console.log(`[capturar] buscando DJe via Escavador para OAB ${oabNumero}/${seccional}`);
+      const diarios = await buscarDiariosEscavador(oabNumero, seccional);
+      console.log(`[capturar] escavador DJe: ${diarios.length} publicações`);
+
+      for (const diario of diarios) {
+        // Filtrar apenas publicações dos últimos 30 dias
+        if (diario.data_publicacao) {
+          const dataPub = new Date(diario.data_publicacao);
+          if (dataPub < limiteData) continue;
+        }
+
+        const numProc = diario.numero_processo || "";
+        const tribunalSigla = diario.tribunal?.sigla || seccional;
+        const tipoPubl = (diario.tipo || "despacho").toLowerCase();
+        const conteudo = diario.conteudo || diario.conteudo_simplificado || `${tipoPubl.toUpperCase()} — ${numProc}`;
+        const chave = `${numProc}::${conteudo.slice(0, 80)}`;
+
+        if (existentesSet.has(chave)) continue;
+        existentesSet.add(chave);
+
+        const prazo = diario.prazo || null;
+        inserir.push({
+          user_id: user.id,
+          tipo: tipoPubl,
+          tribunal: tribunalSigla.toUpperCase(),
+          numero_processo: numProc,
+          cliente_nome: null,
+          data_publicacao: diario.data_publicacao || new Date().toISOString(),
+          conteudo,
+          conteudo_simplificado: diario.conteudo_simplificado || null,
+          status: prazo !== null && prazo <= 5 ? "urgente" : "nova",
+          prazo_dias: prazo,
+          data_prazo: prazo ? new Date(Date.now() + prazo * 24 * 60 * 60 * 1000).toISOString() : null,
+          tarefa_gerada: false,
+        });
+      }
+
+      if (inserir.length > 0) fonteUsada.push("Escavador DJe");
+      processosBuscados = processos.length;
+    }
+
+    // DataJud fallback — só roda se Escavador não trouxe publicações
+    if (inserir.length > 0) {
+      console.log(`[capturar] Escavador já trouxe ${inserir.length} publicações — pulando DataJud`);
+    }
+
+    for (const proc of inserir.length > 0 ? [] : processos) {
       const numero = normalizeCNJ(proc.numero);
       const tribunalKey = detectTribunalFromCNJ(numero);
       const endpoint = DATAJUD_ENDPOINTS[tribunalKey];
@@ -557,6 +674,11 @@ serve(async (req) => {
       await new Promise((r) => setTimeout(r, 150));
     }
 
+    // Registra DataJud como fonte se usou
+    if (processosBuscados > 0 && !fonteUsada.includes("Escavador DJe")) {
+      fonteUsada.push("DataJud/CNJ");
+    }
+
     let capturadas = 0;
     if (inserir.length > 0) {
       const { error: insertError } = await supabase
@@ -579,17 +701,20 @@ serve(async (req) => {
       capturadas = inserir.length;
     }
 
+    const fonteStr = fonteUsada.length > 0 ? fonteUsada.join(" + ") : "DataJud/CNJ";
+
     return new Response(
       JSON.stringify({
         capturadas,
         processosBuscados,
         erros,
+        fonte: fonteStr,
         message:
           capturadas > 0
-            ? `${capturadas} movimentação(ões) real(is) capturada(s) via DataJud/CNJ de ${processosBuscados} processo(s).`
+            ? `${capturadas} publicação(ões) capturada(s) via ${fonteStr} de ${processosBuscados} processo(s).`
             : processosBuscados > 0
-            ? `${processosBuscados} processo(s) consultado(s) no DataJud — nenhuma movimentação nova nos últimos 30 dias.`
-            : "Nenhum processo encontrado no DataJud.",
+            ? `${processosBuscados} processo(s) consultado(s) — nenhuma publicação nova nos últimos 30 dias.`
+            : "Nenhum processo encontrado.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
