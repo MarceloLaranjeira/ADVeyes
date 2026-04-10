@@ -58,6 +58,17 @@ const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
 const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
 const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
 const BUSCA_OAB_URL = `${SUPABASE_BASE_URL}/functions/v1/busca-oab`;
+const PERFIL_KEY = "lexia_perfil_advogado";
+
+function getPerfilOAB(): { oab_numero: string; seccional: string } | null {
+  try {
+    const perfil = JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}");
+    if (perfil.numero_oab) {
+      return { oab_numero: perfil.numero_oab, seccional: (perfil.seccional || "AM").toUpperCase() };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
 
 const tipoLabels: Record<string, { label: string; color: string }> = {
   intimacao: { label: "Intimação", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
@@ -233,10 +244,14 @@ const Publicacoes = () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
+      const perfilOAB = getPerfilOAB();
       const resp = await fetch(CAPTURAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ busca: { tipo: t, valor: v, salvar: true } }),
+        body: JSON.stringify({
+          busca: { tipo: t, valor: v, salvar: true },
+          ...(perfilOAB ?? {}),
+        }),
       });
       const result = await resp.json();
       if (!resp.ok) {
@@ -287,10 +302,11 @@ const Publicacoes = () => {
         return;
       }
 
+      const perfilOAB = getPerfilOAB();
       const resp = await fetch(CAPTURAR_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify(perfilOAB ?? {}),
       }).catch(() => null);
 
       if (!resp) {
