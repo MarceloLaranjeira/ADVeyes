@@ -205,26 +205,31 @@ const Agenda = () => {
   };
   const handleGcalDisconnect = async (deletarEventos: boolean) => {
     setGcalDisconnecting(true);
-    if (deletarEventos) {
-      for (const e of eventos.filter(ev => ev.google_event_id)) {
-        await googleCalendar.deleteEvent(e.google_event_id!);
-        await supabase.from("eventos").update({ google_event_id: null }).eq("id", e.id);
+    try {
+      if (deletarEventos) {
+        for (const e of eventos.filter(ev => ev.google_event_id)) {
+          await googleCalendar.deleteEvent(e.google_event_id!);
+          await supabase.from("eventos").update({ google_event_id: null }).eq("id", e.id);
+        }
+        for (const a of audiencias.filter(au => au.google_event_id)) {
+          await googleCalendar.deleteEvent(a.google_event_id!);
+          await supabase.from("audiencias").update({ google_event_id: null }).eq("id", a.id);
+        }
+        for (const t of tarefas.filter(ta => ta.google_event_id)) {
+          await googleCalendar.deleteEvent(t.google_event_id!);
+          await supabase.from("tarefas").update({ google_event_id: null }).eq("id", t.id);
+        }
       }
-      for (const a of audiencias.filter(au => au.google_event_id)) {
-        await googleCalendar.deleteEvent(a.google_event_id!);
-        await supabase.from("audiencias").update({ google_event_id: null }).eq("id", a.id);
-      }
-      for (const t of tarefas.filter(ta => ta.google_event_id)) {
-        await googleCalendar.deleteEvent(t.google_event_id!);
-        await supabase.from("tarefas").update({ google_event_id: null }).eq("id", t.id);
-      }
+      googleCalendar.disconnect();
+      setGcalConnected(false);
+      setShowGcalDisconnectDialog(false);
+      toast({ title: "Google Calendar desconectado" });
+      fetchAll();
+    } catch {
+      toast({ title: "Erro ao desconectar", description: "Tente novamente", variant: "destructive" });
+    } finally {
+      setGcalDisconnecting(false);
     }
-    googleCalendar.disconnect();
-    setGcalConnected(false);
-    setShowGcalDisconnectDialog(false);
-    setGcalDisconnecting(false);
-    toast({ title: "Google Calendar desconectado" });
-    fetchAll();
   };
 
   const syncAllToGcal = async () => {
