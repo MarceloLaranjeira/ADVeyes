@@ -86,10 +86,12 @@ export const googleCalendar = {
 
     if (input.allDay) {
       const dateStr = input.data_inicio.slice(0, 10);
-      const nextDay = new Date(dateStr);
-      nextDay.setDate(nextDay.getDate() + 1);
+      const [y, mo, d] = dateStr.split("-").map(Number);
+      const next = new Date(y, mo - 1, d + 1);
       startField = { date: dateStr };
-      endField = { date: nextDay.toISOString().slice(0, 10) };
+      endField = {
+        date: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`,
+      };
     } else {
       const start = new Date(input.data_inicio);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -125,10 +127,12 @@ export const googleCalendar = {
 
     if (input.allDay) {
       const dateStr = input.data_inicio.slice(0, 10);
-      const nextDay = new Date(dateStr);
-      nextDay.setDate(nextDay.getDate() + 1);
+      const [y, mo, d] = dateStr.split("-").map(Number);
+      const next = new Date(y, mo - 1, d + 1);
       startField = { date: dateStr };
-      endField = { date: nextDay.toISOString().slice(0, 10) };
+      endField = {
+        date: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`,
+      };
     } else {
       const start = new Date(input.data_inicio);
       const end = new Date(start.getTime() + 60 * 60 * 1000);

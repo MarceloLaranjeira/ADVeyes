@@ -168,8 +168,9 @@ const Financeiro = () => {
             colorId: "2",
             allDay: true,
           });
-          if (gcalResult?.id && insertedId) {
-            await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", insertedId);
+          const targetId = insertedId ?? (editItem?.id as string | null | undefined) ?? null;
+          if (gcalResult?.id && targetId) {
+            await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", targetId);
           }
         }
       }
