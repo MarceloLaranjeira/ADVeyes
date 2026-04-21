@@ -1,0 +1,1 @@
+UPDATE public.asaas_subscriptions SET status = 'active', plan = 'starter', next_due_date = '2026-05-21', trial_ends_at = '2027-04-21', updated_at = now() WHERE user_id = 'd8aaea49-1c17-4642-a550-2e82d7cb5d2a';
