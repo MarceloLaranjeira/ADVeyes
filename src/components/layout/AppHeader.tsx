@@ -60,7 +60,7 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
       <div className="flex items-center gap-1">
         <button
           onClick={() => navigate("/ia-juridica")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg bg-secondary text-primary hover:bg-[hsl(var(--primary-100))] transition-colors"
+          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           aria-label="IA"
           title="Assistente IA"
         >
