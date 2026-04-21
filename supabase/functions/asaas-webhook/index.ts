@@ -1,10 +1,12 @@
 // supabase/functions/asaas-webhook/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "@supabase/supabase-js/cors";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, asaas-access-token",
+// Override CORS to allow the extra header from Asaas
+const customCorsHeaders = {
+  ...corsHeaders,
+  "Access-Control-Allow-Headers": `${corsHeaders["Access-Control-Allow-Headers"]}, asaas-access-token`,
 };
 
 serve(async (req) => {
