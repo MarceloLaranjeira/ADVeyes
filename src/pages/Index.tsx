@@ -382,7 +382,7 @@ const Index = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <h3 className="font-serif font-semibold text-sm">🦅 Horus — Sugestões Proativas</h3>
+                <h3 className="font-serif font-semibold text-sm">Horus — Sugestões Proativas</h3>
               </div>
               <div className="space-y-2">
                 {prazosUrgentes > 0 && (
@@ -605,7 +605,7 @@ const Index = () => {
                     "tribunal-badge"
                   }`}
                 >
-                  ✓ {t}
+                  {t}
                 </span>
               ))}
               <span
