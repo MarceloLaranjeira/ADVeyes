@@ -49,10 +49,10 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className={`font-serif font-bold tracking-widest text-sm uppercase flex-1 ${
+          <span className={`font-serif font-semibold tracking-tight text-base flex-1 ${
             jarvisMode ? "text-cyan-400" : "text-primary"
           }`}>
-            {jarvisMode ? "⬡ ADVeyes" : "ADVeyes"}
+            ADVeyes
           </span>
           {/* 🦅 Horus real-time notifications */}
           <NotificationPanel />
@@ -68,7 +68,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
             <div className="flex items-center gap-2 mr-auto">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" />
               <span className="text-[10px] tracking-widest text-cyan-500/60 font-bold uppercase">
-                HORUS ONLINE · MONITORAMENTO ATIVO
+                Horus online · monitoramento ativo
               </span>
             </div>
           )}
