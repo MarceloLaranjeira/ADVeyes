@@ -14,11 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      asaas_subscriptions: {
+        Row: {
+          asaas_customer_id: string | null
+          asaas_subscription_id: string | null
+          created_at: string
+          id: string
+          next_due_date: string | null
+          plan: string
+          status: string
+          trial_ends_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          created_at?: string
+          id?: string
+          next_due_date?: string | null
+          plan?: string
+          status?: string
+          trial_ends_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asaas_customer_id?: string | null
+          asaas_subscription_id?: string | null
+          created_at?: string
+          id?: string
+          next_due_date?: string | null
+          plan?: string
+          status?: string
+          trial_ends_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audiencias: {
         Row: {
           cliente_nome: string | null
           created_at: string
           data_hora: string
+          google_event_id: string | null
           id: string
           juiz: string | null
           local: string | null
@@ -34,6 +74,7 @@ export type Database = {
           cliente_nome?: string | null
           created_at?: string
           data_hora: string
+          google_event_id?: string | null
           id?: string
           juiz?: string | null
           local?: string | null
@@ -49,6 +90,7 @@ export type Database = {
           cliente_nome?: string | null
           created_at?: string
           data_hora?: string
+          google_event_id?: string | null
           id?: string
           juiz?: string | null
           local?: string | null
@@ -413,6 +455,7 @@ export type Database = {
           data_fim: string | null
           data_inicio: string
           descricao: string | null
+          google_event_id: string | null
           id: string
           local: string | null
           processo_id: string | null
@@ -425,6 +468,7 @@ export type Database = {
           data_fim?: string | null
           data_inicio: string
           descricao?: string | null
+          google_event_id?: string | null
           id?: string
           local?: string | null
           processo_id?: string | null
@@ -437,6 +481,7 @@ export type Database = {
           data_fim?: string | null
           data_inicio?: string
           descricao?: string | null
+          google_event_id?: string | null
           id?: string
           local?: string | null
           processo_id?: string | null
@@ -461,6 +506,7 @@ export type Database = {
           data_pagamento: string | null
           data_vencimento: string | null
           descricao: string
+          google_event_id: string | null
           id: string
           processo_id: string | null
           status: string
@@ -474,6 +520,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string | null
           descricao: string
+          google_event_id?: string | null
           id?: string
           processo_id?: string | null
           status?: string
@@ -487,6 +534,7 @@ export type Database = {
           data_pagamento?: string | null
           data_vencimento?: string | null
           descricao?: string
+          google_event_id?: string | null
           id?: string
           processo_id?: string | null
           status?: string
@@ -932,6 +980,7 @@ export type Database = {
           created_at: string
           data_limite: string | null
           descricao: string | null
+          google_event_id: string | null
           id: string
           prioridade: string
           status: string
@@ -942,6 +991,7 @@ export type Database = {
           created_at?: string
           data_limite?: string | null
           descricao?: string | null
+          google_event_id?: string | null
           id?: string
           prioridade?: string
           status?: string
@@ -952,6 +1002,7 @@ export type Database = {
           created_at?: string
           data_limite?: string | null
           descricao?: string | null
+          google_event_id?: string | null
           id?: string
           prioridade?: string
           status?: string

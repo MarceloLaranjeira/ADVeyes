@@ -295,7 +295,7 @@ serve(async (req) => {
           ultimo_movimento: ultimoMov,
           ultima_verificacao: new Date().toISOString(),
           ativo: true,
-        }, { onConflict: "user_id,numero_processo" }).catch(() => null);
+        }, { onConflict: "user_id,numero_processo" });
       }
 
       if (novos > 0) {
@@ -392,7 +392,7 @@ serve(async (req) => {
         ultima_verificacao: new Date().toISOString(),
         ativo: true,
         oab_origem: `${oabNumero}/${seccional}`,
-      }, { onConflict: "user_id,numero_processo" }).catch(() => null);
+      }, { onConflict: "user_id,numero_processo" });
     }
 
     if (novos > 0) {
