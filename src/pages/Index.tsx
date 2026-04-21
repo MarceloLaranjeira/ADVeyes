@@ -4,15 +4,28 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
 import { TrialBanner } from "@/components/TrialBanner";
-import { ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2 } from "lucide-react";
 import {
-  IconProcessos, IconClientes, IconLeads, IconAgenda, IconAudiencias,
-  IconBusca, IconTarefas, IconFinanceiro, IconHoras, IconDocumentos,
-  IconJurisprudencia, IconRelatorios, IconHorusIA, IconBell, IconAlerta, IconSistema,
-} from "@/components/icons/AppIcons";
-// Icons used: IconProcessos, IconClientes, IconLeads, IconAgenda, IconAudiencias,
-// IconBusca, IconTarefas, IconFinanceiro, IconHoras, IconDocumentos,
-// IconJurisprudencia, IconRelatorios, IconHorusIA, IconBell, IconAlerta, IconSistema
+  ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
+  Briefcase, Users, KanbanSquare, Calendar, Gavel, Search, CheckSquare,
+  DollarSign, FolderOpen, BookOpen, BarChart3, Sparkles, Bell,
+  AlertTriangle, Activity,
+} from "lucide-react";
+const IconProcessos = Briefcase;
+const IconClientes = Users;
+const IconLeads = KanbanSquare;
+const IconAgenda = Calendar;
+const IconAudiencias = Gavel;
+const IconBusca = Search;
+const IconTarefas = CheckSquare;
+const IconFinanceiro = DollarSign;
+const IconHoras = Clock;
+const IconDocumentos = FolderOpen;
+const IconJurisprudencia = BookOpen;
+const IconRelatorios = BarChart3;
+const IconHorusIA = Sparkles;
+const IconBell = Bell;
+const IconAlerta = AlertTriangle;
+const IconSistema = Activity;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
