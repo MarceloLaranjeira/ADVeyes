@@ -1,5 +1,5 @@
-/* Tipografia séria e neutra — Inter (UI) + Source Serif 4 (títulos) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap');
+/* Astrea-style: Nunito (UI + headings) — substituto direto do Museo Sans */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
 
 #lovable-badge {
   display: none !important;
@@ -11,51 +11,53 @@
 
 @layer base {
   :root {
-    /* === TEMA CLARO — GABINETE PREMIUM (Navy + Gold) === */
-    --background: 210 33% 97%;        /* off-white levemente azulado */
-    --foreground: 222 47% 11%;
+    /* === ASTREA DESIGN SYSTEM === */
+    --background: 0 0% 100%;             /* #FFFFFF */
+    --foreground: 220 9% 13%;            /* #202124 */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 220 9% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    /* Navy como primary (igual ao print) */
-    --primary: 222 60% 18%;           /* navy profundo */
+    --popover-foreground: 220 9% 13%;
+    /* Azul Astrea #228BE6 */
+    --primary: 209 79% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 33% 95%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 33% 95%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 45 93% 55%;             /* dourado/amarelo do print */
-    --accent-foreground: 222 60% 12%;
-    --destructive: 0 75% 55%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 214 28% 90%;
-    --input: 214 28% 90%;
-    --ring: 45 93% 55%;
-    --radius: 0.625rem;
-    /* Sidebar — navy profundo com texto claro e accent dourado */
-    --sidebar-background: 222 55% 11%;   /* navy escuro */
-    --sidebar-foreground: 215 25% 75%;   /* cinza-azulado claro */
-    --sidebar-primary: 45 93% 55%;       /* dourado: item ativo */
-    --sidebar-primary-foreground: 222 60% 12%;
-    --sidebar-accent: 222 50% 16%;       /* hover sutil */
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 222 45% 18%;
-    --sidebar-ring: 45 93% 55%;
+    --primary-100: 201 100% 93%;          /* #DAF3FF */
+    --primary-900: 209 73% 42%;           /* #1D6BB7 */
+    /* Cinzas */
+    --secondary: 210 14% 95%;             /* #F1F3F4 */
+    --secondary-foreground: 220 9% 13%;
+    --muted: 210 14% 95%;                 /* #F1F3F4 */
+    --muted-foreground: 210 7% 46%;       /* #6C757D */
+    --accent: 210 14% 95%;
+    --accent-foreground: 220 9% 13%;
     /* Status */
-    --success: 142 71% 45%;
+    --destructive: 0 98% 46%;             /* #E70202 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 141 98% 27%;               /* #02883C */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --info: 199 89% 48%;
+    --warning: 44 97% 59%;                /* #FCC530 */
+    --warning-foreground: 220 9% 13%;
+    --info: 209 79% 52%;
     --info-foreground: 0 0% 100%;
-    /* Brand (mantidos para compatibilidade) */
-    --gold: 45 93% 55%;
-    --gold-light: 45 90% 70%;
-    --navy: 222 55% 11%;
-    --navy-light: 222 45% 18%;
-    /* Neural / IA */
-    --neural-blue: 200 100% 50%;
+    --border: 210 14% 89%;                /* #DEE2E6 */
+    --input: 210 14% 89%;
+    --ring: 209 79% 52%;
+    --radius: 0.5rem;                     /* 8px */
+    /* Sidebar — branca estilo Astrea */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 210 7% 46%;     /* #6C757D */
+    --sidebar-primary: 209 79% 52%;       /* azul para item ativo */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 14% 95%;        /* #F1F3F4 hover */
+    --sidebar-accent-foreground: 220 9% 13%;
+    --sidebar-border: 210 14% 89%;
+    --sidebar-ring: 209 79% 52%;
+    /* Brand legacy (compat) */
+    --gold: 44 97% 59%;
+    --gold-light: 44 97% 75%;
+    --navy: 209 79% 52%;
+    --navy-light: 209 73% 42%;
+    --neural-blue: 209 79% 52%;
     --neural-cyan: 186 100% 50%;
     --neural-purple: 260 80% 60%;
   }
@@ -171,13 +173,12 @@
   * { @apply border-border; }
   body { @apply bg-background text-foreground font-sans antialiased; }
   body, button, input, select, textarea {
-    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    font-feature-settings: 'cv02','cv03','cv04','cv11';
+    font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
   h1, h2, h3, h4, .font-serif {
-    font-family: 'Source Serif 4', 'Georgia', serif;
+    font-family: 'Nunito', system-ui, sans-serif;
     letter-spacing: -0.01em;
-    font-weight: 600;
+    font-weight: 800;
   }
   /* Números tabulares para KPIs */
   .tabular-nums { font-variant-numeric: tabular-nums; }
@@ -203,13 +204,42 @@
 
   /* === NAVIGATION === */
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
   }
   .nav-item-active {
-    background: hsl(var(--sidebar-primary) / 0.12);
-    color: hsl(var(--sidebar-primary));
-    font-weight: 600;
-    box-shadow: inset 3px 0 0 hsl(var(--sidebar-primary));
+    background: hsl(var(--secondary));
+    color: hsl(var(--foreground));
+    font-weight: 700;
+  }
+
+  /* === BOTÃO ASTREA (.ga-button) === */
+  .ga-button {
+    @apply inline-flex items-center justify-center gap-2 h-[38px] px-5 rounded-lg text-xs font-extrabold uppercase tracking-wider transition-all duration-200 hover:opacity-80;
+    letter-spacing: 0.7px;
+  }
+  .ga-button-primary { @apply ga-button bg-primary text-primary-foreground; }
+  .ga-button-success { @apply ga-button bg-[hsl(var(--success))] text-white; }
+  .ga-button-danger  { @apply ga-button bg-destructive text-destructive-foreground; }
+  .ga-button-warning { @apply ga-button bg-[hsl(var(--warning))] text-foreground; }
+  .ga-button-default { @apply ga-button bg-secondary text-muted-foreground; }
+
+  /* === FAB azul (botão "+" flutuante Astrea) === */
+  .fab-add {
+    @apply inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-[hsl(var(--primary-900))] transition-colors shadow-sm;
+  }
+
+  /* === BADGE STATUS Astrea === */
+  .badge-nao-tratada {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider;
+    background: hsl(44 97% 90%);
+    color: hsl(40 92% 35%);
+  }
+
+  /* === Tag IA no menu === */
+  .tag-ia {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold;
+    background: hsl(232 60% 94%);
+    color: hsl(232 70% 50%);
   }
 
   /* === METRIC CARD === */

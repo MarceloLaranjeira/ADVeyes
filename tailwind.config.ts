@@ -13,9 +13,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        serif: ['Microsoft Sans Serif', 'sans-serif'],
-        sans: ['Microsoft Sans Serif', 'sans-serif'],
-        rajdhani: ['Microsoft Sans Serif', 'sans-serif'],
+        sans: ['Nunito', 'system-ui', 'sans-serif'],
+        serif: ['Nunito', 'system-ui', 'sans-serif'],
+        display: ['Nunito', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
