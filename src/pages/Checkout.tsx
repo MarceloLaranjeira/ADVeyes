@@ -50,20 +50,20 @@ export default function Checkout() {
   };
 
   async function ensureCustomer(): Promise<string> {
-    const { data: sub } = await supabase
+    const { data: sub } = await (supabase as any)
       .from("asaas_subscriptions")
       .select("asaas_customer_id")
       .eq("user_id", user!.id)
-      .single();
+      .maybeSingle();
 
     if ((sub as any)?.asaas_customer_id) return (sub as any).asaas_customer_id;
 
     const customer = await asaas.createCustomer({ name: nome, cpfCnpj, email });
     if (!customer?.id) throw new Error("Falha ao criar cliente no Asaas");
 
-    await supabase
+    await (supabase as any)
       .from("asaas_subscriptions")
-      .update({ asaas_customer_id: customer.id } as any)
+      .update({ asaas_customer_id: customer.id })
       .eq("user_id", user!.id);
 
     return customer.id;

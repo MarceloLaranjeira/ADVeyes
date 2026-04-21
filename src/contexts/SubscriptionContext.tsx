@@ -69,12 +69,12 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
 
   const load = useCallback(async () => {
     if (!user) { setSubscription(null); setLoading(false); return; }
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("asaas_subscriptions")
       .select("*")
       .eq("user_id", user.id)
-      .single();
-    setSubscription(data ?? null);
+      .maybeSingle();
+    setSubscription((data as AsaasSubscription | null) ?? null);
     setLoading(false);
   }, [user]);
 

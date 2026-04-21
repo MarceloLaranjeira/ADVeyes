@@ -365,7 +365,13 @@ serve(async (req) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const { data: { user } } = await supabase.auth.getUser(token).catch(() => ({ data: { user: null } }));
+    let user: { id: string } | null = null;
+    try {
+      const r = await supabase.auth.getUser(token);
+      user = r.data.user;
+    } catch {
+      user = null;
+    }
 
     const body = await req.json().catch(() => ({}));
     const oabNumero: string = (body.oab_numero || "").replace(/\D/g, "");
