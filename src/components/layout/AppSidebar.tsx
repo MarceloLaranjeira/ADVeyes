@@ -1,126 +1,97 @@
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
-  IconDashboard, IconProcessos, IconClientes, IconLeads, IconEquipe,
-  IconAgenda, IconTarefas, IconAudiencias, IconPublicacoes, IconBusca,
-  IconJurisprudencia, IconFinanceiro, IconHoras, IconContratos,
-  IconDocumentos, IconRelatorios, IconWhatsApp, IconPortalCliente,
-  IconConfiguracoes, IconHorusIA, IconBell, IconShield, IconLogout,
-} from "@/components/icons/AppIcons";
+  LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
+  CheckSquare, Gavel, Newspaper, Search, BookOpen, Wallet,
+  Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
+  ExternalLink, Settings, Bell, Sparkles, Headphones,
+} from "lucide-react";
 
-const navSections = [
+const sections: Array<{
+  label?: string;
+  items: Array<{ label: string; icon: any; path: string; badge?: number; isNew?: boolean; ai?: boolean }>;
+}> = [
   {
-    label: "Principal",
     items: [
-      { label: "Dashboard", icon: IconDashboard, path: "/" },
-      { label: "Processos", icon: IconProcessos, path: "/processos" },
-      { label: "Clientes", icon: IconClientes, path: "/clientes" },
+      { label: "Área de trabalho", icon: LayoutDashboard, path: "/" },
+      { label: "Processos e casos", icon: Briefcase, path: "/processos" },
+      { label: "Contatos", icon: Users, path: "/clientes" },
+      { label: "CRM — Leads", icon: KanbanSquare, path: "/crm" },
+      { label: "Atendimentos", icon: Headphones, path: "/audiencias" },
     ],
   },
   {
-    label: "CRM & Captação",
+    label: "Rotina jurídica",
     items: [
-      { label: "CRM — Leads", icon: IconLeads, path: "/crm" },
-      { label: "Equipe", icon: IconEquipe, path: "/equipe" },
-    ],
-  },
-  {
-    label: "Rotina Jurídica",
-    items: [
-      { label: "Agenda", icon: IconAgenda, path: "/agenda" },
-      { label: "Tarefas", icon: IconTarefas, path: "/tarefas" },
-      { label: "Audiências", icon: IconAudiencias, path: "/audiencias" },
-      { label: "Publicações", icon: IconPublicacoes, path: "/publicacoes" },
+      { label: "Agenda", icon: Calendar, path: "/agenda" },
+      { label: "Tarefas", icon: CheckSquare, path: "/tarefas" },
+      { label: "Audiências", icon: Gavel, path: "/audiencias" },
+      { label: "Publicações", icon: Newspaper, path: "/publicacoes" },
     ],
   },
   {
     label: "Pesquisa",
     items: [
-      { label: "Busca Processual", icon: IconBusca, path: "/busca" },
-      { label: "Jurisprudência", icon: IconJurisprudencia, path: "/jurisprudencia" },
+      { label: "Busca processual", icon: Search, path: "/busca" },
+      { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
     ],
   },
   {
     label: "Gestão",
     items: [
-      { label: "Financeiro", icon: IconFinanceiro, path: "/financeiro" },
-      { label: "Controle de Horas", icon: IconHoras, path: "/time-tracking" },
-      { label: "Contratos & Templates", icon: IconContratos, path: "/contratos" },
-      { label: "Documentos", icon: IconDocumentos, path: "/documentos" },
-      { label: "Relatórios", icon: IconRelatorios, path: "/relatorios" },
+      { label: "Financeiro", icon: Wallet, path: "/financeiro" },
+      { label: "Controle de horas", icon: Clock, path: "/time-tracking" },
+      { label: "Contratos", icon: FileSignature, path: "/contratos" },
+      { label: "Documentos", icon: FolderOpen, path: "/documentos" },
+      { label: "Indicadores", icon: BarChart3, path: "/relatorios" },
     ],
   },
   {
-    label: "Ferramentas",
+    label: "IA & Ferramentas",
     items: [
-      { label: "WhatsApp", icon: IconWhatsApp, path: "/whatsapp" },
-      { label: "Portal do Cliente", icon: IconPortalCliente, path: "/portal-cliente" },
-      { label: "Configurações", icon: IconConfiguracoes, path: "/configuracoes" },
+      { label: "Criação de peças", icon: Sparkles, path: "/ia-juridica", ai: true },
+      { label: "WhatsApp", icon: MessageSquare, path: "/whatsapp" },
+      { label: "Portal do cliente", icon: ExternalLink, path: "/portal-cliente" },
+      { label: "Configurações", icon: Settings, path: "/configuracoes" },
     ],
   },
 ];
 
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
-  const { signOut, user } = useAuth();
-  const { permission, subscribe } = usePushNotifications();
 
   return (
-    <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border text-sidebar-foreground">
-      {/* Logo */}
-      <div className="px-5 pt-6 pb-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-[hsl(var(--gold))] flex items-center justify-center shrink-0">
-            <span className="text-[hsl(var(--navy))] font-bold text-lg leading-none font-serif">A</span>
-          </div>
-          <div className="leading-tight">
-            <h1 className="text-[15px] font-semibold text-white tracking-tight font-serif">ADVeyes</h1>
-            <p className="text-[10px] text-sidebar-foreground/60 tracking-wide">Gestão Jurídica</p>
-          </div>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-sidebar-accent text-sidebar-foreground">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-          </button>
-        )}
-      </div>
-
-      {/* Horus AI — destaque */}
-      <div className="px-3 pb-2">
-        <Link
-          to="/ia-juridica"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 ${
-            location.pathname === "/ia-juridica"
-              ? "bg-[hsl(var(--gold))] text-[hsl(var(--navy))]"
-              : "text-white/90 hover:bg-sidebar-accent"
-          }`}
-        >
-          <IconHorusIA size={18} className="shrink-0" />
-          <span className="flex-1">Horus IA</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-        </Link>
-      </div>
-
-      {/* Navigation — fluxo único, sem divisórias, agrupamento por espaçamento */}
-      <nav className="flex-1 px-3 pt-1 pb-3 overflow-y-auto">
-        {navSections.map((section, idx) => (
-          <div key={section.label} className={idx === 0 ? "" : "mt-4"}>
-            <p className="px-3 mb-1.5 text-[10px] font-medium text-sidebar-foreground/40 tracking-wider uppercase">
-              {section.label}
-            </p>
+    <aside className="h-full w-60 bg-white border-r border-border flex flex-col">
+      <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
+        {sections.map((section, idx) => (
+          <div key={idx} className={idx === 0 ? "" : "mt-5"}>
+            {section.label && (
+              <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
+                {section.label}
+              </p>
+            )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
                 const isActive = location.pathname === item.path;
+                const Icon = item.icon;
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`nav-item ${isActive ? "nav-item-active" : ""}`}
                     onClick={onClose}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      isActive
+                        ? "bg-secondary text-foreground font-bold"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground font-medium"
+                    }`}
                   >
-                    <item.icon size={17} className="shrink-0" />
-                    {item.label}
+                    <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={isActive ? 2.25 : 2} />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.ai && <span className="tag-ia">IA</span>}
+                    {item.badge ? (
+                      <span className="bg-destructive text-white text-[10px] font-bold px-1.5 py-px rounded">
+                        {item.badge}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -129,34 +100,12 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-3">
-        {permission !== "granted" && (
-          <button
-            onClick={subscribe}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-md text-sidebar-foreground/80 hover:text-white hover:bg-sidebar-accent transition-colors text-xs font-medium"
-          >
-            <IconBell size={15} className="shrink-0" />
-            Ativar notificações
-          </button>
-        )}
-        <Link
-          to="/busca"
-          className="flex items-center gap-2 px-3 py-2 mb-2 rounded-md text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent transition-colors text-xs"
-        >
-          <IconShield size={15} className="shrink-0 text-[hsl(var(--gold))]" />
-          <span className="flex-1 truncate">85+ tribunais ativos</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-        </Link>
-        {user && (
-          <div className="px-3 py-2 mb-1 border-t border-sidebar-border/60">
-            <p className="text-[11px] text-sidebar-foreground/60 truncate mt-2">{user.email}</p>
-          </div>
-        )}
-        <button onClick={signOut} className="nav-item w-full text-left hover:text-red-400">
-          <IconLogout size={17} className="shrink-0" />
-          Sair
-        </button>
+      {/* Footer: status tribunais */}
+      <div className="p-3 border-t border-border">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/60">
+          <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" />
+          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">85+ tribunais ativos</span>
+        </div>
       </div>
     </aside>
   );
