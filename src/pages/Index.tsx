@@ -174,11 +174,11 @@ const Index = () => {
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-4xl font-bold font-serif tracking-tight text-foreground">
+              <h1 className="text-3xl font-semibold font-serif tracking-tight text-foreground">
                 {getSaudacao()}
               </h1>
-              <p className="text-muted-foreground text-sm mt-1.5">
-                Sistema de Gestão — <span className="font-medium text-foreground/70">ADVeyes</span>
+              <p className="text-muted-foreground text-sm mt-1">
+                Visão geral do escritório · {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
               </p>
             </div>
             <Button
@@ -190,33 +190,33 @@ const Index = () => {
             </Button>
           </div>
 
-          {/* 🦅 Horus Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-gradient-to-r from-primary/5 via-primary/3 to-transparent border border-primary/10">
+          {/* Horus Metrics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-card border border-border/70">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
                 <IconHorusIA size={20} className="text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">🦅 Horus — Processos Monitorados</p>
-                <p className="text-xl font-bold font-serif">{horusMetrics.processosMonitorados}</p>
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Processos Monitorados</p>
+                <p className="text-xl font-semibold font-serif tabular-nums">{horusMetrics.processosMonitorados}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-md bg-emerald-500/10 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Tribunais Ativos</p>
-                <p className="text-xl font-bold font-serif text-green-600">{horusMetrics.tribunaisAtivos}</p>
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Tribunais Ativos</p>
+                <p className="text-xl font-semibold font-serif tabular-nums text-emerald-600">{horusMetrics.tribunaisAtivos}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-md bg-sky-500/10 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-sky-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Última Verificação</p>
-                <p className="text-sm font-semibold">{horusMetrics.ultimaVerificacao.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Última Verificação</p>
+                <p className="text-sm font-medium tabular-nums">{horusMetrics.ultimaVerificacao.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
               </div>
             </div>
           </div>
@@ -382,7 +382,7 @@ const Index = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <h3 className="font-serif font-semibold text-sm">🦅 Horus — Sugestões Proativas</h3>
+                <h3 className="font-serif font-semibold text-sm">Horus — Sugestões Proativas</h3>
               </div>
               <div className="space-y-2">
                 {prazosUrgentes > 0 && (
@@ -605,7 +605,7 @@ const Index = () => {
                     "tribunal-badge"
                   }`}
                 >
-                  ✓ {t}
+                  {t}
                 </span>
               ))}
               <span
