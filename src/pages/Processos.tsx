@@ -507,22 +507,29 @@ const Processos = () => {
   return (
     <AppLayout>
       <div className="animate-fade-in">
-        {/* Header */}
+        {/* Header — Astrea style */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-4xl font-bold font-serif tracking-tight">Processos</h1>
-            <p className="text-muted-foreground text-sm mt-1">Gerenciamento de processos do escritório</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Processos e casos</h1>
+            <p className="text-muted-foreground text-[13px] mt-0.5">
+              {processos.length} processo(s) · {filtered.length} exibido(s)
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => exportProcessosPDF(filtered)} className="gap-2">
-              <Download className="w-4 h-4" /> PDF
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => exportProcessosPDF(filtered)} className="gap-1.5 h-9">
+              <Download className="w-3.5 h-3.5" /> PDF
             </Button>
-            <Button variant="outline" onClick={() => setShowSyncDialog(true)} className="gap-2">
-              <RefreshCw className="w-4 h-4" /> Sincronizar OAB
+            <Button variant="outline" size="sm" onClick={() => setShowSyncDialog(true)} className="gap-1.5 h-9">
+              <RefreshCw className="w-3.5 h-3.5" /> Sincronizar OAB
             </Button>
-            <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
-              <Plus className="w-4 h-4" /> Novo Processo
-            </Button>
+            <button
+              onClick={() => { setEditData(null); setShowForm(true); }}
+              className="fab-add"
+              title="Novo processo"
+              aria-label="Novo processo"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
