@@ -170,7 +170,7 @@ const Financeiro = () => {
           });
           const targetId = insertedId ?? (editItem?.id as string | null | undefined) ?? null;
           if (gcalResult?.id && targetId) {
-            await supabase.from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", targetId);
+            await (supabase as any).from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", targetId);
           }
         }
       }

@@ -209,15 +209,15 @@ const Agenda = () => {
       if (deletarEventos) {
         for (const e of eventos.filter(ev => ev.google_event_id)) {
           await googleCalendar.deleteEvent(e.google_event_id!);
-          await supabase.from("eventos").update({ google_event_id: null }).eq("id", e.id);
+          await (supabase as any).from("eventos").update({ google_event_id: null }).eq("id", e.id);
         }
         for (const a of audiencias.filter(au => au.google_event_id)) {
           await googleCalendar.deleteEvent(a.google_event_id!);
-          await supabase.from("audiencias").update({ google_event_id: null }).eq("id", a.id);
+          await (supabase as any).from("audiencias").update({ google_event_id: null }).eq("id", a.id);
         }
         for (const t of tarefas.filter(ta => ta.google_event_id)) {
           await googleCalendar.deleteEvent(t.google_event_id!);
-          await supabase.from("tarefas").update({ google_event_id: null }).eq("id", t.id);
+          await (supabase as any).from("tarefas").update({ google_event_id: null }).eq("id", t.id);
         }
       }
       googleCalendar.disconnect();
@@ -247,7 +247,7 @@ const Agenda = () => {
         colorId: "7",
       });
       if (result?.id) {
-        await supabase.from("eventos").update({ google_event_id: result.id }).eq("id", e.id);
+        await (supabase as any).from("eventos").update({ google_event_id: result.id }).eq("id", e.id);
         ok++;
       }
     }
@@ -263,7 +263,7 @@ const Agenda = () => {
         colorId: "9",
       });
       if (result?.id) {
-        await supabase.from("audiencias").update({ google_event_id: result.id }).eq("id", a.id);
+        await (supabase as any).from("audiencias").update({ google_event_id: result.id }).eq("id", a.id);
         ok++;
       }
     }
@@ -277,7 +277,7 @@ const Agenda = () => {
         allDay: true,
       });
       if (result?.id) {
-        await supabase.from("tarefas").update({ google_event_id: result.id }).eq("id", t.id);
+        await (supabase as any).from("tarefas").update({ google_event_id: result.id }).eq("id", t.id);
         ok++;
       }
     }
@@ -346,7 +346,7 @@ const Agenda = () => {
             colorId: "7",
           });
           if (gcalResult?.id) {
-            await supabase.from("eventos").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
+            await (supabase as any).from("eventos").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
           }
         }
         toast({ title: gcalConnected && syncToGcal ? "Evento criado e sincronizado com Google!" : "Evento criado!" });
