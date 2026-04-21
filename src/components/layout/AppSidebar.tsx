@@ -1,9 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useJarvis } from "@/contexts/JarvisContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useState } from "react";
 import {
   IconDashboard, IconProcessos, IconClientes, IconLeads, IconEquipe,
   IconAgenda, IconTarefas, IconAudiencias, IconPublicacoes, IconBusca,
@@ -69,22 +67,18 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const { signOut, user } = useAuth();
   const { jarvisMode, toggleJarvis } = useJarvis();
   const { permission, subscribe } = usePushNotifications();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-
-  const toggleSection = (label: string) =>
-    setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
 
   return (
     <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border text-sidebar-foreground">
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-sidebar-border flex items-center justify-between">
+      <div className="px-5 pt-6 pb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-md bg-[hsl(var(--gold))] flex items-center justify-center shrink-0 shadow-sm">
-            <span className="text-[hsl(var(--navy))] font-extrabold text-xl leading-none" style={{ fontFamily: 'Georgia, serif' }}>A</span>
+          <div className="w-10 h-10 rounded-md bg-[hsl(var(--gold))] flex items-center justify-center shrink-0">
+            <span className="text-[hsl(var(--navy))] font-bold text-lg leading-none font-serif">A</span>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-white tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>ADVeyes</h1>
-            <p className="text-[10px] text-sidebar-foreground/70 tracking-wide">IA Jurídica Autônoma</p>
+          <div className="leading-tight">
+            <h1 className="text-[15px] font-semibold text-white tracking-tight font-serif">ADVeyes</h1>
+            <p className="text-[10px] text-sidebar-foreground/60 tracking-wide">Gestão Jurídica</p>
           </div>
         </div>
         {onClose && (
@@ -94,111 +88,89 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         )}
       </div>
 
-      {/* Horus AI Button */}
-      <div className="px-3 pt-3">
+      {/* Horus AI — destaque */}
+      <div className="px-3 pb-2">
         <Link
           to="/ia-juridica"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 ${
             location.pathname === "/ia-juridica"
               ? "bg-[hsl(var(--gold))] text-[hsl(var(--navy))]"
-              : "bg-sidebar-accent text-white hover:bg-[hsl(var(--gold))]/15 hover:text-[hsl(var(--gold))] border border-sidebar-border"
+              : "text-white/90 hover:bg-sidebar-accent"
           }`}
         >
           <IconHorusIA size={18} className="shrink-0" />
-          <span className="flex-1">Horus — IA</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <span className="flex-1">Horus IA</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
         </Link>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 pt-2 pb-3 overflow-y-auto space-y-0.5">
-        {navSections.map((section) => {
-          const isCollapsed = collapsed[section.label];
-          return (
-            <div key={section.label}>
-              <button
-                onClick={() => toggleSection(section.label)}
-                className="w-full flex items-center justify-between px-3 py-1.5 mt-2 text-[9px] font-bold text-sidebar-foreground/40 uppercase tracking-[0.15em] hover:text-sidebar-foreground/70 transition-colors"
-              >
-                {section.label}
-                <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
-              </button>
-              {!isCollapsed && (
-                <div className="space-y-0.5 mb-1">
-                  {section.items.map((item) => {
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`nav-item ${isActive ? "nav-item-active" : ""}`}
-                        onClick={onClose}
-                      >
-                        <item.icon size={18} className="shrink-0" />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+      {/* Navigation — fluxo único, sem divisórias, agrupamento por espaçamento */}
+      <nav className="flex-1 px-3 pt-1 pb-3 overflow-y-auto">
+        {navSections.map((section, idx) => (
+          <div key={section.label} className={idx === 0 ? "" : "mt-4"}>
+            <p className="px-3 mb-1.5 text-[10px] font-medium text-sidebar-foreground/40 tracking-wider uppercase">
+              {section.label}
+            </p>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`nav-item ${isActive ? "nav-item-active" : ""}`}
+                    onClick={onClose}
+                  >
+                    <item.icon size={17} className="shrink-0" />
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </nav>
 
-      {/* APIs indicator */}
-      <div className="mx-3 mb-3">
-        <Link
-          to="/busca"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent border border-sidebar-border hover:bg-sidebar-accent/70 transition-colors"
-        >
-          <IconShield size={16} className="shrink-0 text-[hsl(var(--gold))]" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-white/80">APIs Ativas</p>
-            <p className="text-[9px] text-sidebar-foreground/60">85+ Tribunais • SEEU • Projudi</p>
-          </div>
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-        </Link>
-      </div>
-
       {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border">
+      <div className="p-3">
         {permission !== "granted" && (
           <button
             onClick={subscribe}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-[hsl(var(--gold))]/10 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))] hover:bg-[hsl(var(--gold))]/20 transition-colors text-[10px] font-semibold"
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-md text-sidebar-foreground/80 hover:text-white hover:bg-sidebar-accent transition-colors text-xs font-medium"
           >
-            <IconBell size={16} className="shrink-0" />
+            <IconBell size={15} className="shrink-0" />
             Ativar notificações
           </button>
         )}
+        <Link
+          to="/busca"
+          className="flex items-center gap-2 px-3 py-2 mb-2 rounded-md text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent transition-colors text-xs"
+        >
+          <IconShield size={15} className="shrink-0 text-[hsl(var(--gold))]" />
+          <span className="flex-1 truncate">85+ tribunais ativos</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+        </Link>
         {user && (
-          <div className="px-3 mb-2">
-            <p className="text-[10px] text-sidebar-foreground/70 truncate">{user.email}</p>
+          <div className="px-3 py-2 mb-1 border-t border-sidebar-border/60">
+            <p className="text-[11px] text-sidebar-foreground/60 truncate mt-2">{user.email}</p>
           </div>
         )}
-        <button onClick={signOut} className="nav-item w-full text-left hover:text-red-500">
-          <IconLogout size={18} className="shrink-0" />
-          Sair do Sistema
+        <button onClick={signOut} className="nav-item w-full text-left hover:text-red-400">
+          <IconLogout size={17} className="shrink-0" />
+          Sair
         </button>
-        <div className="mt-3 px-3">
-          {/* Jarvis Mode Toggle */}
         <button
           onClick={toggleJarvis}
-          className={`w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-[10px] font-semibold transition-all duration-300 ${
+          className={`w-full flex items-center gap-2 px-3 py-1.5 mt-2 rounded-md text-[10px] font-medium transition-colors ${
             jarvisMode
-              ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-              : "bg-sidebar-accent border border-sidebar-border text-sidebar-foreground/80 hover:text-white"
+              ? "text-cyan-400 hover:bg-cyan-500/10"
+              : "text-sidebar-foreground/50 hover:text-sidebar-foreground/80"
           }`}
         >
-          <span className={`w-2 h-2 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-sidebar-foreground/40"}`} />
-          {jarvisMode ? "MODO JARVIS ATIVO" : "Ativar Modo Jarvis"}
-          <span className="ml-auto text-[8px] opacity-60">{jarvisMode ? "ON" : "OFF"}</span>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse" : "bg-sidebar-foreground/30"}`} />
+          Modo Jarvis
+          <span className="ml-auto text-[9px] opacity-60">{jarvisMode ? "ON" : "OFF"}</span>
         </button>
-        <p className="text-[9px] text-sidebar-foreground/40 uppercase tracking-wider">
-            ADVeyes v1.0 · Horus IA
-          </p>
-        </div>
       </div>
     </aside>
   );
