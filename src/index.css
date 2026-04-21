@@ -10,37 +10,37 @@
 
 @layer base {
   :root {
-    /* === TEMA CLARO — ESCRITÓRIO MINIMALISTA === */
-    --background: 210 40% 98%;        /* #F8FAFC */
-    --foreground: 222 47% 11%;        /* #1E293B */
-    --card: 0 0% 100%;                /* #FFFFFF */
+    /* === TEMA CLARO — GABINETE PREMIUM (Navy + Gold) === */
+    --background: 210 33% 97%;        /* off-white levemente azulado */
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    /* Azul profissional suave */
-    --primary: 221 83% 53%;           /* #3B82F6 */
+    /* Navy como primary (igual ao print) */
+    --primary: 222 60% 18%;           /* navy profundo */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;         /* #F1F5F9 slate-100 */
+    --secondary: 210 33% 95%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;  /* #64748B slate-500 */
-    --accent: 210 40% 94%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --muted: 210 33% 95%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 45 93% 55%;             /* dourado/amarelo do print */
+    --accent-foreground: 222 60% 12%;
+    --destructive: 0 75% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;            /* #E2E8F0 slate-200 */
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --radius: 0.5rem;
-    /* Sidebar — fundo branco com texto ardósia */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 215 16% 47%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 221 83% 53%;
+    --border: 214 28% 90%;
+    --input: 214 28% 90%;
+    --ring: 45 93% 55%;
+    --radius: 0.625rem;
+    /* Sidebar — navy profundo com texto claro e accent dourado */
+    --sidebar-background: 222 55% 11%;   /* navy escuro */
+    --sidebar-foreground: 215 25% 75%;   /* cinza-azulado claro */
+    --sidebar-primary: 45 93% 55%;       /* dourado: item ativo */
+    --sidebar-primary-foreground: 222 60% 12%;
+    --sidebar-accent: 222 50% 16%;       /* hover sutil */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 45% 18%;
+    --sidebar-ring: 45 93% 55%;
     /* Status */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
@@ -49,10 +49,10 @@
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
     /* Brand (mantidos para compatibilidade) */
-    --gold: 42 82% 48%;
-    --gold-light: 42 65% 68%;
-    --navy: 222 60% 12%;
-    --navy-light: 222 40% 22%;
+    --gold: 45 93% 55%;
+    --gold-light: 45 90% 70%;
+    --navy: 222 55% 11%;
+    --navy-light: 222 45% 18%;
     /* Neural / IA */
     --neural-blue: 200 100% 50%;
     --neural-cyan: 186 100% 50%;
@@ -176,7 +176,12 @@
 @layer components {
   /* === STAT CARDS === */
   .stat-card {
-    @apply bg-card rounded-xl border p-5 transition-all duration-200 hover:shadow-sm hover:border-slate-300 cursor-pointer;
+    @apply bg-card rounded-xl border border-border/70 p-5 transition-all duration-200 cursor-pointer;
+    box-shadow: 0 1px 2px hsl(222 30% 20% / 0.04), 0 1px 3px hsl(222 30% 20% / 0.03);
+  }
+  .stat-card:hover {
+    box-shadow: 0 4px 12px hsl(222 30% 20% / 0.08), 0 2px 4px hsl(222 30% 20% / 0.04);
+    transform: translateY(-1px);
   }
 
   /* === ÁREA BADGES === */
@@ -188,16 +193,23 @@
 
   /* === NAVIGATION === */
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
   }
   .nav-item-active {
-    @apply bg-primary/10 text-primary font-semibold;
-    box-shadow: inset 3px 0 0 hsl(var(--primary));
+    background: hsl(var(--sidebar-primary) / 0.12);
+    color: hsl(var(--sidebar-primary));
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 hsl(var(--sidebar-primary));
   }
 
   /* === METRIC CARD === */
   .metric-card {
-    @apply relative bg-card rounded-xl border transition-all duration-200 hover:shadow-sm hover:border-slate-300 cursor-pointer;
+    @apply relative bg-card rounded-xl border border-border/70 transition-all duration-200 cursor-pointer;
+    box-shadow: 0 1px 2px hsl(222 30% 20% / 0.04), 0 1px 3px hsl(222 30% 20% / 0.03);
+  }
+  .metric-card:hover {
+    box-shadow: 0 6px 16px hsl(222 30% 20% / 0.08), 0 2px 4px hsl(222 30% 20% / 0.04);
+    transform: translateY(-1px);
   }
 
   /* === QUICK ACTIONS === */
