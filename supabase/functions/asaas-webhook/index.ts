@@ -51,13 +51,25 @@ serve(async (req) => {
     });
   }
 
-  type DbStatus = "active" | "overdue" | "cancelled";
+  type DbStatus = "active" | "overdue" | "cancelled" | "pending";
   const STATUS_MAP: Record<string, DbStatus | null> = {
-    PAYMENT_CONFIRMED:      "active",
-    PAYMENT_RECEIVED:       "active",
-    PAYMENT_OVERDUE:        "overdue",
-    SUBSCRIPTION_CANCELLED: "cancelled",
-    SUBSCRIPTION_DELETED:   "cancelled",
+    // Dinheiro confirmado de fato → ativa
+    PAYMENT_CONFIRMED:           "active",
+    PAYMENT_RECEIVED:            "active",
+    // Atraso → bloqueia
+    PAYMENT_OVERDUE:             "overdue",
+    // Estorno / chargeback / exclusão → reverte
+    PAYMENT_REFUNDED:            "cancelled",
+    PAYMENT_REFUND_IN_PROGRESS:  "cancelled",
+    PAYMENT_CHARGEBACK_REQUESTED:"cancelled",
+    PAYMENT_CHARGEBACK_DISPUTE:  "cancelled",
+    PAYMENT_AWAITING_CHARGEBACK_REVERSAL: "cancelled",
+    PAYMENT_DELETED:             "pending",
+    SUBSCRIPTION_CANCELLED:      "cancelled",
+    SUBSCRIPTION_DELETED:        "cancelled",
+    // PIX agendado / aguardando compensação → NÃO ativa, mantém pending
+    PAYMENT_CREATED:             null,
+    PAYMENT_AWAITING_RISK_ANALYSIS: null,
   };
 
   const newStatus = STATUS_MAP[event];
