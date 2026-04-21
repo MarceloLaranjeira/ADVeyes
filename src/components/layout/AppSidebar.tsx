@@ -1,6 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useJarvis } from "@/contexts/JarvisContext";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
   IconDashboard, IconProcessos, IconClientes, IconLeads, IconEquipe,
@@ -65,7 +64,6 @@ const navSections = [
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
-  const { jarvisMode, toggleJarvis } = useJarvis();
   const { permission, subscribe } = usePushNotifications();
 
   return (
@@ -158,18 +156,6 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         <button onClick={signOut} className="nav-item w-full text-left hover:text-red-400">
           <IconLogout size={17} className="shrink-0" />
           Sair
-        </button>
-        <button
-          onClick={toggleJarvis}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 mt-2 rounded-md text-[10px] font-medium transition-colors ${
-            jarvisMode
-              ? "text-cyan-400 hover:bg-cyan-500/10"
-              : "text-sidebar-foreground/50 hover:text-sidebar-foreground/80"
-          }`}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse" : "bg-sidebar-foreground/30"}`} />
-          Modo Jarvis
-          <span className="ml-auto text-[9px] opacity-60">{jarvisMode ? "ON" : "OFF"}</span>
         </button>
       </div>
     </aside>
