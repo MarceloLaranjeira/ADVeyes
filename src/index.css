@@ -196,11 +196,13 @@
   }
 
   /* === ÁREA BADGES === */
-  .area-badge-penal    { @apply bg-red-50 text-red-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-red-100; }
-  .area-badge-civel    { @apply bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-blue-100; }
-  .area-badge-familia  { @apply bg-emerald-50 text-emerald-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-emerald-100; }
-  .area-badge-execucao { @apply bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-amber-100; }
-  .area-badge-recurso  { @apply bg-violet-50 text-violet-700 text-xs font-medium px-2.5 py-0.5 rounded-full border border-violet-100; }
+  .area-badge-penal,
+  .area-badge-civel,
+  .area-badge-familia,
+  .area-badge-execucao,
+  .area-badge-recurso {
+    @apply bg-secondary text-muted-foreground text-xs font-medium px-2.5 py-0.5 rounded-full border border-border;
+  }
 
   /* === NAVIGATION === */
   .nav-item {
@@ -237,9 +239,7 @@
 
   /* === Tag IA no menu === */
   .tag-ia {
-    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold;
-    background: hsl(232 60% 94%);
-    color: hsl(232 70% 50%);
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-secondary text-muted-foreground;
   }
 
   /* === METRIC CARD === */
@@ -318,21 +318,21 @@
   /* === TRIBUNAL BADGES === */
   .tribunal-badge {
     @apply inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full;
-    background: hsl(var(--primary) / 0.08);
-    color: hsl(var(--primary));
-    border: 1px solid hsl(var(--primary) / 0.18);
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
   }
   .tribunal-badge-seeu {
     @apply inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full;
-    background: hsla(200, 100%, 50%, 0.08);
-    color: hsl(200, 80%, 45%);
-    border: 1px solid hsla(200, 100%, 50%, 0.22);
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
   }
   .tribunal-badge-projudi {
     @apply inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full;
-    background: hsla(260, 80%, 60%, 0.08);
-    color: hsl(260, 60%, 50%);
-    border: 1px solid hsla(260, 80%, 60%, 0.22);
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
   }
 }
 

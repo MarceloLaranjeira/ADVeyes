@@ -86,7 +86,6 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                   >
                     <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={isActive ? 2.25 : 2} />
                     <span className="flex-1 truncate">{item.label}</span>
-                    {item.ai && <span className="tag-ia">IA</span>}
                     {item.badge ? (
                       <span className="bg-destructive text-white text-[10px] font-bold px-1.5 py-px rounded">
                         {item.badge}
