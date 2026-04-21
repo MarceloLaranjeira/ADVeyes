@@ -75,23 +75,41 @@ serve(async (req) => {
       });
     }
 
+    if (!ASAAS_API_KEY) {
+      console.error("ASAAS_API_KEY not configured");
+      return new Response(JSON.stringify({ error: "ASAAS_API_KEY not configured on server" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[asaas] ${method} ${path}`, body ? JSON.stringify(body).slice(0, 500) : "");
+
     const asaasRes = await fetch(`${BASE_URL}/${path}`, {
       method,
       headers: {
         "Content-Type": "application/json",
         "access_token": ASAAS_API_KEY,
+        "User-Agent": "Adveyes/1.0",
       },
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const data = await asaasRes.json();
+    const text = await asaasRes.text();
+    console.log(`[asaas] response ${asaasRes.status}:`, text.slice(0, 1000));
 
-    return new Response(JSON.stringify(data), {
-      status: asaasRes.status,
+    let data: unknown;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    // Always return 200 to the client with the Asaas payload, so the frontend can show the real error
+    return new Response(JSON.stringify({ asaasStatus: asaasRes.status, data }), {
+      status: asaasRes.ok ? 200 : 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    console.error("[asaas] internal error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: "Internal server error", details: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
