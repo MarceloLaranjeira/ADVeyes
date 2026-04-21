@@ -5,12 +5,18 @@
 import { supabase } from "@/integrations/supabase/client";
 
 async function call(path: string, method = "GET", body?: object) {
-  const { data, error } = await supabase.functions.invoke("asaas", {
+  const { data: result, error } = await supabase.functions.invoke("asaas", {
     body: { path, method, body },
   });
   if (error) throw new Error(error.message);
-  if (data?.errors) throw new Error(JSON.stringify(data.errors));
-  return data;
+  const payload = result?.data ?? result;
+  const status = result?.asaasStatus;
+  if (status && status >= 400) {
+    const msg = payload?.errors?.[0]?.description || payload?.message || JSON.stringify(payload);
+    throw new Error(`Asaas ${status}: ${msg}`);
+  }
+  if (payload?.errors) throw new Error(payload.errors[0]?.description || JSON.stringify(payload.errors));
+  return payload;
 }
 
 export const asaas = {
