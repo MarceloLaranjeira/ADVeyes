@@ -75,20 +75,20 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
     setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
 
   return (
-    <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border">
+    <aside className="h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border text-sidebar-foreground">
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-sidebar-border flex items-center justify-between">
+      <div className="px-4 py-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <IconProcessos size={20} className="brightness-0 invert" />
+          <div className="w-11 h-11 rounded-md bg-[hsl(var(--gold))] flex items-center justify-center shrink-0 shadow-sm">
+            <span className="text-[hsl(var(--navy))] font-extrabold text-xl leading-none" style={{ fontFamily: 'Georgia, serif' }}>A</span>
           </div>
           <div>
-            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase" style={{ fontFamily: 'Georgia, serif' }}>ADVeyes</h1>
-            <p className="text-[9px] text-muted-foreground tracking-widest uppercase">IA Jurídica Autônoma</p>
+            <h1 className="text-base font-bold text-white tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>ADVeyes</h1>
+            <p className="text-[10px] text-sidebar-foreground/70 tracking-wide">IA Jurídica Autônoma</p>
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-muted text-muted-foreground">
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-sidebar-accent text-sidebar-foreground">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         )}
@@ -100,8 +100,8 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           to="/ia-juridica"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             location.pathname === "/ia-juridica"
-              ? "bg-primary text-white"
-              : "bg-primary/8 text-primary hover:bg-primary/12 border border-primary/20"
+              ? "bg-[hsl(var(--gold))] text-[hsl(var(--navy))]"
+              : "bg-sidebar-accent text-white hover:bg-[hsl(var(--gold))]/15 hover:text-[hsl(var(--gold))] border border-sidebar-border"
           }`}
         >
           <IconHorusIA size={18} className="shrink-0" />
@@ -118,7 +118,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
             <div key={section.label}>
               <button
                 onClick={() => toggleSection(section.label)}
-                className="w-full flex items-center justify-between px-3 py-1.5 mt-1 text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest hover:text-muted-foreground transition-colors"
+                className="w-full flex items-center justify-between px-3 py-1.5 mt-2 text-[9px] font-bold text-sidebar-foreground/40 uppercase tracking-[0.15em] hover:text-sidebar-foreground/70 transition-colors"
               >
                 {section.label}
                 <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
@@ -150,12 +150,12 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       <div className="mx-3 mb-3">
         <Link
           to="/busca"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent border border-sidebar-border hover:bg-sidebar-accent/70 transition-colors"
         >
-          <IconShield size={16} className="shrink-0" />
+          <IconShield size={16} className="shrink-0 text-[hsl(var(--gold))]" />
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-foreground/60">APIs Ativas</p>
-            <p className="text-[9px] text-muted-foreground">85+ Tribunais • SEEU • Projudi</p>
+            <p className="text-[10px] font-semibold text-white/80">APIs Ativas</p>
+            <p className="text-[9px] text-sidebar-foreground/60">85+ Tribunais • SEEU • Projudi</p>
           </div>
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
         </Link>
@@ -166,7 +166,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         {permission !== "granted" && (
           <button
             onClick={subscribe}
-            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-colors text-[10px] font-semibold"
+            className="w-full flex items-center gap-2 px-3 py-2 mb-2 rounded-lg bg-[hsl(var(--gold))]/10 border border-[hsl(var(--gold))]/30 text-[hsl(var(--gold))] hover:bg-[hsl(var(--gold))]/20 transition-colors text-[10px] font-semibold"
           >
             <IconBell size={16} className="shrink-0" />
             Ativar notificações
@@ -174,7 +174,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         )}
         {user && (
           <div className="px-3 mb-2">
-            <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+            <p className="text-[10px] text-sidebar-foreground/70 truncate">{user.email}</p>
           </div>
         )}
         <button onClick={signOut} className="nav-item w-full text-left hover:text-red-500">
@@ -188,14 +188,14 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
           className={`w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-[10px] font-semibold transition-all duration-300 ${
             jarvisMode
               ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-              : "bg-muted/50 border border-border text-muted-foreground hover:text-foreground"
+              : "bg-sidebar-accent border border-sidebar-border text-sidebar-foreground/80 hover:text-white"
           }`}
         >
-          <span className={`w-2 h-2 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-muted-foreground/40"}`} />
+          <span className={`w-2 h-2 rounded-full shrink-0 ${jarvisMode ? "bg-cyan-400 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.8)]" : "bg-sidebar-foreground/40"}`} />
           {jarvisMode ? "MODO JARVIS ATIVO" : "Ativar Modo Jarvis"}
           <span className="ml-auto text-[8px] opacity-60">{jarvisMode ? "ON" : "OFF"}</span>
         </button>
-        <p className="text-[9px] text-muted-foreground/40 uppercase tracking-wider">
+        <p className="text-[9px] text-sidebar-foreground/40 uppercase tracking-wider">
             ADVeyes v1.0 · Horus IA
           </p>
         </div>
