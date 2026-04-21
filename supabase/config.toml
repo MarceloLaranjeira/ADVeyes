@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.busca-oab]
 verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
