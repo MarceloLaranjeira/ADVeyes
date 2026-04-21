@@ -170,23 +170,24 @@ const Index = () => {
     <AppLayout>
       <div className="animate-fade-in">
         <TrialBanner />
-        {/* Header - Intelligent Greeting */}
+        {/* Header - Astrea greeting */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-semibold font-serif tracking-tight text-foreground">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {getSaudacao()}
               </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Visão geral do escritório · {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+              <p className="text-muted-foreground text-[13px] mt-0.5">
+                Área de trabalho · {new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
               </p>
             </div>
             <Button
               onClick={() => navigate("/ia-juridica")}
-              className="gap-2"
+              size="sm"
+              className="gap-2 h-9"
             >
-              <IconHorusIA size={18} />
-              Horus IA
+              <IconHorusIA size={16} />
+              Assistente IA
             </Button>
           </div>
 
