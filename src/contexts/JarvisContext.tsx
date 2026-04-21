@@ -12,7 +12,9 @@ const JarvisContext = createContext<JarvisContextType>({
 
 export const JarvisProvider = ({ children }: { children: ReactNode }) => {
   const [jarvisMode, setJarvisMode] = useState(() => {
-    return localStorage.getItem("adveyes_jarvis_mode") === "true";
+    // v2.0 redesign: Jarvis OFF por padrão para garantir o tema premium navy + gold.
+    // Usuário ativa manualmente pelo botão na sidebar.
+    return false;
   });
 
   useEffect(() => {
