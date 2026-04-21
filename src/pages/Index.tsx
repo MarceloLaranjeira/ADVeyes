@@ -207,8 +207,8 @@ const Index = () => {
           {/* Horus Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-lg bg-card border border-border/70">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
-                <IconHorusIA size={20} className="text-primary" />
+              <div className="w-10 h-10 rounded-md bg-secondary flex items-center justify-center">
+                <IconHorusIA size={20} className="text-muted-foreground" />
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Processos Monitorados</p>
@@ -216,17 +216,17 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <div className="w-10 h-10 rounded-md bg-secondary flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Tribunais Ativos</p>
-                <p className="text-xl font-semibold font-serif tabular-nums text-emerald-600">{horusMetrics.tribunaisAtivos}</p>
+                <p className="text-xl font-semibold font-serif tabular-nums">{horusMetrics.tribunaisAtivos}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-sky-500/10 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-sky-600" />
+              <div className="w-10 h-10 rounded-md bg-secondary flex items-center justify-center">
+                <Clock className="w-5 h-5 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Última Verificação</p>
@@ -245,7 +245,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{stats.processos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Ativos</p>
               </div>
-              <div className="p-2 rounded-lg bg-primary/8"><IconProcessos size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconProcessos size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/clientes")}>
@@ -255,17 +255,17 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{stats.clientes}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Cadastrados</p>
               </div>
-              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30"><IconClientes size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconClientes size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/crm")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Leads</p>
-                <p className="text-3xl font-bold mt-1 leading-none text-purple-600" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{leadsNovos}</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{leadsNovos}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Novos</p>
               </div>
-              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconLeads size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconLeads size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/time-tracking")}>
@@ -275,7 +275,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{horasMes.toFixed(0)}h</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Trabalhadas</p>
               </div>
-              <div className="p-2 rounded-lg bg-teal-50 dark:bg-teal-950/30"><IconHoras size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconHoras size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -285,7 +285,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{prazos.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">7 dias</p>
               </div>
-              <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30"><IconAgenda size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconAgenda size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 border-destructive/20 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -295,7 +295,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none text-destructive" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{prazosUrgentes}</p>
                 <p className="text-[10px] text-destructive/70 mt-0.5">Atenção!</p>
               </div>
-              <div className="p-2 rounded-lg bg-destructive/8"><IconAlerta size={20} /></div>
+              <div className="p-2 rounded-lg bg-destructive/10"><IconAlerta size={20} className="text-destructive" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/audiencias")}>
@@ -305,7 +305,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{audienciasProximas.length}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Esta semana</p>
               </div>
-              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30"><IconAudiencias size={20} /></div>
+              <div className="p-2 rounded-lg bg-secondary"><IconAudiencias size={20} className="text-muted-foreground" /></div>
             </div>
           </div>
           <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
@@ -315,7 +315,7 @@ const Index = () => {
                 <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{tarefasHoje}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Tarefas</p>
               </div>
-              <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/30"><CheckCircle2 className="w-4 h-4 text-green-600" /></div>
+              <div className="p-2 rounded-lg bg-secondary"><CheckCircle2 className="w-4 h-4 text-muted-foreground" /></div>
             </div>
           </div>
         </div>
@@ -324,30 +324,30 @@ const Index = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
           <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4 h-4 text-green-600" />
+              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Recebido</p>
-                <p className="text-lg font-bold text-green-600 leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.recebido)}</p>
+                <p className="text-lg font-bold text-foreground leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.recebido)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4 text-yellow-600" />
+              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">A Receber</p>
-                <p className="text-lg font-bold text-yellow-600 leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.pendente)}</p>
+                <p className="text-lg font-bold text-foreground leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.pendente)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center shrink-0">
-                <Receipt className="w-4 h-4 text-red-500" />
+              <div className="w-9 h-9 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                <Receipt className="w-4 h-4 text-destructive" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Atrasado</p>
@@ -355,14 +355,14 @@ const Index = () => {
               </div>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer ${resultadoLiquido >= 0 ? "border-green-200 dark:border-green-800" : "border-red-200 dark:border-red-800"}`} onClick={() => navigate("/financeiro")}>
+          <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${resultadoLiquido >= 0 ? "bg-green-50 dark:bg-green-950/30" : "bg-red-50 dark:bg-red-950/30"}`}>
-                <Wallet className={`w-4 h-4 ${resultadoLiquido >= 0 ? "text-green-600" : "text-red-600"}`} />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${resultadoLiquido >= 0 ? "bg-secondary" : "bg-destructive/10"}`}>
+                <Wallet className={`w-4 h-4 ${resultadoLiquido >= 0 ? "text-muted-foreground" : "text-destructive"}`} />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Resultado Líquido</p>
-                <p className={`text-lg font-bold leading-tight ${resultadoLiquido >= 0 ? "text-green-600" : "text-destructive"}`} style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(resultadoLiquido)}</p>
+                <p className={`text-lg font-bold leading-tight ${resultadoLiquido >= 0 ? "text-foreground" : "text-destructive"}`} style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(resultadoLiquido)}</p>
               </div>
             </CardContent>
           </Card>
@@ -374,15 +374,15 @@ const Index = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Target className="w-4 h-4 text-primary" />
+                  <Target className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-semibold">Meta do Mês</span>
                   <span className="text-xs text-muted-foreground">{formatCurrency(financeiro.recebido)} / {formatCurrency(metaMes.meta_receita)}</span>
                 </div>
-                <span className={`text-sm font-bold ${progressoMeta >= 100 ? "text-green-600" : progressoMeta >= 70 ? "text-yellow-600" : "text-primary"}`}>{progressoMeta}%</span>
+                <span className="text-sm font-bold text-foreground">{progressoMeta}%</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${progressoMeta >= 100 ? "bg-green-500" : progressoMeta >= 70 ? "bg-yellow-500" : "bg-primary"}`}
+                  className="h-full rounded-full transition-all duration-500 bg-foreground/70"
                   style={{ width: `${progressoMeta}%` }}
                 />
               </div>
@@ -392,10 +392,10 @@ const Index = () => {
 
         {/* 🦅 Horus Proactive Suggestions */}
         {(prazosUrgentes > 0 || tarefasHoje > 0 || audienciasProximas.length > 0) && (
-          <Card className="mb-4 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+          <Card className="mb-4">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-foreground/60 animate-pulse" />
                 <h3 className="font-serif font-semibold text-sm">Horus — Sugestões Proativas</h3>
               </div>
               <div className="space-y-2">
@@ -409,19 +409,19 @@ const Index = () => {
                   </div>
                 )}
                 {tarefasHoje > 0 && (
-                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-                    <CheckCircle2 size={16} className="text-blue-600 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-secondary border border-border">
+                    <CheckCircle2 size={16} className="text-muted-foreground mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold text-blue-600">Você tem {tarefasHoje} tarefa(s) para hoje</p>
+                      <p className="text-xs font-semibold text-foreground">Você tem {tarefasHoje} tarefa(s) para hoje</p>
                       <p className="text-xs text-muted-foreground">Organize sua agenda para concluir todas as pendências do dia.</p>
                     </div>
                   </div>
                 )}
                 {audienciasProximas.length > 0 && (
-                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
-                    <IconAudiencias size={16} className="text-purple-600 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-secondary border border-border">
+                    <IconAudiencias size={16} className="text-muted-foreground mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold text-purple-600">{audienciasProximas.length} audiência(s) agendada(s)</p>
+                      <p className="text-xs font-semibold text-foreground">{audienciasProximas.length} audiência(s) agendada(s)</p>
                       <p className="text-xs text-muted-foreground">Prepare a documentação e confirme a pauta com antecedência.</p>
                     </div>
                   </div>
@@ -436,7 +436,7 @@ const Index = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <IconSistema size={18} />
+                <IconSistema size={18} className="text-muted-foreground" />
                 <h3 className="font-serif font-semibold text-sm">Ações Rápidas</h3>
               </div>
             </div>
@@ -447,8 +447,8 @@ const Index = () => {
                   onClick={() => navigate(a.path)}
                   className="quick-action-card group"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-primary/10 group-hover:scale-105 transition-all">
-                    <a.icon className="w-4 h-4 text-slate-500 group-hover:text-primary transition-colors" />
+                  <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center group-hover:bg-secondary/70 group-hover:scale-105 transition-all">
+                    <a.icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                   </div>
                   <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">{a.label}</span>
                 </button>
@@ -459,27 +459,27 @@ const Index = () => {
 
         {/* Horus AI Banner */}
         <Card
-          className="mb-4 cursor-pointer overflow-hidden group border-primary/20 hover:border-primary/40 transition-all duration-200"
+          className="mb-4 cursor-pointer overflow-hidden group transition-all duration-200"
           onClick={() => navigate("/ia-juridica")}
         >
           <CardContent className="p-0">
-            <div className="relative flex items-center gap-4 p-4 bg-gradient-to-r from-primary/8 via-primary/4 to-transparent">
+            <div className="relative flex items-center gap-4 p-4">
               <div className="relative shrink-0">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 flex items-center justify-center animate-neural-pulse">
-                  <IconHorusIA size={28} />
+                <div className="w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center">
+                  <IconHorusIA size={24} className="text-muted-foreground" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-background animate-pulse" />
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-foreground/40 border-2 border-background" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h3 className="font-serif font-bold">Horus — IA Jurídica</h3>
-                  <span className="text-xs bg-green-500/15 text-green-600 px-2 py-0.5 rounded-full font-semibold">Online</span>
+                  <span className="text-xs bg-secondary text-muted-foreground px-2 py-0.5 rounded-full font-semibold">Online</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Assistente com voz, análise de documentos, geração de peças e pesquisa jurídica com IA
                 </p>
               </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-all shrink-0" />
             </div>
           </CardContent>
         </Card>
@@ -492,7 +492,7 @@ const Index = () => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[hsl(var(--warning))]" />
+                    <Clock className="w-4 h-4 text-muted-foreground" />
                     <h3 className="font-serif font-semibold">Prazos Vencendo</h3>
                     {prazosUrgentes > 0 && (
                       <span className="bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded-full font-semibold">
@@ -506,7 +506,7 @@ const Index = () => {
                 </div>
                 {prazos.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <TrendingUp className="w-8 h-8 text-green-500 mb-2 opacity-60" />
+                    <TrendingUp className="w-8 h-8 text-muted-foreground mb-2 opacity-60" />
                     <p className="text-sm text-muted-foreground">Nenhum prazo nos próximos 7 dias</p>
                   </div>
                 ) : (
@@ -518,7 +518,7 @@ const Index = () => {
                         onClick={() => navigate(p.tipo === "tarefa" ? "/tarefas" : "/financeiro")}
                       >
                         <div className="flex items-center gap-2.5">
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${p.tipo === "tarefa" ? "bg-primary/10 text-primary" : "bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]"}`}>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground">
                             {p.tipo === "tarefa" ? "Tarefa" : "Fin."}
                           </span>
                           <div>
@@ -547,11 +547,11 @@ const Index = () => {
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <IconBell size={16} />
+                    <IconBell size={16} className="text-muted-foreground" />
                     <h3 className="font-serif font-semibold text-xs">Notificações</h3>
                   </div>
                   {notificacoesRecentes.length > 0 && (
-                    <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">{notificacoesRecentes.length}</span>
+                    <span className="text-[10px] bg-secondary text-muted-foreground px-1.5 py-0.5 rounded-full">{notificacoesRecentes.length}</span>
                   )}
                 </div>
                 {notificacoesRecentes.length === 0 ? (
@@ -559,7 +559,7 @@ const Index = () => {
                 ) : (
                   <div className="space-y-1.5">
                     {notificacoesRecentes.slice(0, 3).map((n) => (
-                      <div key={n.id} className="p-2 rounded-lg border-l-2 border-l-primary bg-muted/30">
+                      <div key={n.id} className="p-2 rounded-lg border-l-2 border-l-foreground/30 bg-muted/30">
                         <p className="text-xs font-semibold truncate">{n.titulo}</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{n.mensagem}</p>
                       </div>
@@ -573,7 +573,7 @@ const Index = () => {
             <Card className="cursor-pointer" onClick={() => navigate("/audiencias")}>
               <CardContent className="p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <IconAudiencias size={16} />
+                  <IconAudiencias size={16} className="text-muted-foreground" />
                   <h3 className="font-serif font-semibold text-xs">Próximas Audiências</h3>
                 </div>
                 {audienciasProximas.length === 0 ? (
@@ -604,7 +604,7 @@ const Index = () => {
         <Card className="mb-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <IconSistema size={18} />
+              <IconSistema size={18} className="text-muted-foreground" />
               <h3 className="font-serif font-semibold text-sm">APIs dos Tribunais — Status</h3>
               <span className="text-xs text-muted-foreground ml-auto">via DataJud/CNJ</span>
             </div>
