@@ -186,44 +186,44 @@ const Agenda = () => {
     titulo: "", descricao: "", tipo: "reunião", data_inicio: "", hora_inicio: "09:00", local: "",
   });
 
-  // Google Calendar: detect token on mount (after OAuth redirect)
   useEffect(() => {
-    const token = googleCalendar.extractToken() || googleCalendar.getToken();
-    setGcalConnected(!!token);
-  }, []);
+    const oauthResult = googleCalendar.handleOAuthResult();
+    if (oauthResult?.connected) {
+      toast({ title: "Google Calendar conectado com sucesso!" });
+    }
+    void googleCalendar.getStatus()
+      .then((status) => {
+        setGcalConnected(
+          status.connected && status.connection?.status === "connected",
+        );
+      })
+      .catch(() => setGcalConnected(false));
+  }, [toast]);
 
-  const handleGcalConnect = () => {
-    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+  const handleGcalConnect = async () => {
+    try {
+      await googleCalendar.connect(`${window.location.origin}/agenda`);
+    } catch {
       toast({
-        title: "Configuração necessária",
-        description: "Adicione VITE_GOOGLE_CLIENT_ID em Configurações → Integrações para habilitar o Google Calendar.",
+        title: "Não foi possível conectar",
+        description: "Verifique a configuração do Google Calendar e tente novamente.",
         variant: "destructive",
       });
-      return;
     }
-    googleCalendar.authorize();
   };
+
   const handleGcalDisconnect = async (deletarEventos: boolean) => {
     setGcalDisconnecting(true);
     try {
-      if (deletarEventos) {
-        for (const e of eventos.filter(ev => ev.google_event_id)) {
-          await googleCalendar.deleteEvent(e.google_event_id!);
-          await (supabase as any).from("eventos").update({ google_event_id: null }).eq("id", e.id);
-        }
-        for (const a of audiencias.filter(au => au.google_event_id)) {
-          await googleCalendar.deleteEvent(a.google_event_id!);
-          await (supabase as any).from("audiencias").update({ google_event_id: null }).eq("id", a.id);
-        }
-        for (const t of tarefas.filter(ta => ta.google_event_id)) {
-          await googleCalendar.deleteEvent(t.google_event_id!);
-          await (supabase as any).from("tarefas").update({ google_event_id: null }).eq("id", t.id);
-        }
-      }
-      googleCalendar.disconnect();
+      const result = await googleCalendar.disconnect(deletarEventos);
       setGcalConnected(false);
       setShowGcalDisconnectDialog(false);
-      toast({ title: "Google Calendar desconectado" });
+      toast({
+        title: "Google Calendar desconectado",
+        description: deletarEventos && result.failedRemovals > 0
+          ? `${result.failedRemovals} evento(s) podem precisar ser removidos manualmente.`
+          : undefined,
+      });
       fetchAll();
     } catch {
       toast({ title: "Erro ao desconectar", description: "Tente novamente", variant: "destructive" });
@@ -235,56 +235,24 @@ const Agenda = () => {
   const syncAllToGcal = async () => {
     if (!gcalConnected) return;
     setGcalSyncing(true);
-    let ok = 0;
-
-    // Eventos sem google_event_id
-    for (const e of eventos.filter(ev => !ev.google_event_id)) {
-      const result = await googleCalendar.createEvent({
-        titulo: `${e.tipo.charAt(0).toUpperCase() + e.tipo.slice(1)} — ${e.titulo}`,
-        descricao: e.descricao,
-        data_inicio: e.data_inicio,
-        local: e.local,
-        colorId: "7",
+    try {
+      const result = await googleCalendar.syncNow();
+      toast({
+        title: `${result.completed} item(ns) sincronizado(s) com Google Calendar!`,
+        description: result.retried > 0
+          ? `${result.retried} item(ns) serão tentados novamente.`
+          : undefined,
       });
-      if (result?.id) {
-        await (supabase as any).from("eventos").update({ google_event_id: result.id }).eq("id", e.id);
-        ok++;
-      }
-    }
-
-    // Audiências sem google_event_id
-    for (const a of audiencias.filter(au => !au.google_event_id)) {
-      const clienteNome = a.processos?.cliente_nome || "";
-      const numero = a.processos?.numero || "";
-      const result = await googleCalendar.createEvent({
-        titulo: `Audiência — ${clienteNome}${numero ? ` (${numero})` : ""}`,
-        descricao: a.vara ? `Vara: ${a.vara}` : undefined,
-        data_inicio: a.data_hora,
-        colorId: "9",
+      await fetchAll();
+    } catch {
+      toast({
+        title: "Não foi possível sincronizar agora",
+        description: "Os itens permanecem na fila e serão tentados automaticamente.",
+        variant: "destructive",
       });
-      if (result?.id) {
-        await (supabase as any).from("audiencias").update({ google_event_id: result.id }).eq("id", a.id);
-        ok++;
-      }
+    } finally {
+      setGcalSyncing(false);
     }
-
-    // Tarefas com prazo sem google_event_id
-    for (const t of tarefas.filter(ta => ta.data_limite && !ta.google_event_id)) {
-      const result = await googleCalendar.createEvent({
-        titulo: `Prazo — ${t.titulo}`,
-        data_inicio: t.data_limite!,
-        colorId: "11",
-        allDay: true,
-      });
-      if (result?.id) {
-        await (supabase as any).from("tarefas").update({ google_event_id: result.id }).eq("id", t.id);
-        ok++;
-      }
-    }
-
-    toast({ title: `${ok} item(ns) sincronizado(s) com Google Calendar!` });
-    setGcalSyncing(false);
-    fetchAll();
   };
 
   const fetchAll = async () => {
@@ -338,16 +306,13 @@ const Agenda = () => {
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else {
         if (gcalConnected && syncToGcal && inserted) {
-          const gcalResult = await googleCalendar.createEvent({
+          await googleCalendar.createEvent({
             titulo: `${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)} — ${form.titulo}`,
             descricao: form.descricao,
             data_inicio,
             local: form.local,
             colorId: "7",
           });
-          if (gcalResult?.id) {
-            await (supabase as any).from("eventos").update({ google_event_id: gcalResult.id }).eq("id", inserted.id);
-          }
         }
         toast({ title: gcalConnected && syncToGcal ? "Evento criado e sincronizado com Google!" : "Evento criado!" });
         setShowForm(false);

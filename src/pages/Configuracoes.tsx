@@ -7,10 +7,12 @@ import {
   CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
 } from "lucide-react";
-import { horusDiscovery } from "@/services/horus";
 import { Textarea } from "@/components/ui/textarea";
 import { PLANS, asaas } from "@/lib/asaas";
-import { googleCalendar } from "@/lib/google-calendar";
+import {
+  googleCalendar,
+  type GoogleCalendarStatus,
+} from "@/lib/google-calendar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -21,13 +23,16 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+type TribunalCredencial = Tables<"tribunal_credenciais">;
+type SubscriptionRow = Tables<"asaas_subscriptions">;
+type SubscriptionSummary = Pick<SubscriptionRow, "plan" | "status" | "trial_ends_at">;
+
 // ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
 const PERFIL_KEY = "lexia_perfil_advogado";
-const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
-const OAB_SYNC_URL = `${SUPABASE_BASE_URL}/functions/v1/oab-sync`;
 
 const PerfilAdvogadoForm = () => {
   const { toast } = useToast();
@@ -46,7 +51,6 @@ const PerfilAdvogadoForm = () => {
           oab_numero: oab,
           seccional,
           nome_advogado: form.nome || "",
-          user_id: user?.id || "",
         },
       });
 
@@ -137,7 +141,7 @@ const PerfilAdvogadoForm = () => {
         />
       </div>
       <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-        <strong>🦅 Horus</strong> usa seus dados para descobrir automaticamente todos os processos vinculados à sua OAB em TODOS os tribunais brasileiros. Nenhum cadastro manual necessário!
+        <strong>🦅 Horus</strong> consulta as fontes judiciais configuradas para localizar processos vinculados à sua OAB. A cobertura depende dos dados disponibilizados por cada tribunal.
       </p>
       <div className="flex flex-wrap gap-2 items-center">
         <Button onClick={salvar} disabled={syncing} className="gap-2">
@@ -295,49 +299,120 @@ const Configuracoes = () => {
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [credenciais, setCredenciais] = useState<Record<string, any>[]>([]);
+  const [credenciais, setCredenciais] = useState<TribunalCredencial[]>([]);
   const [showCredForm, setShowCredForm] = useState(false);
-  const [editCred, setEditCred] = useState<Record<string, any> | null>(null);
+  const [editCred, setEditCred] = useState<TribunalCredencial | null>(null);
   const [deleteCred, setDeleteCred] = useState<string | null>(null);
   const [credForm, setCredForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
 
   // Google Calendar state
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
+  const [gcalStatus, setGcalStatus] = useState<GoogleCalendarStatus | null>(null);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [showGcalDisconnectDialog, setShowGcalDisconnectDialog] = useState(false);
 
   // Asaas / plano state
-  const [planData, setPlanData] = useState<Record<string, any> | null>(null);
+  const [planData, setPlanData] = useState<SubscriptionSummary | null>(null);
   const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
   const [checkoutForm, setCheckoutForm] = useState({ nome: "", cpfCnpj: "", email: "" });
 
   useEffect(() => {
-    // Handle Google OAuth token redirect
-    const token = googleCalendar.extractToken();
-    if (token) { setGcalConnected(true); toast({ title: "Google Calendar conectado com sucesso!" }); }
+    const oauthResult = googleCalendar.handleOAuthResult();
+    if (oauthResult?.connected) {
+      toast({ title: "Google Calendar conectado com sucesso!" });
+    } else if (oauthResult?.errorCode) {
+      toast({
+        title: "Não foi possível conectar o Google Calendar",
+        description: oauthResult.errorCode === "access_denied"
+          ? "A autorização foi cancelada."
+          : "Tente novamente ou revise a configuração da integração.",
+        variant: "destructive",
+      });
+    }
+
+    if (user) {
+      void googleCalendar.getStatus()
+        .then((status) => {
+          setGcalStatus(status);
+          setGcalConnected(
+            status.connected && status.connection?.status === "connected",
+          );
+        })
+        .catch(() => setGcalConnected(false));
+    }
 
     // Load plan from Supabase
     if (user) {
-      (supabase.from as any)("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }: any) => {
+      supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
         setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleGcalConnect = () => {
-    if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+  const handleGcalConnect = async () => {
+    setGcalLoading(true);
+    try {
+      await googleCalendar.connect(`${window.location.origin}/configuracoes`);
+    } catch {
       toast({
-        title: "Configuração necessária",
-        description: "Adicione VITE_GOOGLE_CLIENT_ID no painel Lovable (Project Settings → Environment Variables) e redeploye.",
+        title: "Não foi possível iniciar a conexão",
+        description: "Revise a configuração OAuth do Google Calendar.",
         variant: "destructive",
       });
-      return;
+      setGcalLoading(false);
     }
-    googleCalendar.authorize();
   };
-  const handleGcalDisconnect = () => { googleCalendar.disconnect(); setGcalConnected(false); toast({ title: "Google Calendar desconectado" }); };
+
+  const handleGcalSync = async () => {
+    setGcalLoading(true);
+    try {
+      const result = await googleCalendar.syncNow();
+      const status = await googleCalendar.getStatus();
+      setGcalStatus(status);
+      toast({
+        title: `${result.completed} item(ns) sincronizado(s)`,
+        description: result.retried
+          ? `${result.retried} item(ns) serão tentados novamente.`
+          : undefined,
+      });
+    } catch {
+      toast({
+        title: "Sincronização pendente",
+        description: "O worker automático tentará novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setGcalLoading(false);
+    }
+  };
+
+  const handleGcalDisconnect = async (removeEvents: boolean) => {
+    setGcalLoading(true);
+    try {
+      const result = await googleCalendar.disconnect(removeEvents);
+      setGcalConnected(false);
+      setGcalStatus(null);
+      setShowGcalDisconnectDialog(false);
+      toast({
+        title: "Google Calendar desconectado",
+        description: removeEvents && result.failedRemovals
+          ? `${result.failedRemovals} evento(s) podem precisar ser removidos manualmente.`
+          : undefined,
+      });
+    } catch {
+      toast({
+        title: "Erro ao desconectar",
+        description: "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setGcalLoading(false);
+    }
+  };
 
   const handleCheckout = async (planKey: string) => {
     if (!checkoutForm.nome || !checkoutForm.cpfCnpj || !checkoutForm.email) {
@@ -345,16 +420,19 @@ const Configuracoes = () => {
     }
     setCheckoutLoading(true);
     try {
-      // Create customer on Asaas
-      const customer = await asaas.createCustomer({ name: checkoutForm.nome, cpfCnpj: checkoutForm.cpfCnpj.replace(/\D/g, ""), email: checkoutForm.email });
-      // Create PIX payment for first month
-      const plan = PLANS[planKey as keyof typeof PLANS];
-      const payment = await asaas.createPixPayment({ customer: customer.id, value: plan.price, dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10), description: `LEXIA ${plan.name} — 1º mês` });
-      // Get QR code
-      const qr = await asaas.getPixQrCode(payment.id);
-      if (qr) setPixQr({ encodedImage: qr.encodedImage, payload: qr.payload });
-      // Save subscription intent
-      await (supabase.from as any)("asaas_subscriptions").upsert({ user_id: user!.id, asaas_customer_id: customer.id, plan: planKey, status: "pending" }, { onConflict: "user_id" });
+      const result = await asaas.createCheckout({
+        plan: planKey as keyof typeof PLANS,
+        billingType: "PIX",
+        customer: {
+          name: checkoutForm.nome,
+          cpfCnpj: checkoutForm.cpfCnpj,
+          email: checkoutForm.email,
+        },
+      });
+      if (!result.pix?.encodedImage || !result.pix.payload) {
+        throw new Error("Assinatura criada, mas o QR Code ainda não está disponível.");
+      }
+      setPixQr({ encodedImage: result.pix.encodedImage, payload: result.pix.payload });
       toast({ title: "PIX gerado! Escaneie para ativar o plano." });
     } catch (err) {
       toast({ title: "Erro ao gerar cobrança", description: (err as Error).message, variant: "destructive" });
@@ -413,7 +491,7 @@ const Configuracoes = () => {
   useEffect(() => { fetchCredenciais(); }, []);
 
   const openNewCred = () => { setEditCred(null); setCredForm(emptyForm); setShowCredForm(true); };
-  const openEditCred = (c: Record<string, unknown>) => {
+  const openEditCred = (c: TribunalCredencial) => {
     setEditCred(c);
     setCredForm({ tribunal: (c.tribunal as string) || "", token_acesso: (c.token_acesso as string) || "", numero_oab: (c.numero_oab as string) || "", seccional_oab: (c.seccional_oab as string) || "", cpf: (c.cpf as string) || "" });
     setShowCredForm(true);
@@ -1047,34 +1125,119 @@ const Configuracoes = () => {
                   <div className="space-y-3">
                     <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
                       <p className="text-sm font-medium text-green-700 mb-1">Integração ativa</p>
-                      <p className="text-xs text-muted-foreground">Novos compromissos criados na Agenda serão automaticamente sincronizados com seu Google Calendar.</p>
+                      <p className="text-xs text-muted-foreground">
+                        {gcalStatus?.connection?.google_email
+                          ? `Conta: ${gcalStatus.connection.google_email}`
+                          : "Sua conta Google está conectada."}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Novos compromissos serão sincronizados automaticamente.
+                      </p>
+                      {gcalStatus?.connection?.last_sync_at ? (
+                        <p className="text-[11px] text-muted-foreground mt-2">
+                          Última sincronização: {new Date(gcalStatus.connection.last_sync_at).toLocaleString("pt-BR")}
+                        </p>
+                      ) : null}
+                      {(gcalStatus?.queue.pending || gcalStatus?.queue.retry || gcalStatus?.queue.failed) ? (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Pendentes: {(gcalStatus?.queue.pending ?? 0) + (gcalStatus?.queue.retry ?? 0)}
+                          {gcalStatus?.queue.failed ? ` · Com erro: ${gcalStatus.queue.failed}` : ""}
+                        </p>
+                      ) : null}
                     </div>
-                    <Button variant="outline" className="gap-2 text-destructive hover:text-destructive w-full sm:w-auto" onClick={handleGcalDisconnect}>
-                      <Link2Off className="w-4 h-4" /> Desconectar Google Calendar
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={handleGcalSync}
+                        disabled={gcalLoading}
+                      >
+                        {gcalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4" />}
+                        Sincronizar agora
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="gap-2 text-destructive hover:text-destructive"
+                        onClick={() => setShowGcalDisconnectDialog(true)}
+                        disabled={gcalLoading}
+                      >
+                        <Link2Off className="w-4 h-4" /> Desconectar
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    {gcalStatus?.connection?.status === "reconnect_required" ? (
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                        <p className="text-sm font-medium text-amber-700">Reconexão necessária</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          O Google revogou ou expirou a autorização. Conecte novamente.
+                        </p>
+                      </div>
+                    ) : null}
                     <p className="text-sm text-muted-foreground">
                       Conecte sua conta Google para sincronizar compromissos, audiências e prazos diretamente no seu calendário.
                     </p>
                     <div className="rounded-lg border p-3 bg-muted/30 text-xs space-y-1">
                       <p className="font-semibold text-foreground">Como funciona:</p>
                       <p className="text-muted-foreground">1. Clique em "Conectar Google" abaixo</p>
-                      <p className="text-muted-foreground">2. Authorize o LEXIA no Google</p>
+                      <p className="text-muted-foreground">2. Autorize o ADVeyes no Google</p>
                       <p className="text-muted-foreground">3. Novos eventos serão sincronizados automaticamente</p>
                     </div>
-                    <Button className="gap-2 w-full sm:w-auto" onClick={handleGcalConnect}>
-                      <Link2 className="w-4 h-4" /> Conectar Google Calendar
+                    <Button
+                      className="gap-2 w-full sm:w-auto"
+                      onClick={handleGcalConnect}
+                      disabled={gcalLoading}
+                    >
+                      {gcalLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                      {gcalStatus?.connection?.status === "reconnect_required"
+                        ? "Reconectar Google Calendar"
+                        : "Conectar Google Calendar"}
                     </Button>
                     <p className="text-[10px] text-muted-foreground">
-                      Requer <code className="bg-muted px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> configurado no ambiente.
-                      Obtenha em <span className="italic">console.cloud.google.com</span>.
+                      O acesso é individual e pode ser revogado a qualquer momento.
                     </p>
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            <AlertDialog
+              open={showGcalDisconnectDialog}
+              onOpenChange={setShowGcalDisconnectDialog}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Desconectar Google Calendar</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Os dados continuarão no ADVeyes. Escolha se os eventos já
+                    criados também devem ser removidos da sua agenda Google.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="sm:justify-between">
+                  <AlertDialogCancel disabled={gcalLoading}>Cancelar</AlertDialogCancel>
+                  <div className="flex flex-col-reverse sm:flex-row gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleGcalDisconnect(false)}
+                      disabled={gcalLoading}
+                    >
+                      Manter eventos no Google
+                    </Button>
+                    <AlertDialogAction
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void handleGcalDisconnect(true);
+                      }}
+                      disabled={gcalLoading}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Remover eventos e desconectar
+                    </AlertDialogAction>
+                  </div>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* ── JusBrasil ── */}
             <Card>

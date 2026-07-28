@@ -68,7 +68,16 @@ const Financeiro = () => {
     if (metaRes.data) setMetas(metaRes.data);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+    void googleCalendar.getStatus()
+      .then((status) => {
+        setGcalConnected(
+          status.connected && status.connection?.status === "connected",
+        );
+      })
+      .catch(() => setGcalConnected(false));
+  }, []);
 
   const filtered = registros.filter((r) => {
     const matchTipo = filterTipo === "Todos" || r.tipo === filterTipo;
@@ -142,37 +151,16 @@ const Financeiro = () => {
     }
     setLoading(true);
     const payload = { ...form, valor: parseFloat(form.valor), user_id: user!.id, data_vencimento: form.data_vencimento || null };
-    let insertedId: string | null = null;
     const { error } = editItem
       ? await supabase.from("financeiro").update(payload).eq("id", editItem.id)
       : await (async () => {
-          const { data, error } = await supabase.from("financeiro").insert(payload).select("id").single();
-          if (data?.id) insertedId = data.id;
+          const { error } = await supabase.from("financeiro").insert(payload);
           return { error };
         })();
     if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
     else {
       if (gcalConnected && form.data_vencimento) {
-        const titulo = `Vencimento — ${form.descricao} R$ ${parseFloat(form.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${form.status})`;
-        if (editItem?.google_event_id) {
-          await googleCalendar.updateEvent(editItem.google_event_id as string, {
-            titulo,
-            data_inicio: form.data_vencimento,
-            colorId: "2",
-            allDay: true,
-          });
-        } else {
-          const gcalResult = await googleCalendar.createEvent({
-            titulo,
-            data_inicio: form.data_vencimento,
-            colorId: "2",
-            allDay: true,
-          });
-          const targetId = insertedId ?? (editItem?.id as string | null | undefined) ?? null;
-          if (gcalResult?.id && targetId) {
-            await (supabase as any).from("financeiro").update({ google_event_id: gcalResult.id }).eq("id", targetId);
-          }
-        }
+        googleCalendar.requestSync();
       }
       toast({ title: "Lançamento registrado!" });
       setForm({ tipo: "honorario", descricao: "", valor: "", data_vencimento: "", status: "pendente" });
@@ -219,11 +207,8 @@ const Financeiro = () => {
 
   const deleteItem = async (id: string) => {
     if (!confirm("Excluir este lançamento?")) return;
-    const registro = registros.find(r => r.id === id);
-    if (gcalConnected && registro?.google_event_id) {
-      await googleCalendar.deleteEvent(registro.google_event_id as string);
-    }
     await supabase.from("financeiro").delete().eq("id", id);
+    if (gcalConnected) googleCalendar.requestSync();
     fetchData();
   };
 
