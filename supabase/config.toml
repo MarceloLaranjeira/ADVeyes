@@ -1,22 +1,53 @@
-project_id = "qawfrmuitdiqmdjezyly"
+project_id = "mrgxxwllthlwxqhehjwp"
 
 [functions.process-email-queue]
 verify_jwt = true
 
 [functions.oab-sync]
-verify_jwt = false
+verify_jwt = true
 
 [functions.cron-monitoramento]
 verify_jwt = false
 
 [functions.dje-discovery]
-verify_jwt = false
+verify_jwt = true
 
 [functions.dje-tjam-busca]
-verify_jwt = false
+verify_jwt = true
 
 [functions.busca-oab]
-verify_jwt = false
+verify_jwt = true
 
 [functions.asaas-webhook]
+verify_jwt = false
+
+[functions.asaas]
+verify_jwt = true
+
+[functions.chat]
+verify_jwt = true
+
+[functions.capturar-publicacoes]
+verify_jwt = true
+
+[functions.busca-processual]
+verify_jwt = true
+
+[functions.portal-data]
+verify_jwt = false
+
+[functions.tribunal-api]
+verify_jwt = true
+
+[functions.google-calendar]
+# Valida o JWT do usuário dentro da função para compatibilidade com chaves
+# assimétricas e respostas de erro controladas.
+verify_jwt = false
+
+[functions.google-calendar-callback]
+# Callback externo do Google protegido por OAuth state de uso único.
+verify_jwt = false
+
+[functions.google-calendar-worker]
+# Chamado pelo pg_cron e protegido por GOOGLE_CALENDAR_WORKER_SECRET.
 verify_jwt = false

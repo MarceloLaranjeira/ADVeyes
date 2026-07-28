@@ -1,7 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://qawfrmuitdiqmdjezyly.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhd2ZybXVpdGRpcW1kamV6eWx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NDk4NzQsImV4cCI6MjA4ODMyNTg3NH0.tRm-_Gl2W9yWVnM7Jrs4flyhdwN1UlMo8OYcE373Fp8";
+export const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL || "https://mrgxxwllthlwxqhehjwp.supabase.co";
+export const SUPABASE_PUBLISHABLE_KEY =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  "sb_publishable_CPL2znmYp5DybyZW8NdWiw_bZUzyoKy";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+export const getFunctionUrl = (name: string) =>
+  `${SUPABASE_URL}/functions/v1/${encodeURIComponent(name)}`;
+
+export async function getAuthenticatedFunctionHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Sessão expirada. Faça login novamente.");
+  }
+
+  return {
+    "Content-Type": "application/json",
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${session.access_token}`,
+  };
+}
