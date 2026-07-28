@@ -2,13 +2,22 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ZipPath,
 
-  [Parameter(Mandatory = $true)]
-  [string]$ProjectRef
+  [string]$ProjectRef,
+
+  [switch]$Local
 )
 
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+if ($Local -and -not [string]::IsNullOrWhiteSpace($ProjectRef)) {
+  throw "Use -Local sem -ProjectRef."
+}
+
+if (-not $Local -and [string]::IsNullOrWhiteSpace($ProjectRef)) {
+  throw "Informe -ProjectRef para importação remota ou use -Local."
+}
 
 $booleanColumns = @{
   contratos_templates = @("ativo")
@@ -98,18 +107,39 @@ function Read-ZipCsv {
   }
 }
 
-$apiKeyOutput = npx supabase projects api-keys `
-  --project-ref $ProjectRef `
-  --output-format json 2>$null | ConvertFrom-Json
+function ConvertTo-SqlLiteral {
+  param([AllowNull()][string]$Value)
 
-$serviceRoleKey = (
-  $apiKeyOutput.keys |
-    Where-Object { $_.name -eq "service_role" } |
-    Select-Object -First 1
-).api_key
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return "NULL"
+  }
 
-if ([string]::IsNullOrWhiteSpace($serviceRoleKey)) {
-  throw "Não foi possível obter a chave service_role pelo Supabase CLI."
+  return "'" + $Value.Replace("'", "''") + "'"
+}
+
+if ($Local) {
+  $localStatus = npx supabase status --output json 2>$null |
+    ConvertFrom-Json
+  $serviceRoleKey = $localStatus.SERVICE_ROLE_KEY
+  $apiBaseUrl = ([string]$localStatus.API_URL).TrimEnd("/")
+} else {
+  $apiKeyOutput = npx supabase projects api-keys `
+    --project-ref $ProjectRef `
+    --output-format json 2>$null | ConvertFrom-Json
+
+  $serviceRoleKey = (
+    $apiKeyOutput.keys |
+      Where-Object { $_.name -eq "service_role" } |
+      Select-Object -First 1
+  ).api_key
+  $apiBaseUrl = "https://$ProjectRef.supabase.co"
+}
+
+if (
+  [string]::IsNullOrWhiteSpace($serviceRoleKey) -or
+  [string]::IsNullOrWhiteSpace($apiBaseUrl)
+) {
+  throw "Não foi possível obter a configuração administrativa do Supabase."
 }
 
 $headers = @{
@@ -141,6 +171,73 @@ $archive = [System.IO.Compression.ZipFile]::OpenRead(
 $results = @()
 
 try {
+  if ($Local) {
+    $projectLine = Get-Content "supabase/config.toml" |
+      Where-Object { $_ -match '^\s*project_id\s*=' } |
+      Select-Object -First 1
+    if (-not $projectLine -or $projectLine -notmatch '"([^"]+)"') {
+      throw "Não foi possível resolver project_id em supabase/config.toml."
+    }
+
+    $localProjectRef = $Matches[1]
+    $dbContainer = "supabase_db_$localProjectRef"
+    $containerExists = docker ps --format "{{.Names}}" |
+      Where-Object { $_ -eq $dbContainer }
+    if (-not $containerExists) {
+      throw "Container local não encontrado: $dbContainer"
+    }
+
+    $authUsers = Read-ZipCsv -Archive $archive -FileName "auth_users.csv"
+    foreach ($authUser in $authUsers) {
+      $userId = ConvertTo-SqlLiteral ([string]$authUser.uuid)
+      $email = ConvertTo-SqlLiteral ([string]$authUser.email)
+      $createdAt = ConvertTo-SqlLiteral ([string]$authUser.created_at)
+
+      $sql = @"
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at,
+  confirmation_token,
+  email_change,
+  email_change_token_new,
+  recovery_token
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  ${userId}::uuid,
+  'authenticated',
+  'authenticated',
+  $email,
+  '',
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb,
+  coalesce(${createdAt}::timestamptz, now()),
+  now(),
+  '',
+  '',
+  '',
+  ''
+)
+on conflict (id) do update set email = excluded.email;
+"@
+
+      $sql | docker exec -i $dbContainer `
+        psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao criar usuário local $($authUser.uuid)."
+      }
+    }
+  }
+
   foreach ($item in $importOrder) {
     $table = $item.Table
     $sourceRows = Read-ZipCsv -Archive $archive -FileName $item.File
@@ -175,7 +272,7 @@ try {
       continue
     }
 
-    $uri = "https://$ProjectRef.supabase.co/rest/v1/$table" +
+    $uri = "$apiBaseUrl/rest/v1/$table" +
       "?on_conflict=$($item.Conflict)"
 
     Invoke-RestMethod `
