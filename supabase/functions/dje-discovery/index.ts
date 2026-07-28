@@ -196,6 +196,11 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const token = authHeader.replace("Bearer ", "");
 
     const supabase = createClient(
@@ -205,16 +210,15 @@ serve(async (req) => {
     );
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
-
-    const body = await req.json().catch(() => ({}));
-
-    // Aceita user_id do body como fallback (chamada interna de oab-sync)
-    const userId = user?.id || (body.user_id as string | undefined);
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "Não autenticado", detail: authErr?.message }), {
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const body = await req.json().catch(() => ({}));
+
+    const userId = user.id;
 
     const modo: string = body.modo || "dje"; // "dje" | "import"
 

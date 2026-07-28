@@ -12,9 +12,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
-const DJE_BUSCA_URL = `${SUPABASE_BASE_URL}/functions/v1/dje-tjam-busca`;
+import { supabase } from "@/integrations/supabase/client";
 
 type PublicacaoDJE = {
   id: string;
@@ -77,55 +75,32 @@ const DjeTjam = () => {
     setResultados([]);
 
     try {
-      // Obtém token de sessão do Supabase
-      const tokenRaw = localStorage.getItem("sb-yjfhuuovxhqpcpheivgv-auth-token");
-      const accessToken = tokenRaw ? JSON.parse(tokenRaw)?.access_token : null;
-
-      const resp = await fetch(DJE_BUSCA_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke("dje-tjam-busca", {
+        body: {
           dataInicio,
           dataFim,
           palavraChave: palavraChave || undefined,
           oab: numeroOAB || undefined,
-        }),
+        },
       });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const lista: PublicacaoDJE[] = data.publicacoes ?? [];
-        setResultados(lista);
-        toast({
-          title: lista.length > 0
-            ? `${lista.length} publicação(ões) encontrada(s) no DJE TJAM`
-            : "Nenhuma publicação encontrada",
-          description: lista.length === 0
-            ? "Tente ampliar o período ou usar outros termos."
-            : `Fonte: ${data.fonte ?? "DJE TJAM"}`,
-        });
-      } else {
-        const err = await resp.json().catch(() => ({}));
-        console.error("[DJE TJAM]", err);
-        // Fallback mock para demonstração
-        const mock = gerarMockResultados(palavraChave || numeroOAB);
-        setResultados(mock);
-        toast({
-          title: `Modo demonstração — ${mock.length} publicação(ões)`,
-          description: err.error ?? "A Edge Function retornou um erro. Verifique o deploy no Supabase.",
-          variant: "destructive",
-        });
-      }
-    } catch (e) {
-      console.error("[DJE TJAM] fetch error:", e);
-      const mock = gerarMockResultados(palavraChave || numeroOAB);
-      setResultados(mock);
+      if (error) throw error;
+
+      const lista: PublicacaoDJE[] = data?.publicacoes ?? [];
+      setResultados(lista);
       toast({
-        title: "Modo demonstração",
-        description: "Não foi possível conectar à Edge Function dje-tjam-busca. Faça o deploy no Supabase.",
+        title: lista.length > 0
+          ? `${lista.length} publicação(ões) encontrada(s) no DJE TJAM`
+          : "Nenhuma publicação encontrada",
+        description: lista.length === 0
+          ? "Tente ampliar o período ou usar outros termos."
+          : `Fonte: ${data?.fonte ?? "DJE TJAM"}`,
+      });
+    } catch (e) {
+      console.error("[DJE TJAM]", e);
+      toast({
+        title: "Erro ao consultar o DJE TJAM",
+        description: e instanceof Error ? e.message : "Não foi possível consultar o serviço.",
         variant: "destructive",
       });
     } finally {
@@ -396,47 +371,5 @@ const DjeTjam = () => {
     </AppLayout>
   );
 };
-
-// Dados mock para demonstração quando a Edge Function não está configurada
-function gerarMockResultados(termo: string): PublicacaoDJE[] {
-  return [
-    {
-      id: "mock-1",
-      dataPublicacao: new Date().toISOString(),
-      edicao: "5421",
-      caderno: "1 - Judicial - 1ª Instância",
-      pagina: "34",
-      tipoAto: "intimacao",
-      orgaoJulgador: "3ª Vara Cível da Comarca de Manaus",
-      numeroProcesso: "0001234-56.2024.8.04.0001",
-      partes: `${termo || "Parte Autora"} x Parte Ré`,
-      conteudo: `INTIMAÇÃO — 3ª Vara Cível da Comarca de Manaus. Processo nº 0001234-56.2024.8.04.0001.\n\nIntimam-se as partes e seus respectivos patronos de que fica DESIGNADA Audiência de Instrução e Julgamento para o dia 15 de maio de 2026, às 14h00, perante este Juízo.\n\nFica, ainda, intimada a parte autora para que apresente rol de testemunhas no prazo improrrogável de 05 (cinco) dias úteis, sob pena de preclusão.\n\nCumpra-se e intimem-se.\n\nManaus/AM, ${format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}.`,
-    },
-    {
-      id: "mock-2",
-      dataPublicacao: new Date(Date.now() - 86400000).toISOString(),
-      edicao: "5420",
-      caderno: "1 - Judicial - 1ª Instância",
-      pagina: "78",
-      tipoAto: "despacho",
-      orgaoJulgador: "2ª Vara de Família e Sucessões",
-      numeroProcesso: "0007891-23.2023.8.04.0002",
-      partes: `${termo || "Requerente"} x Requerido`,
-      conteudo: `DESPACHO — 2ª Vara de Família e Sucessões.\n\nConsiderando a juntada de documentos às fls. 234/256, intime-se a parte requerida para que, no prazo de 15 (quinze) dias, manifeste-se sobre os documentos juntados.\n\nApós, venham conclusos para decisão.\n\nManaus/AM, ${format(new Date(Date.now() - 86400000), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}.`,
-    },
-    {
-      id: "mock-3",
-      dataPublicacao: new Date(Date.now() - 2 * 86400000).toISOString(),
-      edicao: "5419",
-      caderno: "2 - Judicial - 2ª Instância",
-      pagina: "12",
-      tipoAto: "acordao",
-      orgaoJulgador: "1ª Câmara Cível do TJAM",
-      numeroProcesso: "0003456-78.2022.8.04.0001",
-      partes: `${termo || "Apelante"} x Apelado`,
-      conteudo: `ACÓRDÃO — 1ª Câmara Cível do Tribunal de Justiça do Amazonas.\n\nAPELAÇÃO CÍVEL. DIREITO CIVIL. RESPONSABILIDADE CONTRATUAL.\n\nACORDAM os membros da Primeira Câmara Cível do Tribunal de Justiça do Estado do Amazonas, por unanimidade, NEGAR PROVIMENTO ao recurso, nos termos do voto do Relator.\n\nManaus/AM, ${format(new Date(Date.now() - 2 * 86400000), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}.`,
-    },
-  ];
-}
 
 export default DjeTjam;

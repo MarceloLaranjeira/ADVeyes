@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getAuthenticatedFunctionHeaders,
+  getFunctionUrl,
+  supabase,
+} from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,10 +58,6 @@ type Publicacao = {
   created_at: string;
 };
 
-const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
-const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
-const CAPTURAR_URL = `${SUPABASE_BASE_URL}/functions/v1/capturar-publicacoes`;
-const BUSCA_OAB_URL = `${SUPABASE_BASE_URL}/functions/v1/busca-oab`;
 const PERFIL_KEY = "lexia_perfil_advogado";
 
 function getPerfilOAB(): { oab_numero: string; seccional: string } | null {
@@ -210,23 +210,16 @@ const Publicacoes = () => {
     setBuscaFeita(false);
     setBuscaResultados([]);
     try {
-      // Usa a Edge Function busca-oab (verify_jwt=false — sem necessidade de token)
-      const resp = await fetch(BUSCA_OAB_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo: t, valor: v }),
+      const { data: result, error } = await supabase.functions.invoke("busca-oab", {
+        body: { tipo: t, valor: v },
       });
-      const result = await resp.json();
-      if (!resp.ok) {
-        toast({ title: "Erro na busca", description: result.error || "Tente novamente", variant: "destructive" });
-        return;
-      }
-      setBuscaResultados(result.resultados || []);
+      if (error) throw error;
+      setBuscaResultados(result?.resultados || []);
       setBuscaFeita(true);
-      if ((result.resultados || []).length === 0) {
+      if ((result?.resultados || []).length === 0) {
         toast({ title: "Nenhum processo encontrado", description: `Sem resultados para ${t.toUpperCase()}: ${v}` });
       } else {
-        toast({ title: `${result.total} processo(s) encontrado(s)`, description: `Fonte: ${result.fonte || "DataJud/CNJ"}` });
+        toast({ title: `${result?.total} processo(s) encontrado(s)`, description: `Fonte: ${result?.fonte || "DataJud/CNJ"}` });
       }
     } catch {
       toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor.", variant: "destructive" });
@@ -241,24 +234,15 @@ const Publicacoes = () => {
     if (!v || buscaResultados.length === 0) return;
     setSalvandoBusca(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
       const perfilOAB = getPerfilOAB();
-      const resp = await fetch(CAPTURAR_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
+      const { data: result, error } = await supabase.functions.invoke("capturar-publicacoes", {
+        body: {
           busca: { tipo: t, valor: v, salvar: true },
           ...(perfilOAB ?? {}),
-        }),
+        },
       });
-      const result = await resp.json();
-      if (!resp.ok) {
-        toast({ title: "Erro ao salvar", description: result.error || "Tente novamente", variant: "destructive" });
-        return;
-      }
-      const salvos = result.publicacoesSalvas || 0;
+      if (error) throw error;
+      const salvos = result?.publicacoesSalvas || 0;
       toast({
         title: salvos > 0 ? `${salvos} publicação(ões) salva(s)!` : "Publicações já registradas",
         description: salvos > 0 ? "As movimentações foram adicionadas ao módulo Publicações." : "Não há publicações novas para salvar.",
@@ -295,33 +279,13 @@ const Publicacoes = () => {
   const capturarPublicacoes = async () => {
     setLoadingCaptura(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) {
-        toast({ title: "Sessão expirada. Faça login novamente.", variant: "destructive" });
-        return;
-      }
-
       const perfilOAB = getPerfilOAB();
-      const resp = await fetch(CAPTURAR_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(perfilOAB ?? {}),
-      }).catch(() => null);
+      const { data: result, error } = await supabase.functions.invoke("capturar-publicacoes", {
+        body: perfilOAB ?? {},
+      });
+      if (error) throw error;
 
-      if (!resp) {
-        toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor DataJud.", variant: "destructive" });
-        return;
-      }
-
-      const result = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        toast({ title: "Erro ao capturar", description: result.error || result.message || "Tente novamente.", variant: "destructive" });
-        return;
-      }
-
-      if (result.capturadas > 0) {
+      if ((result?.capturadas ?? 0) > 0) {
         toast({ title: `${result.capturadas} movimentação(ões) capturada(s)!`, description: result.message });
         fetchPublicacoes();
       } else {
@@ -382,9 +346,9 @@ AÇÃO NECESSÁRIA: [descrição em 1 frase do que o advogado deve fazer]
 TAREFA SUGERIDA: [título objetivo da tarefa a ser criada, ex: "Apresentar rol de testemunhas - Proc. 0001234"]
 RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]`;
 
-      const response = await fetch(CHAT_URL, {
+      const response = await fetch(getFunctionUrl("chat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: await getAuthenticatedFunctionHeaders(),
         body: JSON.stringify({ messages: [{ role: "user", content: prompt }], mode: "assistente" }),
       });
 

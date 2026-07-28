@@ -2,7 +2,6 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { inicializarHorus } from "@/services/horus";
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -88,11 +87,6 @@ class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
-
-// 🦅 Inicializar Horus ao carregar o app
-inicializarHorus().catch((error) => {
-  console.error("❌ Erro ao inicializar Horus:", error);
-});
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
