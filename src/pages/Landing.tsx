@@ -27,7 +27,7 @@ const Nav = () => {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <LogoMark size="sm" />
-            <span className="font-serif font-bold text-[#1a2a5e] tracking-widest text-lg uppercase">LEXIA</span>
+            <span className="font-serif font-bold text-[#1a2a5e] tracking-widest text-lg uppercase">ADVeyes</span>
           </div>
 
           {/* Desktop nav */}
@@ -242,7 +242,7 @@ const features = [
     icon: Calendar,
     color: "bg-green-50 text-green-600",
     title: "Agenda Inteligente",
-    desc: "Compromissos, prazos e audiências em views Mês/Semana/Dia. Integração com Google Calendar.",
+    desc: "Conecte sua própria conta Google uma vez e sincronize automaticamente os eventos que você criar no ADVeyes.",
   },
   {
     icon: Bot,
@@ -300,8 +300,8 @@ const Features = () => (
 // ─── How It Works ─────────────────────────────────────────────────────────────
 const steps = [
   { n: "01", title: "Cadastre-se em 2 minutos", desc: "Crie sua conta gratuitamente. Sem cartão de crédito. Sem formulário complicado." },
-  { n: "02", title: "Importe seus processos", desc: "Adicione processos manualmente ou deixe o LEXIA buscar automaticamente nos tribunais pelo seu número OAB." },
-  { n: "03", title: "Deixe o LEXIA trabalhar", desc: "Andamentos automáticos, alertas de prazo, publicações e IA jurídica sempre ao seu lado." },
+  { n: "02", title: "Importe seus processos", desc: "Adicione processos manualmente ou deixe o ADVeyes buscar automaticamente nos tribunais pelo seu número OAB." },
+  { n: "03", title: "Deixe o ADVeyes trabalhar", desc: "Andamentos automáticos, alertas de prazo, publicações e IA jurídica sempre ao seu lado." },
 ];
 
 const HowItWorks = () => (
@@ -431,7 +431,7 @@ const testimonials = [
   {
     name: "Dr. Rodrigo Figueiredo",
     role: "Advogado Criminalista · OAB/AM 12.305",
-    text: "O LEXIA mudou completamente minha rotina. Os andamentos automáticos do TJAM me economizam pelo menos 2 horas por dia. A IA jurídica é impressionante para redigir recursos.",
+    text: "O ADVeyes mudou completamente minha rotina. Os andamentos automáticos do TJAM me economizam pelo menos 2 horas por dia. A IA jurídica é impressionante para redigir recursos.",
     stars: 5,
   },
   {
@@ -443,7 +443,7 @@ const testimonials = [
   {
     name: "Dr. André Santana",
     role: "Advogado Trabalhista · OAB/BA 28.907",
-    text: "A integração com o DataJud é perfeita. Todos os andamentos chegam automáticos. Nunca mais perdi um prazo desde que comecei a usar o LEXIA.",
+    text: "A integração com o DataJud é perfeita. Todos os andamentos chegam automáticos. Nunca mais perdi um prazo desde que comecei a usar o ADVeyes.",
     stars: 5,
   },
 ];
@@ -490,7 +490,7 @@ const CTABanner = () => {
           Pronto para transformar<br />seu escritório?
         </h2>
         <p className="text-blue-200/70 text-lg mb-8">
-          Junte-se a centenas de advogados que já usam o LEXIA para trabalhar melhor.
+          Junte-se a centenas de advogados que já usam o ADVeyes para trabalhar melhor.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
@@ -517,17 +517,17 @@ const Footer = () => (
         <div className="flex items-center gap-3">
           <LogoMark dark size="sm" />
           <div>
-            <div className="font-serif font-bold tracking-widest text-sm uppercase text-white/80">LEXIA</div>
+            <div className="font-serif font-bold tracking-widest text-sm uppercase text-white/80">ADVeyes</div>
             <div className="text-[9px] tracking-widest uppercase text-white/30">Gestão Jurídica</div>
           </div>
         </div>
         <div className="flex gap-6 text-xs">
-          <a href="#" className="hover:text-white transition-colors">Termos de Uso</a>
-          <a href="#" className="hover:text-white transition-colors">Privacidade (LGPD)</a>
-          <a href="#" className="hover:text-white transition-colors">Contato</a>
-          <a href="#" className="hover:text-white transition-colors">Suporte</a>
+          <Link to="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="hover:text-white transition-colors">Privacidade (LGPD)</Link>
+          <a href="mailto:marcelolaranjeira33@gmail.com" className="hover:text-white transition-colors">Contato</a>
+          <a href="mailto:marcelolaranjeira33@gmail.com" className="hover:text-white transition-colors">Suporte</a>
         </div>
-        <p className="text-xs">© 2025 LEXIA · Albertino e Advogados Associados</p>
+        <p className="text-xs">© 2026 ADVeyes · Operado pela Automatikus</p>
       </div>
     </div>
   </footer>
