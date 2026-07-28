@@ -4,82 +4,78 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-async function call(path: string, method = "GET", body?: object) {
+export type PlanKey = keyof typeof PLANS;
+export type BillingType = "CREDIT_CARD" | "PIX" | "BOLETO";
+
+export interface CheckoutInput {
+  plan: PlanKey;
+  billingType: BillingType;
+  customer: {
+    name: string;
+    cpfCnpj: string;
+    email: string;
+    phone?: string;
+  };
+  creditCard?: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  };
+}
+
+export interface CheckoutResult {
+  ok: true;
+  subscription?: { id?: string };
+  payment?: {
+    id?: string;
+    bankSlipUrl?: string;
+    invoiceUrl?: string;
+  } | null;
+  pix?: {
+    payload?: string;
+    encodedImage?: string;
+  } | null;
+}
+
+async function call(body: object): Promise<CheckoutResult> {
   const { data: result, error } = await supabase.functions.invoke("asaas", {
-    body: { path, method, body },
+    body,
   });
-  if (error) throw new Error(error.message);
-  const payload = result?.data ?? result;
-  const status = result?.asaasStatus;
-  if (status && status >= 400) {
-    const msg = payload?.errors?.[0]?.description || payload?.message || JSON.stringify(payload);
-    throw new Error(`Asaas ${status}: ${msg}`);
+  if (error) {
+    let message = error.message;
+    if (error.context instanceof Response) {
+      try {
+        const payload = await error.context.clone().json() as { error?: string };
+        message = payload.error || message;
+      } catch {
+        // Mantém a mensagem padrão quando a resposta não é JSON.
+      }
+    }
+    throw new Error(message);
   }
-  if (payload?.errors) throw new Error(payload.errors[0]?.description || JSON.stringify(payload.errors));
-  return payload;
+  if (!result?.ok) {
+    const detail =
+      result?.details?.errors?.[0]?.description ||
+      result?.details?.message ||
+      result?.error ||
+      "Falha ao processar cobrança";
+    throw new Error(detail);
+  }
+  return result as CheckoutResult;
 }
 
 export const asaas = {
-  /** Create a customer in Asaas */
-  createCustomer(data: {
-    name: string;
-    cpfCnpj: string;
-    email?: string;
-    phone?: string;
-  }) {
-    return call("customers", "POST", data);
+  createCheckout(input: CheckoutInput) {
+    return call({ action: "create_checkout", ...input });
   },
 
-  /** Create a recurring subscription */
-  createSubscription(data: {
-    customer: string;
-    billingType: "CREDIT_CARD" | "PIX" | "BOLETO";
-    value: number;
-    nextDueDate: string;
-    cycle: "MONTHLY" | "YEARLY";
-    description: string;
-    creditCard?: {
-      holderName: string;
-      number: string;
-      expiryMonth: string;
-      expiryYear: string;
-      ccv: string;
-    };
-    creditCardHolderInfo?: {
-      name: string;
-      email: string;
-      cpfCnpj: string;
-      postalCode: string;
-      addressNumber: string;
-      phone: string;
-    };
-  }) {
-    return call("subscriptions", "POST", data);
-  },
-
-  /** Get subscription status */
-  getSubscription(subscriptionId: string) {
-    return call(`subscriptions/${subscriptionId}`);
-  },
-
-  /** Cancel subscription */
-  cancelSubscription(subscriptionId: string) {
-    return call(`subscriptions/${subscriptionId}`, "DELETE");
-  },
-
-  /** Create a one-time PIX payment */
-  createPixPayment(data: {
-    customer: string;
-    value: number;
-    dueDate: string;
-    description: string;
-  }) {
-    return call("payments", "POST", { ...data, billingType: "PIX" });
-  },
-
-  /** Get PIX QR code for a payment */
-  getPixQrCode(paymentId: string) {
-    return call(`payments/${paymentId}/pixQrCode`);
+  cancelSubscription() {
+    return call({ action: "cancel_subscription" });
   },
 };
 

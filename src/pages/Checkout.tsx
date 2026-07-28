@@ -13,9 +13,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckCircle2, CreditCard, QrCode, FileText } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 type PlanKey = keyof typeof PLANS;
+
+const isPlanKey = (value: string | null): value is PlanKey =>
+  value !== null && Object.prototype.hasOwnProperty.call(PLANS, value);
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
@@ -23,7 +25,8 @@ export default function Checkout() {
   const { user } = useAuth();
   const { refresh } = useSubscription();
 
-  const initialPlan = (searchParams.get("plan") as PlanKey) ?? "profissional";
+  const requestedPlan = searchParams.get("plan");
+  const initialPlan: PlanKey = isPlanKey(requestedPlan) ? requestedPlan : "profissional";
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>(initialPlan);
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<{ qrCode: string; encodedImage: string } | null>(null);
@@ -43,59 +46,31 @@ export default function Checkout() {
 
   const plan = PLANS[selectedPlan];
 
-  const getNextDueDate = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
-  };
-
-  async function ensureCustomer(): Promise<string> {
-    const { data: sub } = await (supabase as any)
-      .from("asaas_subscriptions")
-      .select("asaas_customer_id")
-      .eq("user_id", user!.id)
-      .maybeSingle();
-
-    if ((sub as any)?.asaas_customer_id) return (sub as any).asaas_customer_id;
-
-    const customer = await asaas.createCustomer({ name: nome, cpfCnpj, email });
-    if (!customer?.id) throw new Error("Falha ao criar cliente no Asaas");
-
-    await (supabase as any)
-      .from("asaas_subscriptions")
-      .update({ asaas_customer_id: customer.id })
-      .eq("user_id", user!.id);
-
-    return customer.id;
-  }
-
   async function handleCartao() {
-    if (!nome || !cpfCnpj || !cardHolder || !cardNumber || !cardExpiry || !cardCvv) {
+    if (
+      !nome || !cpfCnpj || !email || !cardHolder || !cardNumber ||
+      !cardExpiry || !cardCvv || !cardCep || !cardAddressNumber || !cardPhone
+    ) {
       toast.error("Preencha todos os campos do cartão");
+      return;
+    }
+    if (!/^\d{2}\/\d{4}$/.test(cardExpiry.trim())) {
+      toast.error("Informe a validade no formato MM/AAAA");
       return;
     }
     setLoading(true);
     try {
-      const customerId = await ensureCustomer();
       const [expMonth, expYear] = cardExpiry.split("/");
-      await asaas.createSubscription({
-        customer: customerId,
+      await asaas.createCheckout({
+        plan: selectedPlan,
         billingType: "CREDIT_CARD",
-        value: plan.price,
-        nextDueDate: getNextDueDate(),
-        cycle: "MONTHLY",
-        description: `ADVeyes ${plan.name}`,
+        customer: { name: nome, cpfCnpj, email, phone: cardPhone },
         creditCard: {
           holderName: cardHolder,
           number: cardNumber.replace(/\s/g, ""),
           expiryMonth: expMonth.trim(),
           expiryYear: expYear.trim(),
           ccv: cardCvv,
-        },
-        creditCardHolderInfo: {
-          name: nome,
-          email,
-          cpfCnpj,
           postalCode: cardCep.replace("-", ""),
           addressNumber: cardAddressNumber,
           phone: cardPhone,
@@ -112,18 +87,18 @@ export default function Checkout() {
   }
 
   async function handlePix() {
-    if (!nome || !cpfCnpj) { toast.error("Preencha nome e CPF/CNPJ"); return; }
+    if (!nome || !cpfCnpj || !email) { toast.error("Preencha nome, CPF/CNPJ e e-mail"); return; }
     setLoading(true);
     try {
-      const customerId = await ensureCustomer();
-      const payment = await asaas.createPixPayment({
-        customer: customerId,
-        value: plan.price,
-        dueDate: getNextDueDate(),
-        description: `ADVeyes ${plan.name}`,
+      const result = await asaas.createCheckout({
+        plan: selectedPlan,
+        billingType: "PIX",
+        customer: { name: nome, cpfCnpj, email, phone: cardPhone },
       });
-      const qr = await asaas.getPixQrCode(payment.id);
-      setPixData({ qrCode: qr.payload, encodedImage: qr.encodedImage });
+      if (!result.pix?.payload || !result.pix?.encodedImage) {
+        throw new Error("Assinatura criada, mas o QR Code ainda não está disponível. Tente novamente em instantes.");
+      }
+      setPixData({ qrCode: result.pix.payload, encodedImage: result.pix.encodedImage });
       toast.info("Escaneie o QR code. Sua conta ativa automaticamente após confirmação.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX");
@@ -133,19 +108,19 @@ export default function Checkout() {
   }
 
   async function handleBoleto() {
-    if (!nome || !cpfCnpj) { toast.error("Preencha nome e CPF/CNPJ"); return; }
+    if (!nome || !cpfCnpj || !email) { toast.error("Preencha nome, CPF/CNPJ e e-mail"); return; }
     setLoading(true);
     try {
-      const customerId = await ensureCustomer();
-      const result = await asaas.createSubscription({
-        customer: customerId,
+      const result = await asaas.createCheckout({
+        plan: selectedPlan,
         billingType: "BOLETO",
-        value: plan.price,
-        nextDueDate: getNextDueDate(),
-        cycle: "MONTHLY",
-        description: `ADVeyes ${plan.name}`,
+        customer: { name: nome, cpfCnpj, email, phone: cardPhone },
       });
-      setBoletoUrl(result.bankSlipUrl ?? null);
+      const url = result.payment?.bankSlipUrl ?? result.payment?.invoiceUrl;
+      if (!url) {
+        throw new Error("Assinatura criada, mas o boleto ainda não está disponível. Tente novamente em instantes.");
+      }
+      setBoletoUrl(url);
       toast.info("Boleto gerado! Sua conta ativa automaticamente após compensação.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erro ao gerar boleto");

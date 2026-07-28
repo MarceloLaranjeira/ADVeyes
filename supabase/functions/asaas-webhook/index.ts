@@ -29,7 +29,12 @@ serve(async (req) => {
 
   let payload: {
     event: string;
-    payment?: { subscriptionId?: string; customer?: string; dueDate?: string };
+    payment?: {
+      id?: string;
+      subscription?: string;
+      customer?: string;
+      dueDate?: string;
+    };
     subscription?: { id?: string; customer?: string };
   };
   try {
@@ -43,7 +48,7 @@ serve(async (req) => {
 
   const { event, payment, subscription } = payload;
   const asaasCustomerId = payment?.customer ?? subscription?.customer;
-  const asaasSubscriptionId = payment?.subscriptionId ?? subscription?.id;
+  const asaasSubscriptionId = payment?.subscription ?? subscription?.id;
 
   if (!asaasCustomerId) {
     return new Response(JSON.stringify({ ok: true, skipped: "no customer id" }), {
