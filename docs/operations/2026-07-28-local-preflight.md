@@ -16,6 +16,8 @@
 - `npm run build`: aprovado.
 - Build mantém aviso preexistente de bundle principal maior que 500 kB.
 - Teste sentinela de autenticação adicionado: 3 testes aprovados.
+- Teste sentinela de assinatura por usuário: 2 testes aprovados.
+- Teste sentinela SQL de RLS: 8 testes aprovados com dois usuários sintéticos.
 
 ## Reconstrução do banco
 
@@ -64,6 +66,13 @@ Ela concede ao backend:
 Depois da migration, a restauração terminou com sucesso. A migration ainda não
 foi aplicada remotamente; no remoto os privilégios equivalentes já existem.
 
+A comparação de grants também mostrou que o Supabase gerenciado concede os
+privilégios-base dos papéis da API automaticamente, enquanto a reconstrução
+local via migrations não os recompunha. A migration local
+`20260728224603_align_api_role_grants.sql` alinha `anon` e `authenticated` ao
+estado remoto e preserva as revogações especiais de assinatura e Google
+Calendar.
+
 ## Validações do banco
 
 - `supabase db lint`: nenhum problema encontrado.
@@ -75,7 +84,6 @@ foi aplicada remotamente; no remoto os privilégios equivalentes já existem.
 
 ## Próximo passo
 
-1. Versionar os artefatos da Fase 0.
-2. Criar testes SQL sentinela de RLS com dois usuários.
-3. Criar a migration de fundação de tenants pelo Supabase CLI.
-4. Testar somente no banco local restaurado.
+1. Criar a migration de fundação de tenants pelo Supabase CLI.
+2. Criar testes pgTAP das tabelas centrais.
+3. Testar somente no banco local restaurado.
