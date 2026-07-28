@@ -33,3 +33,5 @@ dist-ssr
 .superpowers/
 graphify-out/
 supabase/.temp/
+check_ts.js
+check_ts.mjs

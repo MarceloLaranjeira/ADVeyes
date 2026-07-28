@@ -5,9 +5,10 @@
 - Produção atual no Lovable Cloud: `qawfrmuitdiqmdjezyly`.
 - Novo Supabase sob controle da Automatikus: `mrgxxwllthlwxqhehjwp`.
 
-O schema, os 60 registros exportados e os três usuários
-já foram migrados para o projeto novo. O frontend continua apontando para a
-produção atual até a homologação das integrações externas e do login.
+O schema, os 60 registros exportados e os três usuários foram migrados para o
+projeto novo. O frontend de produção já usa o projeto sob controle da
+Automatikus; integrações externas que dependem de secrets continuam sujeitas
+ao checklist de homologação abaixo.
 
 O frontend deve obter URLs e chaves exclusivamente pelas variáveis
 `VITE_SUPABASE_*` ou pelo cliente central em
