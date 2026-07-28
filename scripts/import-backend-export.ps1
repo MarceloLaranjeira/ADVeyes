@@ -287,6 +287,15 @@ on conflict (id) do update set email = excluded.email;
       Imported = $payloadRows.Count
     }
   }
+
+  if ($Local) {
+    "select private.seed_albertino_tenant();" |
+      docker exec -i $dbContainer `
+        psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Falha ao criar o tenant Albertino depois da restauração local."
+    }
+  }
 } finally {
   $archive.Dispose()
   $serviceRoleKey = $null

@@ -82,8 +82,21 @@ Calendar.
   PostHog, depois de imprimir `No issues found`. O erro não veio do banco.
 - `service_role` local possui os sete privilégios esperados em `profiles`.
 
+## Fundação multiempresa local
+
+- Nove tabelas administrativas criadas com RLS e sem policy permissiva
+  temporária.
+- 28 testes pgTAP aprovados: 8 do isolamento legado e 20 da fundação.
+- Tenant `albertino` criado automaticamente depois da restauração local.
+- Três memberships ativas, com exatamente um owner.
+- Marca inicial, superadmin e evento de auditoria criados.
+- O seed foi executado duas vezes sem duplicar tenant, memberships ou
+  auditoria.
+- O mapeamento das duas contas da Grazielle como `lawyer/assigned` permanece
+  pendente de confirmação antes da produção.
+
 ## Próximo passo
 
-1. Criar a migration de fundação de tenants pelo Supabase CLI.
-2. Criar testes pgTAP das tabelas centrais.
-3. Testar somente no banco local restaurado.
+1. Criar helpers privados de autorização por tenant.
+2. Testar a matriz de papéis e escopos.
+3. Continuar somente no banco local restaurado.

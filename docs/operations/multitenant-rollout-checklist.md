@@ -51,6 +51,10 @@ Confirmar existência sem copiar valores:
       forma idempotente.
 - [ ] Os três usuários existentes foram localizados.
 - [ ] O owner foi confirmado explicitamente.
+- [ ] Confirmar antes da produção o mapeamento inicial de papéis:
+      `marcelolaranjeira33@gmail.com` como `owner/tenant` e as contas
+      `grazielleag@hotmail.com` e `grazielle0705@gmail.com` como
+      `lawyer/assigned`.
 - [ ] Contagens das tabelas foram registradas.
 - [ ] Policies e funções privilegiadas foram revisadas.
 - [ ] Jobs cron ativos foram registrados.
@@ -96,4 +100,3 @@ Confirmar existência sem copiar valores:
 | Advisors |  |  |
 | Testes frontend |  |  |
 | Testes Edge Functions |  |  |
-
