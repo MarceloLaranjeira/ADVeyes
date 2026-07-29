@@ -350,11 +350,11 @@ anônimo.
 
 **Passos:**
 
-- [ ] Receber hostname validado, não tenant UUID livre.
-- [ ] Retornar apenas marca pública e status de disponibilidade.
-- [ ] Rejeitar hosts fora da allowlist.
-- [ ] Aplicar cache curto com chave por hostname.
-- [ ] Não retornar plano, membros ou dados internos.
+- [x] Receber hostname validado, não tenant UUID livre.
+- [x] Retornar apenas marca pública e status de disponibilidade.
+- [x] Rejeitar hosts fora da allowlist.
+- [x] Aplicar cache curto com chave por hostname.
+- [x] Não retornar plano, membros ou dados internos.
 
 **Aceite:** pré-login marca corretamente sem vazar informações.
 
@@ -375,14 +375,18 @@ anônimo.
 
 **Passos:**
 
-- [ ] Resolver slug pelo hostname.
-- [ ] Buscar marca pública antes do login.
-- [ ] Após login, carregar memberships ativas.
-- [ ] Bloquear tenant sem associação.
-- [ ] No host central, apresentar seletor para múltiplos tenants.
-- [ ] Navegar ao subdomínio escolhido.
+- [x] Resolver slug pelo hostname.
+- [x] Buscar marca pública antes do login.
+- [x] Após login, carregar memberships ativas.
+- [x] Bloquear tenant sem associação.
+- [x] No host central, apresentar seletor para múltiplos tenants.
+- [x] Navegar ao subdomínio escolhido.
 
 **Aceite:** usuário multi-tenant alterna sem misturar cache ou queries.
+
+**Nota de implementação:** resolução, bloqueio e seleção já estão concluídos.
+O uso obrigatório de `tenant_id` em todas as consultas empresariais permanece
+na Tarefa 10.2 antes da ativação multi-tenant em produção.
 
 ### Tarefa 4.3 — `BrandProvider` e tokens
 

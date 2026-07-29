@@ -13,15 +13,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { recognizeDocument, type DocumentInfo } from "@/lib/document-recognition";
 import { buildTenantDocumentPath } from "@/lib/tenant-storage";
+import { useTenant } from "@/contexts/TenantContext";
+import type { Tables } from "@/integrations/supabase/types";
 
 const tiposDoc = ["Petição", "Contestação", "Recurso", "HC", "Alegações", "Procuração", "Contrato", "Parecer", "Decisão", "Outros"];
 
+type Documento = Tables<"documentos">;
+type ProcessoOption = Pick<
+  Tables<"processos">,
+  "id" | "numero" | "cliente_nome"
+>;
+
 const Documentos = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [documentos, setDocumentos] = useState<Record<string, any>[]>([]);
-  const [processos, setProcessos] = useState<Record<string, any>[]>([]);
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [processos, setProcessos] = useState<ProcessoOption[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -81,16 +90,7 @@ const Documentos = () => {
     }
     setLoading(true);
 
-    const { data: membership, error: membershipError } = await (supabase.from as any)(
-      "tenant_memberships",
-    )
-      .select("tenant_id")
-      .eq("user_id", user!.id)
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
-
-    if (membershipError || !membership?.tenant_id) {
+    if (!currentTenant) {
       toast({
         title: "Escritório não identificado",
         description: "Sua conta precisa estar vinculada a um escritório ativo.",
@@ -102,7 +102,7 @@ const Documentos = () => {
 
     const documentId = crypto.randomUUID();
     const filePath = buildTenantDocumentPath({
-      tenantId: membership.tenant_id,
+      tenantId: currentTenant.tenantId,
       documentId,
       fileName: selectedFile.name,
     });
@@ -124,7 +124,7 @@ const Documentos = () => {
       arquivo_path: filePath,
       tamanho: selectedFile.size,
       user_id: user!.id,
-      tenant_id: membership.tenant_id,
+      tenant_id: currentTenant.tenantId,
     });
 
     if (error) {

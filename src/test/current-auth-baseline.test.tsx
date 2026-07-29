@@ -10,6 +10,17 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: useAuthMock,
 }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenant: () => ({
+    memberships: [{ tenantId: "tenant-a" }],
+    currentTenant: { tenantId: "tenant-a" },
+    loading: false,
+    error: null,
+    selectTenant: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 function renderProtectedRoute() {
