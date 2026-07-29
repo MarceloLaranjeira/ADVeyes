@@ -236,6 +236,13 @@ on conflict (id) do update set email = excluded.email;
         throw "Falha ao criar usuário local $($authUser.uuid)."
       }
     }
+
+    "select private.seed_albertino_tenant();" |
+      docker exec -i $dbContainer `
+        psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Falha ao criar o tenant Albertino antes da restauração local."
+    }
   }
 
   foreach ($item in $importOrder) {
@@ -289,13 +296,6 @@ on conflict (id) do update set email = excluded.email;
   }
 
   if ($Local) {
-    "select private.seed_albertino_tenant();" |
-      docker exec -i $dbContainer `
-        psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Falha ao criar o tenant Albertino depois da restauração local."
-    }
-
     "select private.backfill_albertino_tenant();" |
       docker exec -i $dbContainer `
         psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null

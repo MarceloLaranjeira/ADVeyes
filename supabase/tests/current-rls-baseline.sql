@@ -56,6 +56,45 @@ insert into auth.users (
     ''
   );
 
+insert into public.tenants (
+  id,
+  legal_name,
+  display_name,
+  slug,
+  status
+) values (
+  '10000000-0000-0000-0000-000000000099',
+  'Tenant RLS Baseline Ltda.',
+  'Tenant RLS Baseline',
+  'tenant-rls-baseline',
+  'active'
+);
+
+insert into public.tenant_memberships (
+  tenant_id,
+  user_id,
+  role,
+  status,
+  data_scope,
+  activated_at
+) values
+  (
+    '10000000-0000-0000-0000-000000000099',
+    '10000000-0000-0000-0000-000000000001',
+    'owner',
+    'active',
+    'tenant',
+    now()
+  ),
+  (
+    '10000000-0000-0000-0000-000000000099',
+    '20000000-0000-0000-0000-000000000002',
+    'lawyer',
+    'active',
+    'assigned',
+    now()
+  );
+
 insert into public.clientes (id, user_id, nome)
 values
   (

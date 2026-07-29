@@ -86,8 +86,9 @@ Calendar.
 
 - Nove tabelas administrativas criadas com RLS e sem policy permissiva
   temporária.
-- 55 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação, 24 da
-  matriz de autorização e 3 da adição compatível de `tenant_id`.
+- 62 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação, 24 da
+  matriz de autorização, 3 da adição de `tenant_id` e 7 dos triggers de
+  compatibilidade.
 - Tenant `albertino` criado automaticamente depois da restauração local.
 - Três memberships ativas, com exatamente um owner.
 - Marca inicial, superadmin e evento de auditoria criados.
@@ -105,9 +106,15 @@ Calendar.
 - 45 linhas existentes foram associadas ao tenant Albertino.
 - O verificador de backfill encontrou zero linhas sem tenant e zero
   divergências pai/filho.
+- Inserts legados agora inferem tenant por membership ou registro pai.
+- Usuário multi-tenant sem contexto, spoofing e troca posterior de tenant são
+  rejeitados.
+- No último ensaio reset/import, os triggers preencheram as 45 linhas durante
+  a própria restauração; por isso o backfill final foi idempotente e alterou
+  zero linhas.
 
 ## Próximo passo
 
-1. Criar triggers temporários de compatibilidade para inserts legados.
-2. Rejeitar tenant incompatível e memberships ambíguas.
+1. Criar policies tenant-aware para os módulos principais.
+2. Testar dois tenants e escopos com registros sintéticos.
 3. Continuar somente no banco local restaurado.
