@@ -86,8 +86,8 @@ Calendar.
 
 - Nove tabelas administrativas criadas com RLS e sem policy permissiva
   temporária.
-- 52 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação e 24 da
-  matriz de autorização.
+- 55 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação, 24 da
+  matriz de autorização e 3 da adição compatível de `tenant_id`.
 - Tenant `albertino` criado automaticamente depois da restauração local.
 - Três memberships ativas, com exatamente um owner.
 - Marca inicial, superadmin e evento de auditoria criados.
@@ -100,9 +100,11 @@ Calendar.
 - Platform admin não recebe acesso jurídico automático.
 - Escopos `team` e `assigned` negam por padrão até cada módulo possuir vínculo
   explícito de atribuição.
+- 26 tabelas empresariais ou de fila receberam `tenant_id` anulável, FK e
+  índice sem troca das policies legadas.
 
 ## Próximo passo
 
-1. Inventariar as tabelas empresariais.
-2. Adicionar `tenant_id` anulável sem trocar as policies existentes.
+1. Fazer o backfill transacional do tenant Albertino.
+2. Conferir contagens e relações pai/filho.
 3. Continuar somente no banco local restaurado.
