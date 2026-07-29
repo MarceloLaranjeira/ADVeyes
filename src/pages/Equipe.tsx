@@ -1,280 +1,252 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { MemberFormDialog } from "@/components/equipe/MemberFormDialog";
+import { MemberAccessDialog } from "@/components/equipe/MemberAccessDialog";
+import { MemberTable } from "@/components/equipe/MemberTable";
+import { PendingInvitations } from "@/components/equipe/PendingInvitations";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTenant } from "@/contexts/TenantContext";
+import { useTeamManagement } from "@/hooks/useTeamManagement";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Users, Plus, Phone, Mail, Award, Briefcase,
-  Clock, DollarSign, TrendingUp, Edit, Trash2,
-  UserCheck, Scale,
-} from "lucide-react";
+import type {
+  InviteMemberInput,
+  PendingInvitation,
+  TeamDataScope,
+  TeamMember,
+  TeamRole,
+} from "@/types/team-management";
+import { Clock, Plus, ShieldCheck, UserCheck, Users } from "lucide-react";
 
-const cargos = ["advogado", "estagiario", "paralegal", "administrativo", "socio", "associado", "correspondente"];
-
-const Equipe = () => {
-  const { user } = useAuth();
+export default function Equipe() {
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const [membros, setMembros] = useState<Record<string, any>[]>([]);
-  const [timeEntries, setTimeEntries] = useState<Record<string, any>[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editMembro, setEditMembro] = useState<Record<string, any> | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    nome: "", email: "", telefone: "", cargo: "advogado",
-    oab: "", valor_hora: "", meta_horas_mes: "160", ativo: true,
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
+  const management = useTeamManagement(currentTenant?.tenantId ?? null);
+  const canManage = currentTenant?.role === "owner" ||
+    currentTenant?.role === "admin";
 
-  const fetchData = async () => {
-    const [membrosRes, timeRes] = await Promise.all([
-      (supabase.from as any)("equipe").select("*").order("nome"),
-      (supabase.from as any)("time_entries").select("horas, valor_hora, faturado, created_at").gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
-    ]);
-    if (membrosRes.data) setMembros(membrosRes.data);
-    if (timeRes.data) setTimeEntries(timeRes.data);
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  const resetForm = () => {
-    setForm({ nome: "", email: "", telefone: "", cargo: "advogado", oab: "", valor_hora: "", meta_horas_mes: "160", ativo: true });
-    setEditMembro(null);
-  };
-
-  const openEdit = (m: Record<string, any>) => {
-    setForm({
-      nome: m.nome || "", email: m.email || "", telefone: m.telefone || "",
-      cargo: m.cargo || "advogado", oab: m.oab || "",
-      valor_hora: m.valor_hora || "", meta_horas_mes: m.meta_horas_mes || "160",
-      ativo: m.ativo !== false,
+  const notifyError = (error: unknown) =>
+    toast({
+      title: "Não foi possível concluir",
+      description: error instanceof Error ? error.message : "Tente novamente.",
+      variant: "destructive",
     });
-    setEditMembro(m);
-    setShowForm(true);
+
+  const invite = async (
+    input: Omit<InviteMemberInput, "tenantId">,
+  ) => {
+    if (!currentTenant) return;
+    try {
+      const result = await management.inviteMember({
+        ...input,
+        tenantId: currentTenant.tenantId,
+      });
+      setFormOpen(false);
+      toast({
+        title: "Convite criado",
+        description: result.emailQueued
+          ? "O e-mail foi colocado na fila de envio."
+          : "O convite foi salvo, mas o e-mail precisa ser reenviado.",
+      });
+    } catch (error) {
+      notifyError(error);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.nome.trim()) {
-      toast({ title: "Nome é obrigatório", variant: "destructive" });
+  const suspend = async (member: TeamMember) => {
+    if (
+      !member.membership_id ||
+      !window.confirm(
+        `Suspender o acesso de ${member.name}? O histórico será preservado.`,
+      )
+    ) return;
+    try {
+      await management.suspendMember(member.membership_id);
+      toast({ title: "Acesso suspenso" });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
+  const reactivate = async (member: TeamMember) => {
+    if (!member.membership_id) return;
+    try {
+      await management.reactivateMember(member.membership_id);
+      toast({ title: "Acesso reativado" });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
+  const updateAccess = async (
+    role: Exclude<TeamRole, "owner">,
+    scope: TeamDataScope,
+    teamId: string | null,
+  ) => {
+    if (!accessMember?.membership_id) return;
+    try {
+      await management.updateAccess(
+        accessMember.membership_id,
+        role,
+        scope,
+        teamId,
+      );
+      setAccessMember(null);
+      toast({ title: "Acesso atualizado" });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
+  const resend = async (invitation: PendingInvitation) => {
+    try {
+      const result = await management.resendInvitation(invitation.id);
+      toast({
+        title: result.emailQueued ? "Convite reenviado" : "Convite renovado",
+        description: result.emailQueued
+          ? "Um novo link válido por 7 dias foi enviado."
+          : "O link foi renovado, mas houve falha ao enfileirar o e-mail.",
+      });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
+  const revoke = async (invitation: PendingInvitation) => {
+    if (!window.confirm(`Revogar o convite enviado para ${invitation.email}?`)) {
       return;
     }
-    setLoading(true);
-    const payload = {
-      nome: form.nome, email: form.email || null, telefone: form.telefone || null,
-      cargo: form.cargo, oab: form.oab || null,
-      valor_hora: form.valor_hora ? parseFloat(form.valor_hora) : null,
-      meta_horas_mes: form.meta_horas_mes ? parseFloat(form.meta_horas_mes) : 160,
-      ativo: form.ativo, user_id: user!.id,
-    };
-    const { error } = editMembro
-      ? await (supabase.from as any)("equipe").update(payload).eq("id", editMembro.id)
-      : await (supabase.from as any)("equipe").insert(payload);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: editMembro ? "Membro atualizado!" : "Membro cadastrado!" });
-      resetForm();
-      setShowForm(false);
-      fetchData();
+    try {
+      await management.revokeInvitation(invitation.id);
+      toast({ title: "Convite revogado" });
+    } catch (error) {
+      notifyError(error);
     }
-    setLoading(false);
   };
 
-  const deleteMembro = async (id: string) => {
-    if (!confirm("Remover este membro da equipe?")) return;
-    await (supabase.from as any)("equipe").delete().eq("id", id);
-    toast({ title: "Membro removido" });
-    fetchData();
-  };
-
-  const totalHorasMes = timeEntries.reduce((s, e) => s + Number(e.horas), 0);
-  const totalFaturadoMes = timeEntries.filter((e) => e.faturado).reduce((s, e) => s + Number(e.horas) * Number(e.valor_hora || 0), 0);
-
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const getCargoColor = (cargo: string) => {
-    const map: Record<string, string> = {
-      socio: "bg-primary/10 text-primary", advogado: "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300",
-      estagiario: "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300",
-      paralegal: "bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300",
-      administrativo: "bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300",
-      associado: "bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-300",
-      correspondente: "bg-gray-50 text-gray-700 dark:bg-gray-950/30 dark:text-gray-300",
-    };
-    return map[cargo] || "bg-muted text-muted-foreground";
-  };
+  const activeCount = management.members.filter(
+    (member) => member.status === "active",
+  ).length;
+  const suspendedCount = management.members.filter(
+    (member) => member.status === "suspended",
+  ).length;
 
   return (
     <AppLayout>
-      <div className="animate-fade-in">
-        <div className="flex items-start justify-between mb-8">
+      <div className="animate-fade-in space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-4xl font-bold font-serif tracking-tight">Gestão de Equipe</h1>
-            <p className="text-muted-foreground text-sm mt-1">Advogados, estagiários e colaboradores do escritório</p>
+            <h1 className="font-serif text-4xl font-bold tracking-tight">
+              Gestão de Equipe
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Acessos, perfis e convites de {currentTenant?.displayName}.
+            </p>
           </div>
-          <Button onClick={() => { resetForm(); setShowForm(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> Novo Membro
-          </Button>
-        </div>
-
-        {/* KPIs do mês */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-xs text-muted-foreground">Membros Ativos</p><p className="text-2xl font-bold">{membros.filter((m) => m.ativo).length}</p></div>
-          </CardContent></Card>
-          <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center"><Scale className="w-5 h-5 text-blue-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Advogados</p><p className="text-2xl font-bold">{membros.filter((m) => ["advogado", "socio", "associado"].includes(m.cargo)).length}</p></div>
-          </CardContent></Card>
-          <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center"><Clock className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Horas/Mês</p><p className="text-2xl font-bold">{totalHorasMes.toFixed(0)}h</p></div>
-          </CardContent></Card>
-          <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center"><DollarSign className="w-5 h-5 text-yellow-600" /></div>
-            <div><p className="text-xs text-muted-foreground">Faturado/Mês</p><p className="text-xl font-bold text-yellow-600">{formatCurrency(totalFaturadoMes)}</p></div>
-          </CardContent></Card>
-        </div>
-
-        {/* Cards da equipe */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {membros.length === 0 && (
-            <div className="col-span-3 text-center py-16 text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Nenhum membro cadastrado</p>
-              <Button variant="outline" className="mt-4 gap-2" onClick={() => setShowForm(true)}>
-                <Plus className="w-4 h-4" /> Cadastrar primeiro membro
-              </Button>
-            </div>
+          {canManage && (
+            <Button onClick={() => setFormOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" /> Convidar membro
+            </Button>
           )}
-          {membros.map((m) => (
-            <Card key={m.id} className={`${!m.ativo ? "opacity-60" : ""}`}>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg">
-                      {m.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold">{m.nome}</p>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${getCargoColor(m.cargo)}`}>{m.cargo}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => openEdit(m)}>
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteMembro(m.id)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-sm">
-                  {m.oab && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Award className="w-3.5 h-3.5 shrink-0" />
-                      <span>OAB: {m.oab}</span>
-                    </div>
-                  )}
-                  {m.email && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Mail className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{m.email}</span>
-                    </div>
-                  )}
-                  {m.telefone && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Phone className="w-3.5 h-3.5 shrink-0" />
-                      <span>{m.telefone}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t">
-                  <div className="text-center p-2 bg-muted/40 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Valor/Hora</p>
-                    <p className="text-sm font-bold">{m.valor_hora ? formatCurrency(Number(m.valor_hora)) : "—"}</p>
-                  </div>
-                  <div className="text-center p-2 bg-muted/40 rounded-lg">
-                    <p className="text-xs text-muted-foreground">Meta/Mês</p>
-                    <p className="text-sm font-bold">{m.meta_horas_mes || 160}h</p>
-                  </div>
-                </div>
-
-                {!m.ativo && (
-                  <div className="mt-3 text-center">
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">Inativo</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
         </div>
 
-        {/* Form Dialog */}
-        <Dialog open={showForm} onOpenChange={(o) => { setShowForm(o); if (!o) resetForm(); }}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>{editMembro ? "Editar Membro" : "Novo Membro da Equipe"}</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nome Completo *</Label>
-                <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Nome do membro" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Cargo</Label>
-                  <Select value={form.cargo} onValueChange={(v) => setForm({ ...form, cargo: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{cargos.map((c) => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}</SelectContent>
-                  </Select>
+        {management.error && (
+          <Card className="border-destructive/40">
+            <CardContent className="flex items-center justify-between gap-4 p-5">
+              <p className="text-sm text-destructive">{management.error}</p>
+              <Button variant="outline" onClick={() => void management.refresh()}>
+                Tentar novamente
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card><CardContent className="flex items-center gap-4 p-5">
+            <UserCheck className="h-8 w-8 text-primary" />
+            <div><p className="text-xs text-muted-foreground">Ativos</p>
+              <p className="text-2xl font-bold">{activeCount}</p></div>
+          </CardContent></Card>
+          <Card><CardContent className="flex items-center gap-4 p-5">
+            <Clock className="h-8 w-8 text-amber-500" />
+            <div><p className="text-xs text-muted-foreground">Convites</p>
+              <p className="text-2xl font-bold">{management.invitations.length}</p></div>
+          </CardContent></Card>
+          <Card><CardContent className="flex items-center gap-4 p-5">
+            <ShieldCheck className="h-8 w-8 text-muted-foreground" />
+            <div><p className="text-xs text-muted-foreground">Suspensos</p>
+              <p className="text-2xl font-bold">{suspendedCount}</p></div>
+          </CardContent></Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5" /> Pessoas e acessos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {management.loading
+              ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  Carregando equipe...
                 </div>
-                <div className="space-y-2">
-                  <Label>Nº OAB</Label>
-                  <Input value={form.oab} onChange={(e) => setForm({ ...form, oab: e.target.value })} placeholder="Ex: 123456/SP" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>E-mail</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@escritorio.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(00) 00000-0000" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Valor/Hora (R$)</Label>
-                  <Input type="number" step="0.01" value={form.valor_hora} onChange={(e) => setForm({ ...form, valor_hora: e.target.value })} placeholder="Ex: 300,00" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Meta de Horas/Mês</Label>
-                  <Input type="number" value={form.meta_horas_mes} onChange={(e) => setForm({ ...form, meta_horas_mes: e.target.value })} placeholder="160" />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg">
-                <Switch checked={form.ativo} onCheckedChange={(v) => setForm({ ...form, ativo: v })} id="ativo" />
-                <Label htmlFor="ativo" className="cursor-pointer">Membro ativo</Label>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>Cancelar</Button>
-                <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editMembro ? "Atualizar" : "Cadastrar"}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+              )
+              : (
+                <Tabs defaultValue="members">
+                  <TabsList>
+                    <TabsTrigger value="members">Membros</TabsTrigger>
+                    {canManage && (
+                      <TabsTrigger value="invitations">
+                        Convites ({management.invitations.length})
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+                  <TabsContent value="members">
+                    <MemberTable
+                      members={management.members}
+                      canManage={canManage}
+                      busy={management.mutating}
+                      onSuspend={(member) => void suspend(member)}
+                      onReactivate={(member) => void reactivate(member)}
+                      onEdit={setAccessMember}
+                    />
+                  </TabsContent>
+                  {canManage && (
+                    <TabsContent value="invitations">
+                      <PendingInvitations
+                        invitations={management.invitations}
+                        busy={management.mutating}
+                        onResend={(invitation) => void resend(invitation)}
+                        onRevoke={(invitation) => void revoke(invitation)}
+                      />
+                    </TabsContent>
+                  )}
+                </Tabs>
+              )}
+          </CardContent>
+        </Card>
       </div>
+
+      <MemberFormDialog
+        open={formOpen}
+        teams={management.teams}
+        busy={management.mutating}
+        onOpenChange={setFormOpen}
+        onSubmit={invite}
+      />
+      <MemberAccessDialog
+        member={accessMember}
+        teams={management.teams}
+        busy={management.mutating}
+        onOpenChange={(open) => {
+          if (!open) setAccessMember(null);
+        }}
+        onSubmit={updateAccess}
+      />
     </AppLayout>
   );
-};
-
-export default Equipe;
+}
