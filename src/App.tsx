@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
+import { BrandProvider } from "@/contexts/BrandContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { JarvisProvider } from "@/contexts/JarvisContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -51,8 +52,9 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <TenantProvider>
-              <SubscriptionProvider>
-                <JarvisProvider>
+              <BrandProvider>
+                <SubscriptionProvider>
+                  <JarvisProvider>
                   <Routes>
                     <Route path="/landing" element={<Landing />} />
                     <Route path="/privacidade" element={<PoliticaPrivacidade />} />
@@ -87,8 +89,9 @@ const App = () => (
                     <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                </JarvisProvider>
-              </SubscriptionProvider>
+                  </JarvisProvider>
+                </SubscriptionProvider>
+              </BrandProvider>
             </TenantProvider>
           </AuthProvider>
         </BrowserRouter>

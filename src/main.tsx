@@ -43,7 +43,7 @@ class ErrorBoundary extends React.Component<
             }}
           >
             <h2 style={{ color: "#ef4444", marginBottom: "16px", fontSize: "20px" }}>
-              ⚠️ Erro no Sistema ADVeyes
+              ⚠️ Erro no sistema
             </h2>
             <p style={{ color: "#94a3b8", marginBottom: "16px", fontSize: "14px" }}>
               Ocorreu um erro inesperado. Por favor, recarregue a página.

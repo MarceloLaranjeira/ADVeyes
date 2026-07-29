@@ -405,10 +405,10 @@ na Tarefa 10.2 antes da ativação multi-tenant em produção.
 
 **Passos:**
 
-- [ ] Aplicar nome, logos, favicon e CSS variables.
-- [ ] Validar cores e usar fallback ADVeyes.
-- [ ] Evitar flash longo da marca errada.
-- [ ] Isolar cache por tenant.
+- [x] Aplicar nome, logos, favicon e CSS variables.
+- [x] Validar cores e usar fallback ADVeyes.
+- [x] Evitar flash longo da marca errada.
+- [x] Isolar estado por tenant sem cache compartilhado.
 
 **Aceite:** duas abas de tenants diferentes mantêm marcas corretas.
 

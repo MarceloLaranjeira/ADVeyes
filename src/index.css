@@ -171,6 +171,7 @@
 
 @layer base {
   * { @apply border-border; }
+  html[data-brand-ready="true"] { accent-color: hsl(var(--primary)); }
   body { @apply bg-background text-foreground font-sans antialiased; }
   body, button, input, select, textarea {
     font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -182,6 +183,25 @@
   }
   /* Números tabulares para KPIs */
   .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Estado neutro enquanto o subdomínio resolve sua marca pública. */
+  .brand-bootstrap {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f8fafc;
+  }
+  .brand-bootstrap__indicator {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #cbd5e1;
+    border-top-color: #475569;
+    border-radius: 9999px;
+    animation: brand-bootstrap-spin 0.8s linear infinite;
+  }
+  @keyframes brand-bootstrap-spin {
+    to { transform: rotate(360deg); }
+  }
 }
 
 @layer components {
