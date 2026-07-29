@@ -86,10 +86,11 @@ Calendar.
 
 - Nove tabelas administrativas criadas com RLS e sem policy permissiva
   temporária.
-- 94 testes pgTAP aprovados, incluindo isolamento dos módulos restantes,
-  herança de acesso por registro pai e caminhos privados do Storage por tenant
-- 16 testes de frontend aprovados
-  principais.
+- 102 testes pgTAP aprovados, incluindo isolamento dos módulos restantes,
+  herança de acesso por registro pai e caminhos privados do Storage por tenant.
+- Endpoint público de marca validado por hostname, sem expor tenant UUID,
+  plano, membros ou dados jurídicos.
+- 16 testes de frontend aprovados.
 - Tenant `albertino` criado automaticamente depois da restauração local.
 - Três memberships ativas, com exatamente um owner.
 - Marca inicial, superadmin e evento de auditoria criados.
