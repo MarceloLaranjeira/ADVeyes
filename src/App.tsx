@@ -39,6 +39,7 @@ import PortalLogin from "./pages/portal/PortalLogin";
 import PortalDashboard from "./pages/portal/PortalDashboard";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import TermosUso from "./pages/TermosUso";
+import ConviteAceite from "./pages/ConviteAceite";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
                     <Route path="/termos" element={<TermosUso />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/convite/aceitar" element={<ConviteAceite />} />
                     {/* Portal do Cliente (public, token-based) */}
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
