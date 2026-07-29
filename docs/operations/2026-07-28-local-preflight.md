@@ -102,9 +102,12 @@ Calendar.
   explícito de atribuição.
 - 26 tabelas empresariais ou de fila receberam `tenant_id` anulável, FK e
   índice sem troca das policies legadas.
+- 45 linhas existentes foram associadas ao tenant Albertino.
+- O verificador de backfill encontrou zero linhas sem tenant e zero
+  divergências pai/filho.
 
 ## Próximo passo
 
-1. Fazer o backfill transacional do tenant Albertino.
-2. Conferir contagens e relações pai/filho.
+1. Criar triggers temporários de compatibilidade para inserts legados.
+2. Rejeitar tenant incompatível e memberships ambíguas.
 3. Continuar somente no banco local restaurado.

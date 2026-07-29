@@ -295,6 +295,13 @@ on conflict (id) do update set email = excluded.email;
     if ($LASTEXITCODE -ne 0) {
       throw "Falha ao criar o tenant Albertino depois da restauração local."
     }
+
+    "select private.backfill_albertino_tenant();" |
+      docker exec -i $dbContainer `
+        psql -U postgres -d postgres -v ON_ERROR_STOP=1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Falha ao associar os dados restaurados ao tenant Albertino."
+    }
   }
 } finally {
   $archive.Dispose()
