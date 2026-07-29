@@ -18,6 +18,36 @@ create unique index equipe_tenant_email_key
   on public.equipe (tenant_id, lower(email))
   where email is not null and btrim(email) <> '';
 
+-- Link existing professional profiles only when tenant + e-mail identifies
+-- exactly one membership. Ambiguous or account-less profiles stay preserved.
+with exact_membership as (
+  select
+    professional.id as equipe_id,
+    professional.tenant_id,
+    (array_agg(membership.id))[1] as membership_id
+  from public.equipe professional
+  join auth.users account
+    on lower(account.email) = lower(professional.email)
+  join public.tenant_memberships membership
+    on membership.tenant_id = professional.tenant_id
+    and membership.user_id = account.id
+  where professional.membership_id is null
+  group by professional.id, professional.tenant_id
+  having count(*) = 1
+)
+update public.equipe professional
+set membership_id = exact_membership.membership_id,
+    ativo = exists (
+      select 1
+      from public.tenant_memberships membership
+      where membership.id = exact_membership.membership_id
+        and membership.status = 'active'
+    ),
+    updated_at = now()
+from exact_membership
+where professional.id = exact_membership.equipe_id
+  and professional.tenant_id = exact_membership.tenant_id;
+
 alter table public.tenant_invitations
   add column equipe_id uuid,
   add column team_id uuid;
