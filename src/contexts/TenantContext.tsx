@@ -187,10 +187,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
     setMembershipLoading(true);
     try {
-      const currentUserTenants =
-        supabase.rpc as unknown as CurrentUserTenantsRpc;
       const { data, error } = await withTimeout(
-        currentUserTenants("current_user_tenants"),
+        (supabase.rpc as unknown as CurrentUserTenantsRpc).call(
+          supabase,
+          "current_user_tenants",
+        ),
       );
 
       if (requestId !== membershipRequest.current) return;

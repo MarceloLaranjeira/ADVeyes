@@ -12,10 +12,19 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    functions: { invoke: invokeMock },
-    rpc: rpcMock,
-  },
+  supabase: (() => {
+    const client = {
+      functions: { invoke: invokeMock },
+      rpc(this: unknown, ...args: unknown[]) {
+        if (this !== client) {
+          throw new Error("Supabase RPC perdeu o contexto do cliente");
+        }
+        return rpcMock(...args);
+      },
+    };
+
+    return client;
+  })(),
 }));
 
 import {
