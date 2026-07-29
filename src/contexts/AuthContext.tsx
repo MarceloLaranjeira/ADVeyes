@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { withTimeout } from "@/lib/async-timeout";
 
 interface AuthContextType {
   session: Session | null;
@@ -33,11 +34,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    void withTimeout(supabase.auth.getSession()).then(
+      ({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      },
+      () => {
+        setSession(null);
+        setUser(null);
+      },
+    ).finally(() => setLoading(false));
 
     return () => subscription.unsubscribe();
   }, []);

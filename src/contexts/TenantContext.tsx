@@ -14,6 +14,7 @@ import {
   buildTenantAppUrl,
   resolveTenantHost,
 } from "@/lib/tenant-host";
+import { withTimeout } from "@/lib/async-timeout";
 
 export interface TenantBranding {
   publicName: string;
@@ -141,12 +142,19 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
   const loadPublicConfig = useCallback(async () => {
     setPublicLoading(true);
-    const { data, error } = await supabase.functions.invoke(
-      "tenant-public-config",
-      { body: { hostname: host.hostname } },
-    );
+    try {
+      const { data, error } = await withTimeout(
+        supabase.functions.invoke(
+          "tenant-public-config",
+          { body: { hostname: host.hostname } },
+        ),
+      );
 
-    if (error || !data) {
+      if (error || !data) throw error ?? new Error("Configuração ausente");
+
+      setPublicConfig(data as TenantPublicConfig);
+      setPublicError(false);
+    } catch {
       if (host.local) {
         setPublicConfig({
           hostname: host.hostname,
@@ -160,11 +168,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         setPublicConfig(null);
         setPublicError(true);
       }
-    } else {
-      setPublicConfig(data as TenantPublicConfig);
-      setPublicError(false);
+    } finally {
+      setPublicLoading(false);
     }
-    setPublicLoading(false);
   }, [host]);
 
   const loadMemberships = useCallback(async () => {
@@ -180,42 +186,48 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setMembershipLoading(true);
-    const currentUserTenants = supabase.rpc as unknown as CurrentUserTenantsRpc;
-    const { data, error } = await currentUserTenants("current_user_tenants");
+    try {
+      const currentUserTenants =
+        supabase.rpc as unknown as CurrentUserTenantsRpc;
+      const { data, error } = await withTimeout(
+        currentUserTenants("current_user_tenants"),
+      );
 
-    if (requestId !== membershipRequest.current) return;
+      if (requestId !== membershipRequest.current) return;
+      if (error) throw error;
 
-    if (error) {
+      const nextMemberships = (data ?? []).map(mapMembership);
+      setMemberships(nextMemberships);
+      setMembershipUserId(user.id);
+      setMembershipError(false);
+
+      const storedSlug = sessionStorage.getItem(
+        `adveyes:selected-tenant:${user.id}`,
+      );
+      const selected =
+        (host.mode === "tenant"
+          ? nextMemberships.find(
+              (membership: TenantMembership) => membership.slug === host.slug,
+            )
+          : nextMemberships.find(
+              (membership: TenantMembership) => membership.slug === storedSlug,
+            )) ??
+        (host.mode === "central" && nextMemberships.length === 1
+          ? nextMemberships[0]
+          : null);
+
+      setCurrentTenant(selected ?? null);
+    } catch {
+      if (requestId !== membershipRequest.current) return;
       setMemberships([]);
       setCurrentTenant(null);
       setMembershipUserId(user.id);
       setMembershipError(true);
-      setMembershipLoading(false);
-      return;
+    } finally {
+      if (requestId === membershipRequest.current) {
+        setMembershipLoading(false);
+      }
     }
-
-    const nextMemberships = (data ?? []).map(mapMembership);
-    setMemberships(nextMemberships);
-    setMembershipUserId(user.id);
-    setMembershipError(false);
-
-    const storedSlug = sessionStorage.getItem(
-      `adveyes:selected-tenant:${user.id}`,
-    );
-    const selected =
-      (host.mode === "tenant"
-        ? nextMemberships.find(
-            (membership: TenantMembership) => membership.slug === host.slug,
-          )
-        : nextMemberships.find(
-            (membership: TenantMembership) => membership.slug === storedSlug,
-          )) ??
-      (host.mode === "central" && nextMemberships.length === 1
-        ? nextMemberships[0]
-        : null);
-
-    setCurrentTenant(selected ?? null);
-    setMembershipLoading(false);
   }, [host, user]);
 
   useEffect(() => {
