@@ -19,11 +19,13 @@ begin
 
   get diagnostics affected_rows = row_count;
 
-  if affected_rows <> 1 then
+  -- A fresh/local database does not contain production identities. Keep this
+  -- data correction idempotent there, while still rejecting ambiguous matches.
+  if affected_rows > 1 then
     raise exception using
       errcode = 'P0001',
       message = format(
-        'Expected one Albertino membership for Grazielle, updated %s',
+        'Expected at most one Albertino membership for Grazielle, updated %s',
         affected_rows
       );
   end if;
