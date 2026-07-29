@@ -86,7 +86,8 @@ Calendar.
 
 - Nove tabelas administrativas criadas com RLS e sem policy permissiva
   temporária.
-- 28 testes pgTAP aprovados: 8 do isolamento legado e 20 da fundação.
+- 52 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação e 24 da
+  matriz de autorização.
 - Tenant `albertino` criado automaticamente depois da restauração local.
 - Três memberships ativas, com exatamente um owner.
 - Marca inicial, superadmin e evento de auditoria criados.
@@ -94,9 +95,14 @@ Calendar.
   auditoria.
 - O mapeamento das duas contas da Grazielle como `lawyer/assigned` permanece
   pendente de confirmação antes da produção.
+- Helpers privados cobrem platform admin, membership ativa, papel, permissão
+  por módulo e acesso a registro.
+- Platform admin não recebe acesso jurídico automático.
+- Escopos `team` e `assigned` negam por padrão até cada módulo possuir vínculo
+  explícito de atribuição.
 
 ## Próximo passo
 
-1. Criar helpers privados de autorização por tenant.
-2. Testar a matriz de papéis e escopos.
+1. Inventariar as tabelas empresariais.
+2. Adicionar `tenant_id` anulável sem trocar as policies existentes.
 3. Continuar somente no banco local restaurado.
