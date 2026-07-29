@@ -375,7 +375,7 @@ select ok(
   private.can_access_tenant_record(
     '50000000-0000-0000-0000-000000000005',
     '51000000-0000-0000-0000-000000000001',
-    'finance',
+    'financeiro',
     '52000000-0000-0000-0000-000000000001'
   ),
   'finance acessa registro financeiro'

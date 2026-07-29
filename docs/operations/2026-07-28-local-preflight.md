@@ -86,9 +86,8 @@ Calendar.
 
 - Nove tabelas administrativas criadas com RLS e sem policy permissiva
   temporária.
-- 62 testes pgTAP aprovados: 8 do isolamento legado, 20 da fundação, 24 da
-  matriz de autorização, 3 da adição de `tenant_id` e 7 dos triggers de
-  compatibilidade.
+- 71 testes pgTAP aprovados, incluindo 9 cenários de RLS cruzado nos módulos
+  principais.
 - Tenant `albertino` criado automaticamente depois da restauração local.
 - Três memberships ativas, com exatamente um owner.
 - Marca inicial, superadmin e evento de auditoria criados.
@@ -112,9 +111,15 @@ Calendar.
 - No último ensaio reset/import, os triggers preencheram as 45 linhas durante
   a própria restauração; por isso o backfill final foi idempotente e alterou
   zero linhas.
+- RLS tenant-aware aplicada localmente em `clientes`, `processos`,
+  `financeiro`, `eventos`, `documentos`, `tarefas` e `audiencias`.
+- Atribuições diretas e por equipe são resolvidas pela tabela interna
+  `tenant_record_assignments`.
+- Finance não recebe leitura jurídica; tenants A e B não enxergam dados um do
+  outro.
 
 ## Próximo passo
 
-1. Criar policies tenant-aware para os módulos principais.
-2. Testar dois tenants e escopos com registros sintéticos.
+1. Aplicar RLS tenant-aware nos módulos restantes.
+2. Proteger Storage pelo prefixo do tenant.
 3. Continuar somente no banco local restaurado.

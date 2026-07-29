@@ -62,13 +62,21 @@ insert into public.tenants (
   display_name,
   slug,
   status
-) values (
-  '10000000-0000-0000-0000-000000000099',
-  'Tenant RLS Baseline Ltda.',
-  'Tenant RLS Baseline',
-  'tenant-rls-baseline',
-  'active'
-);
+) values
+  (
+    '10000000-0000-0000-0000-000000000099',
+    'Tenant RLS Baseline A Ltda.',
+    'Tenant RLS Baseline A',
+    'tenant-rls-baseline-a',
+    'active'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000099',
+    'Tenant RLS Baseline B Ltda.',
+    'Tenant RLS Baseline B',
+    'tenant-rls-baseline-b',
+    'active'
+  );
 
 insert into public.tenant_memberships (
   tenant_id,
@@ -79,7 +87,7 @@ insert into public.tenant_memberships (
   activated_at
 ) values
   (
-    '10000000-0000-0000-0000-000000000099',
+    '20000000-0000-0000-0000-000000000099',
     '10000000-0000-0000-0000-000000000001',
     'owner',
     'active',
