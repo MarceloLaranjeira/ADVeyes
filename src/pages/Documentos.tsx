@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { recognizeDocument, type DocumentInfo } from "@/lib/document-recognition";
+import { buildTenantDocumentPath } from "@/lib/tenant-storage";
 
 const tiposDoc = ["Petição", "Contestação", "Recurso", "HC", "Alegações", "Procuração", "Contrato", "Parecer", "Decisão", "Outros"];
 
@@ -80,8 +81,31 @@ const Documentos = () => {
     }
     setLoading(true);
 
-    const fileExt = selectedFile.name.split(".").pop();
-    const filePath = `${user!.id}/${Date.now()}.${fileExt}`;
+    const { data: membership, error: membershipError } = await (supabase.from as any)(
+      "tenant_memberships",
+    )
+      .select("tenant_id")
+      .eq("user_id", user!.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+
+    if (membershipError || !membership?.tenant_id) {
+      toast({
+        title: "Escritório não identificado",
+        description: "Sua conta precisa estar vinculada a um escritório ativo.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const documentId = crypto.randomUUID();
+    const filePath = buildTenantDocumentPath({
+      tenantId: membership.tenant_id,
+      documentId,
+      fileName: selectedFile.name,
+    });
 
     const { error: uploadError } = await supabase.storage.from("documentos").upload(filePath, selectedFile);
     if (uploadError) {
@@ -92,6 +116,7 @@ const Documentos = () => {
 
     const processo = processos.find(p => p.id === form.processo_id);
     const { error } = await supabase.from("documentos").insert({
+      id: documentId,
       nome: form.nome,
       tipo: form.tipo,
       processo_id: form.processo_id || null,
@@ -99,9 +124,11 @@ const Documentos = () => {
       arquivo_path: filePath,
       tamanho: selectedFile.size,
       user_id: user!.id,
+      tenant_id: membership.tenant_id,
     });
 
     if (error) {
+      await supabase.storage.from("documentos").remove([filePath]);
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Documento enviado com sucesso!" });
