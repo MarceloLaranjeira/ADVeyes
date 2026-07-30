@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+const DATAJUD_KEY = getDataJudAuthorization();
 
 // Regex para número CNJ: 0000000-00.0000.0.00.0000
 const CNJ_REGEX = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/g;

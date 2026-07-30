@@ -9,6 +9,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,9 +26,7 @@ const ESC_HEADERS = {
 };
 
 // DataJud/CNJ — fallback gratuito
-const DATAJUD_KEY =
-  Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = getDataJudAuthorization();
 
 // Tribunais por estado OAB
 const OAB_ESTADO_TRIBUNAIS: Record<string, string[]> = {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +44,7 @@ serve(async (req) => {
       return `https://api-publica.datajud.cnj.jus.br/api_publica_${key}/_search`;
     };
 
-    const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+    const DATAJUD_KEY = getDataJudAuthorization();
     let totalUpdates = 0;
 
     // Processar em lotes de 10 para evitar timeout da Edge Function

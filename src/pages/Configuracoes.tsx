@@ -867,10 +867,10 @@ const Configuracoes = () => {
                   </p>
                   <div className="space-y-1 text-xs">
                     <p><span className="font-medium text-foreground">Endpoint base:</span> <code className="bg-muted px-1 rounded">https://api-publica.datajud.cnj.jus.br</code></p>
-                    <p><span className="font-medium text-foreground">Autenticação:</span> API Key pública — <code className="bg-muted px-1 rounded">APIKey cDZHYzlZa0JadVREZDJCendFbzV3cU1qM2owQUlTSmFRdnBEstF</code></p>
-                    <p><span className="font-medium text-foreground">Índice TJAM:</span> <code className="bg-muted px-1 rounded">api_tjam</code> | Índice SEEU: <code className="bg-muted px-1 rounded">api_seeu</code> | Projudi: consultado via TJs parceiros</p>
+                    <p><span className="font-medium text-foreground">Autenticação:</span> credencial pública do CNJ protegida nas Edge Functions.</p>
+                    <p><span className="font-medium text-foreground">Índice TJAM:</span> <code className="bg-muted px-1 rounded">api_publica_tjam</code> | SEEU e Projudi: consultados pelo índice do tribunal identificado no número CNJ.</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-2 italic">Essa chave já está configurada na Edge Function busca-processual. Nenhuma ação necessária para consulta básica.</p>
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">A credencial é atualizada no Supabase e nunca é exposta no navegador. Nenhuma ação do escritório é necessária para consulta básica.</p>
                 </div>
 
                 {/* SEEU */}

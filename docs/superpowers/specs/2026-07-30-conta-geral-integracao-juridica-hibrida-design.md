@@ -66,7 +66,8 @@ para o escritório.
   implementa o fluxo completo de candidatos, confirmação e monitoramento.
 - A função atual de publicações usa uma rota de diários que não aparece na
   documentação V2 vigente.
-- A função atual do DataJud possui uma chave de fallback embutida no código.
+- A autenticação do DataJud é centralizada no segredo `DATAJUD_API_KEY` das
+  Edge Functions, sem chave de fallback embutida no código.
   Chaves devem existir somente como segredos do ambiente.
 - Movimentações do DataJud estão sendo convertidas em publicações. Uma
   movimentação pode representar publicação ou andamento, portanto os conceitos
@@ -438,4 +439,3 @@ O critério de conclusão da primeira fase é:
 
 Nenhuma cobrança ou monitoramento real será criado durante testes sem
 confirmação explícita do responsável pelo escritório.
-

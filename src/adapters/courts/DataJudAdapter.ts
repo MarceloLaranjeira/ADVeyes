@@ -17,8 +17,14 @@ export class DataJudAdapter extends BaseCourtAdapter {
   readonly urlBase = "https://api-publica.datajud.cnj.jus.br";
 
   private get apiKey(): string {
-    return import.meta.env.VITE_DATAJUD_API_KEY ||
-      "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+    const value = import.meta.env.VITE_DATAJUD_API_KEY?.trim();
+    if (!value) {
+      throw new Error(
+        "DataJud não está disponível diretamente no cliente; use a Edge Function.",
+      );
+    }
+
+    return /^APIKey\s+/i.test(value) ? value : `APIKey ${value}`;
   }
 
   private getEndpoint(tribunal: string): string {
