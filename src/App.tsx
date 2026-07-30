@@ -11,7 +11,6 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { JarvisProvider } from "@/contexts/JarvisContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import Index from "./pages/Index";
 import Landing from "./pages/Landing";
 import Processos from "./pages/Processos";
 import Clientes from "./pages/Clientes";
@@ -40,6 +39,10 @@ import PortalDashboard from "./pages/portal/PortalDashboard";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import TermosUso from "./pages/TermosUso";
 import ConviteAceite from "./pages/ConviteAceite";
+import HomeEntry from "./pages/HomeEntry";
+import PlatformAdmin from "./pages/PlatformAdmin";
+import { AuthenticatedRoute } from "@/components/auth/AuthenticatedRoute";
+import { PlatformAdminRoute } from "@/components/auth/PlatformAdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -67,7 +70,20 @@ const App = () => (
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
                     {/* Protected lawyer routes */}
-                    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                    <Route
+                      path="/"
+                      element={<AuthenticatedRoute><HomeEntry /></AuthenticatedRoute>}
+                    />
+                    <Route
+                      path="/admin"
+                      element={
+                        <AuthenticatedRoute>
+                          <PlatformAdminRoute>
+                            <PlatformAdmin />
+                          </PlatformAdminRoute>
+                        </AuthenticatedRoute>
+                      }
+                    />
                     <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
                     <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
                     <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />

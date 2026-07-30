@@ -100,3 +100,9 @@ verify_jwt = true
 
 [functions.tenant-accept-invite]
 verify_jwt = true
+
+[functions.platform-admin]
+verify_jwt = true
+
+[functions.legal-discover-lawyer-processes]
+verify_jwt = true
