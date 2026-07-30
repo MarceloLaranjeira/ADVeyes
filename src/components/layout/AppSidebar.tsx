@@ -3,12 +3,20 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Search, BookOpen, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Bell, Sparkles, Headphones,
+  ExternalLink, Settings, Sparkles, Headphones, UserCog,
+  type LucideIcon,
 } from "lucide-react";
 
 const sections: Array<{
   label?: string;
-  items: Array<{ label: string; icon: any; path: string; badge?: number; isNew?: boolean; ai?: boolean }>;
+  items: Array<{
+    label: string;
+    icon: LucideIcon;
+    path: string;
+    badge?: number;
+    isNew?: boolean;
+    ai?: boolean;
+  }>;
 }> = [
   {
     items: [
@@ -40,6 +48,7 @@ const sections: Array<{
     items: [
       { label: "Financeiro", icon: Wallet, path: "/financeiro" },
       { label: "Controle de horas", icon: Clock, path: "/time-tracking" },
+      { label: "Gestão de equipe", icon: UserCog, path: "/equipe" },
       { label: "Contratos", icon: FileSignature, path: "/contratos" },
       { label: "Documentos", icon: FolderOpen, path: "/documentos" },
       { label: "Indicadores", icon: BarChart3, path: "/relatorios" },
