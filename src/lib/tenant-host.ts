@@ -51,3 +51,6 @@ export const buildTenantAppUrl = ({
 
   return `${protocol}//${slug}${TENANT_HOST_SUFFIX}${pathname}${search}${hash}`;
 };
+
+export const shouldNavigateTenantInPlace = (host: TenantHost) =>
+  host.local || host.mode === "central";

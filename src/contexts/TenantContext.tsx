@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   buildTenantAppUrl,
   resolveTenantHost,
+  shouldNavigateTenantInPlace,
 } from "@/lib/tenant-host";
 import { withTimeout } from "@/lib/async-timeout";
 
@@ -248,7 +249,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         tenant.slug,
       );
 
-      if (host.local) {
+      if (shouldNavigateTenantInPlace(host)) {
         setCurrentTenant(tenant);
         return;
       }
@@ -263,7 +264,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }),
       );
     },
-    [host.local, user],
+    [host, user],
   );
 
   const error = useMemo<TenantAccessError>(() => {

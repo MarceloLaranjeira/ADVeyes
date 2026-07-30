@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTenantAppUrl,
   resolveTenantHost,
+  shouldNavigateTenantInPlace,
 } from "@/lib/tenant-host";
 
 describe("tenant-host", () => {
@@ -42,5 +43,21 @@ describe("tenant-host", () => {
     ).toBe(
       "https://albertino.adveyes.automatikus.com.br/agenda?dia=1",
     );
+  });
+
+  it("mantém a navegação no domínio central e no ambiente local", () => {
+    expect(
+      shouldNavigateTenantInPlace(
+        resolveTenantHost("adveyes.automatikus.com.br"),
+      ),
+    ).toBe(true);
+    expect(
+      shouldNavigateTenantInPlace(resolveTenantHost("localhost")),
+    ).toBe(true);
+    expect(
+      shouldNavigateTenantInPlace(
+        resolveTenantHost("albertino.adveyes.automatikus.com.br"),
+      ),
+    ).toBe(false);
   });
 });

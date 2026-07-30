@@ -108,30 +108,45 @@ Deno.serve(async (request) => {
       .not("tenant_id", "is", null),
   ]);
 
-  const firstError = [
+  const coreError = [
     tenantsResult.error,
     membershipsResult.error,
-    subscriptionsResult.error,
-    discoveriesResult.error,
-    monitorsResult.error,
-    failedEventsResult.error,
   ].find(Boolean);
-  if (firstError) {
-    console.error("platform-admin: overview query failed");
+  if (coreError) {
+    console.error("platform-admin: overview core query failed");
     return json({ error: "operation_failed" }, 500);
   }
 
+  [
+    ["subscriptions", subscriptionsResult.error],
+    ["discoveries", discoveriesResult.error],
+    ["monitors", monitorsResult.error],
+    ["failed events", failedEventsResult.error],
+  ].forEach(([query, error]) => {
+    if (error) {
+      console.error(`platform-admin: optional ${query} query failed`);
+    }
+  });
+
   const memberships = countByTenant(membershipsResult.data);
-  const discoveries = countByTenant(discoveriesResult.data);
-  const monitors = countByTenant(monitorsResult.data);
+  const discoveries = countByTenant(
+    discoveriesResult.error ? null : discoveriesResult.data,
+  );
+  const monitors = countByTenant(
+    monitorsResult.error ? null : monitorsResult.data,
+  );
   const failedEvents = countByTenant(
-    failedEventsResult.data as Array<{ tenant_id: string }> | null,
+    failedEventsResult.error
+      ? null
+      : failedEventsResult.data as Array<{ tenant_id: string }> | null,
   );
   const subscriptions = new Map(
-    (subscriptionsResult.data ?? []).map((subscription) => [
-      subscription.tenant_id,
-      subscription,
-    ]),
+    (subscriptionsResult.error ? [] : subscriptionsResult.data ?? []).map(
+      (subscription) => [
+        subscription.tenant_id,
+        subscription,
+      ],
+    ),
   );
 
   const tenants = (tenantsResult.data as TenantRow[] ?? []).map((tenant) => {

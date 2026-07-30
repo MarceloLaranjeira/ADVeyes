@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { buildTenantAppUrl } from "@/lib/tenant-host";
+import {
+  buildTenantAppUrl,
+  shouldNavigateTenantInPlace,
+} from "@/lib/tenant-host";
 import {
   platformAdmin,
   type PlatformOverview,
@@ -65,9 +68,9 @@ const PlatformAdmin = () => {
     const membership = memberships.find((item) => item.tenantId === tenantId);
     if (!membership) return;
 
-    if (host.local) {
+    if (shouldNavigateTenantInPlace(host)) {
       selectTenant(membership);
-      navigate("/");
+      navigate("/processos");
       return;
     }
 
