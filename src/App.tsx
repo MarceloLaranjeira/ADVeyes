@@ -41,6 +41,7 @@ import TermosUso from "./pages/TermosUso";
 import ConviteAceite from "./pages/ConviteAceite";
 import HomeEntry from "./pages/HomeEntry";
 import PlatformAdmin from "./pages/PlatformAdmin";
+import IntegracoesJuridicas from "./pages/IntegracoesJuridicas";
 import { AuthenticatedRoute } from "@/components/auth/AuthenticatedRoute";
 import { PlatformAdminRoute } from "@/components/auth/PlatformAdminRoute";
 
@@ -91,6 +92,7 @@ const App = () => (
                     <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
                     <Route path="/busca" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
                     <Route path="/jurisprudencia" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
+                    <Route path="/integracoes-juridicas" element={<ProtectedRoute><IntegracoesJuridicas /></ProtectedRoute>} />
                     <Route path="/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
                     <Route path="/financeiro" element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />
                     <Route path="/publicacoes" element={<ProtectedRoute><Publicacoes /></ProtectedRoute>} />

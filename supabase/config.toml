@@ -106,3 +106,9 @@ verify_jwt = true
 
 [functions.legal-discover-lawyer-processes]
 verify_jwt = true
+
+[functions.legal-confirm-processes]
+verify_jwt = true
+
+[functions.escavador-webhook]
+verify_jwt = false

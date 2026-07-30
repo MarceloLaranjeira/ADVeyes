@@ -107,9 +107,6 @@ Deno.serve(async (request) => {
   if (professionalError) return json({ error: "operation_failed" }, 500);
   if (!professional) return json({ error: "professional_not_found" }, 404);
 
-  const token = Deno.env.get("ESCAVADOR_API_TOKEN");
-  if (!token) return json({ error: "integration_not_configured" }, 503);
-
   const { data: registration, error: registrationError } = await auth.admin
     .from("lawyer_registrations")
     .upsert({
@@ -126,6 +123,15 @@ Deno.serve(async (request) => {
     .single();
   if (registrationError || !registration) {
     return json({ error: "operation_failed" }, 500);
+  }
+
+  const token = Deno.env.get("ESCAVADOR_API_TOKEN");
+  if (!token) {
+    return json({
+      error: "integration_not_configured",
+      registrationId: registration.id,
+      registrationSaved: true,
+    }, 503);
   }
 
   try {

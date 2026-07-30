@@ -36,6 +36,13 @@ export class EscavadorApiError extends Error {
   }
 }
 
+function errorCodeForStatus(status: number): string {
+  if (status === 401) return "escavador_unauthorized";
+  if (status === 402) return "escavador_insufficient_balance";
+  if (status === 429) return "escavador_rate_limited";
+  return "escavador_request_failed";
+}
+
 function safeNextUrl(next: string | null | undefined): string | null {
   if (!next) return null;
   const parsed = new URL(next);
@@ -74,14 +81,10 @@ export async function discoverLawyerProcesses(input: {
     });
 
     if (!response.ok) {
-      const code = response.status === 401
-        ? "escavador_unauthorized"
-        : response.status === 402
-        ? "escavador_insufficient_balance"
-        : response.status === 429
-        ? "escavador_rate_limited"
-        : "escavador_request_failed";
-      throw new EscavadorApiError(response.status, code);
+      throw new EscavadorApiError(
+        response.status,
+        errorCodeForStatus(response.status),
+      );
     }
 
     const payload = await response.json() as EscavadorLawyerProcessesResponse;
@@ -105,4 +108,44 @@ export async function discoverLawyerProcesses(input: {
     processes: Array.from(processes.values()),
     pages: page,
   };
+}
+
+interface EscavadorMonitorResponse {
+  id: number | string;
+  numero?: string;
+  frequencia?: string;
+  status?: string;
+  documentos_publicos?: boolean;
+}
+
+export async function createProcessMonitor(input: {
+  token: string;
+  processNumber: string;
+  tribunal?: string | null;
+  frequency: "DIARIA" | "SEMANAL";
+  includePublicDocuments: boolean;
+}): Promise<EscavadorMonitorResponse> {
+  const response = await fetch(`${ESCAVADOR_API_BASE}/monitoramentos/processos`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${input.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      numero: input.processNumber,
+      ...(input.tribunal ? { tribunal: input.tribunal } : {}),
+      frequencia: input.frequency,
+      documentos_publicos: input.includePublicDocuments,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new EscavadorApiError(
+      response.status,
+      errorCodeForStatus(response.status),
+    );
+  }
+
+  return await response.json() as EscavadorMonitorResponse;
 }

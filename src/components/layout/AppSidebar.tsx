@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Search, BookOpen, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, Headphones, UserCog,
+  ExternalLink, Settings, Sparkles, Headphones, UserCog, Link2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +41,7 @@ const sections: Array<{
     items: [
       { label: "Busca processual", icon: Search, path: "/busca" },
       { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
+      { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
     ],
   },
   {
