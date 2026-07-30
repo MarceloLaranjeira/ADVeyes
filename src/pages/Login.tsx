@@ -18,6 +18,11 @@ const Login = () => {
   const [tokenFileName, setTokenFileName] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const requestedNext = new URLSearchParams(window.location.search).get("next");
+  const nextPath = requestedNext?.startsWith("/") &&
+      !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/";
 
   const handleTokenFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -35,14 +40,14 @@ const Login = () => {
         if (error) {
           toast({ title: "Token inválido ou expirado", description: error.message, variant: "destructive" });
         } else {
-          navigate("/");
+          navigate(nextPath);
         }
       } else if (data.email && data.password) {
         const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
         if (error) {
           toast({ title: "Credenciais inválidas", description: error.message, variant: "destructive" });
         } else {
-          navigate("/");
+          navigate(nextPath);
         }
       } else {
         toast({ title: "Arquivo inválido", description: "O arquivo não contém credenciais reconhecidas.", variant: "destructive" });
@@ -79,7 +84,7 @@ const Login = () => {
     if (error) {
       toast({ title: "Erro ao entrar", description: error.message, variant: "destructive" });
     } else {
-      navigate("/");
+      navigate(nextPath);
     }
     setLoading(false);
   };
@@ -91,7 +96,7 @@ const Login = () => {
         supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: `${window.location.origin}/`,
+            redirectTo: `${window.location.origin}${nextPath}`,
             skipBrowserRedirect: true,
           },
         }),

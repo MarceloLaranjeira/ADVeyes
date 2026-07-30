@@ -1,9 +1,10 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation();
   const { session, loading } = useAuth();
   const {
     memberships,
@@ -23,7 +24,8 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!session) {
-    return <Navigate to="/login" replace />;
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?next=${next}`} replace />;
   }
 
   if (error || !currentTenant) {
