@@ -7,6 +7,7 @@ import { PendingInvitations } from "@/components/equipe/PendingInvitations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTeamManagement } from "@/hooks/useTeamManagement";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +22,7 @@ import { Clock, Plus, ShieldCheck, UserCheck, Users } from "lucide-react";
 
 export default function Equipe() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
@@ -39,6 +41,17 @@ export default function Equipe() {
     input: Omit<InviteMemberInput, "tenantId">,
   ) => {
     if (!currentTenant) return;
+    if (
+      user?.email &&
+      input.profile.email.trim().toLowerCase() === user.email.toLowerCase()
+    ) {
+      notifyError(
+        new Error(
+          "Seu e-mail já possui acesso ao escritório e não precisa de convite.",
+        ),
+      );
+      return;
+    }
     try {
       const result = await management.inviteMember({
         ...input,

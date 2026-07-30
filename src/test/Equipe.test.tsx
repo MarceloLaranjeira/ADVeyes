@@ -7,7 +7,12 @@ const { tenantMock, managementMock, toastMock } = vi.hoisted(() => ({
   toastMock: vi.fn(),
 }));
 
+const { authMock } = vi.hoisted(() => ({
+  authMock: vi.fn(),
+}));
+
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: tenantMock }));
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: authMock }));
 vi.mock("@/hooks/useTeamManagement", () => ({
   useTeamManagement: managementMock,
 }));
@@ -39,6 +44,7 @@ const baseManagement = {
 describe("Equipe", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authMock.mockReturnValue({ user: null });
     managementMock.mockReturnValue(baseManagement);
   });
 
@@ -71,6 +77,39 @@ describe("Equipe", () => {
       screen.queryByRole("button", { name: /convidar membro/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/convites \(0\)/i)).not.toBeInTheDocument();
+  });
+
+  it("impede convite para o próprio e-mail", async () => {
+    authMock.mockReturnValue({
+      user: { email: "marcelolaranjeira33@gmail.com" },
+    });
+    tenantMock.mockReturnValue({
+      currentTenant: {
+        tenantId: "00000000-0000-4000-8000-000000000001",
+        displayName: "Albertino",
+        role: "owner",
+      },
+    });
+
+    render(<Equipe />);
+    fireEvent.click(screen.getByRole("button", { name: /convidar membro/i }));
+    fireEvent.change(screen.getByLabelText("Nome completo"), {
+      target: { value: "Marcelo" },
+    });
+    fireEvent.change(screen.getByLabelText("E-mail do convite"), {
+      target: { value: "marcelolaranjeira33@gmail.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar convite" }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description:
+            "Seu e-mail já possui acesso ao escritório e não precisa de convite.",
+        }),
+      )
+    );
+    expect(baseManagement.inviteMember).not.toHaveBeenCalled();
   });
 
   it("reativa membro suspenso preservado", async () => {

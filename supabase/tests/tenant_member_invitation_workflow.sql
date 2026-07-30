@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(19);
 
 select has_column(
   'public',
@@ -217,6 +217,18 @@ select is(
   'existe um convite pendente'
 );
 
+select is(
+  (
+    select professional.user_id
+    from public.equipe professional
+    where professional.tenant_id =
+      '82000000-0000-0000-0000-000000000001'
+      and lower(professional.email) = 'invitee@adveyes.test'
+  ),
+  null::uuid,
+  'perfil convidado não pertence ao remetente'
+);
+
 select throws_ok(
   $$
     select public.tenant_invite_member_server(
@@ -283,6 +295,18 @@ select lives_ok(
     )
   $$,
   'e-mail convidado aceita convite'
+);
+
+select is(
+  (
+    select professional.user_id
+    from public.equipe professional
+    where professional.tenant_id =
+      '82000000-0000-0000-0000-000000000001'
+      and lower(professional.email) = 'invitee@adveyes.test'
+  ),
+  '81000000-0000-0000-0000-000000000004'::uuid,
+  'aceite vincula o perfil à conta correta'
 );
 
 select is(
