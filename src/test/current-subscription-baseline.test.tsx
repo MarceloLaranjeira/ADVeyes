@@ -3,37 +3,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   useAuthMock,
-  fromMock,
+  useTenantMock,
+  getSubscriptionMock,
   channelMock,
   removeChannelMock,
-  maybeSingleMock,
-  eqMock,
 } = vi.hoisted(() => {
-  const maybeSingle = vi.fn();
-  const eq = vi.fn(() => ({ maybeSingle }));
-  const select = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ select }));
   const subscribe = vi.fn(() => ({ id: "subscription-channel" }));
   const on = vi.fn(() => ({ subscribe }));
-  const channel = vi.fn(() => ({ on }));
-
   return {
     useAuthMock: vi.fn(),
-    fromMock: from,
-    channelMock: channel,
+    useTenantMock: vi.fn(),
+    getSubscriptionMock: vi.fn(),
+    channelMock: vi.fn(() => ({ on })),
     removeChannelMock: vi.fn(),
-    maybeSingleMock: maybeSingle,
-    eqMock: eq,
   };
 });
 
-vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: useAuthMock,
+vi.mock("@/contexts/AuthContext", () => ({ useAuth: useAuthMock }));
+vi.mock("@/contexts/TenantContext", () => ({ useTenant: useTenantMock }));
+vi.mock("@/lib/asaas", () => ({
+  asaas: { getSubscription: getSubscriptionMock },
 }));
-
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: fromMock,
     channel: channelMock,
     removeChannel: removeChannelMock,
   },
@@ -46,7 +38,6 @@ import {
 
 function SubscriptionProbe() {
   const { loading, plan, status } = useSubscription();
-
   return (
     <div>
       <span>{loading ? "carregando" : "carregado"}</span>
@@ -56,52 +47,49 @@ function SubscriptionProbe() {
   );
 }
 
-describe("baseline de assinatura por usuário", () => {
+describe("assinatura compartilhada por escritório", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthMock.mockReturnValue({
-      user: { id: "user-a" },
+    useAuthMock.mockReturnValue({ user: { id: "user-a" } });
+    useTenantMock.mockReturnValue({
+      currentTenant: { tenantId: "tenant-a", role: "owner" },
+      loading: false,
+    });
+    getSubscriptionMock.mockResolvedValue({
+      canManage: true,
+      subscription: {
+        id: "subscription-a",
+        tenant_id: "tenant-a",
+        status: "active",
+        billing_cycle: "monthly",
+        trial_ends_at: null,
+        next_due_date: "2026-08-30",
+        billing_plans: {
+          code: "profissional",
+          name: "Profissional",
+          version: 1,
+          entitlements: {},
+          features: [],
+        },
+      },
     });
   });
 
-  it("consulta somente a assinatura vinculada ao usuário autenticado", async () => {
-    maybeSingleMock.mockResolvedValue({
-      data: {
-        id: "subscription-a",
-        user_id: "user-a",
-        plan: "profissional",
-        status: "active",
-        trial_ends_at: null,
-      },
-    });
-
+  it("consulta a assinatura vinculada ao escritório atual", async () => {
     render(
       <SubscriptionProvider>
         <SubscriptionProbe />
       </SubscriptionProvider>,
     );
-
-    await waitFor(() => {
-      expect(screen.getByText("carregado")).toBeInTheDocument();
-    });
-
-    expect(fromMock).toHaveBeenCalledWith("asaas_subscriptions");
-    expect(eqMock).toHaveBeenCalledWith("user_id", "user-a");
+    await waitFor(() =>
+      expect(screen.getByText("carregado")).toBeInTheDocument()
+    );
+    expect(getSubscriptionMock).toHaveBeenCalledWith("tenant-a");
     expect(screen.getByText("profissional")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
   });
 
-  it("recarrega a mesma assinatura sem trocar o proprietário", async () => {
-    maybeSingleMock.mockResolvedValue({
-      data: {
-        id: "subscription-a",
-        user_id: "user-a",
-        plan: "starter",
-        status: "active",
-        trial_ends_at: null,
-      },
-    });
-
+  it("recarrega a assinatura do mesmo escritório", async () => {
     function RefreshProbe() {
       const { loading, refresh } = useSubscription();
       return (
@@ -116,15 +104,10 @@ describe("baseline de assinatura por usuário", () => {
         <RefreshProbe />
       </SubscriptionProvider>,
     );
-
     const button = await screen.findByRole("button", { name: "atualizar" });
     await waitFor(() => expect(button).not.toBeDisabled());
-
-    await act(async () => {
-      button.click();
-    });
-
-    expect(eqMock).toHaveBeenNthCalledWith(1, "user_id", "user-a");
-    expect(eqMock).toHaveBeenNthCalledWith(2, "user_id", "user-a");
+    await act(async () => button.click());
+    expect(getSubscriptionMock).toHaveBeenNthCalledWith(1, "tenant-a");
+    expect(getSubscriptionMock).toHaveBeenNthCalledWith(2, "tenant-a");
   });
 });

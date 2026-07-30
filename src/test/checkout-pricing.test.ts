@@ -23,17 +23,18 @@ describe("catálogo comercial aprovado", () => {
     }
   });
 
-  it("mantém o backend Asaas alinhado ao catálogo exibido", () => {
-    const edgeSource = readFileSync(
-      resolve(process.cwd(), "supabase/functions/asaas/index.ts"),
+  it("mantém o catálogo do banco alinhado ao catálogo exibido", () => {
+    const migration = readFileSync(
+      resolve(
+        process.cwd(),
+        "supabase/migrations/20260730051538_billing_catalog_and_tenant_subscriptions.sql",
+      ),
       "utf8",
     );
 
     for (const [key, plan] of Object.entries(BILLING_PLANS)) {
-      expect(edgeSource).toContain(
-        `${key}: { name: "${plan.name}", price: ${plan.price} }`,
-      );
+      expect(migration).toContain(`'${key}', 1, '${plan.name}'`);
+      expect(migration).toContain(`${plan.price * 100}, ${plan.annualTotal * 100}`);
     }
-    expect(edgeSource).not.toContain('starter: { name: "Starter"');
   });
 });

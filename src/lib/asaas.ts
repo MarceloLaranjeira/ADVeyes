@@ -10,10 +10,24 @@ import {
 
 export type PlanKey = BillingPlanKey;
 export type BillingType = "CREDIT_CARD" | "PIX" | "BOLETO";
+export type BillingCycle = "monthly" | "annual";
+
+export interface CheckoutSelection {
+  extraUsers: number;
+  extraMonitoringPacks: number;
+  extraSearchTerms: number;
+  aiCreditPacks: number;
+  whiteLabel: boolean;
+}
 
 export interface CheckoutInput {
+  tenantId: string;
   plan: PlanKey;
+  billingCycle: BillingCycle;
   billingType: BillingType;
+  idempotencyKey: string;
+  selection: CheckoutSelection;
+  installmentCount?: number;
   customer: {
     name: string;
     cpfCnpj: string;
@@ -44,9 +58,46 @@ export interface CheckoutResult {
     payload?: string;
     encodedImage?: string;
   } | null;
+  pricing?: {
+    recurringTotalCents: number;
+    initialTotalCents: number;
+    activationFeeCents: number;
+    implementationFeeCents: number;
+    prepaidTotalCents: number;
+    recurringAddonsMonthlyCents: number;
+  };
 }
 
-async function call(body: object): Promise<CheckoutResult> {
+export interface TenantSubscription {
+  id: string;
+  tenant_id: string;
+  status: "trialing" | "pending" | "active" | "past_due" | "canceled";
+  billing_cycle: BillingCycle | null;
+  trial_ends_at: string | null;
+  next_due_date: string | null;
+  billing_plans: {
+    code: PlanKey;
+    name: string;
+    version: number;
+    entitlements: Record<string, number | boolean>;
+    features: string[];
+  } | null;
+}
+
+export interface CatalogResult {
+  ok: true;
+  plans: Array<Record<string, unknown>>;
+  addons: Array<Record<string, unknown>>;
+  canManage: boolean;
+}
+
+export interface SubscriptionResult {
+  ok: true;
+  subscription: TenantSubscription | null;
+  canManage: boolean;
+}
+
+async function call<T>(body: object): Promise<T> {
   const { data: result, error } = await supabase.functions.invoke("asaas", {
     body,
   });
@@ -70,16 +121,24 @@ async function call(body: object): Promise<CheckoutResult> {
       "Falha ao processar cobrança";
     throw new Error(detail);
   }
-  return result as CheckoutResult;
+  return result as T;
 }
 
 export const asaas = {
   createCheckout(input: CheckoutInput) {
-    return call({ action: "create_checkout", ...input });
+    return call<CheckoutResult>({ action: "create_checkout", ...input });
   },
 
-  cancelSubscription() {
-    return call({ action: "cancel_subscription" });
+  getCatalog(tenantId: string) {
+    return call<CatalogResult>({ action: "get_catalog", tenantId });
+  },
+
+  getSubscription(tenantId: string) {
+    return call<SubscriptionResult>({ action: "get_subscription", tenantId });
+  },
+
+  cancelSubscription(tenantId: string) {
+    return call<{ ok: true }>({ action: "cancel_subscription", tenantId });
   },
 };
 

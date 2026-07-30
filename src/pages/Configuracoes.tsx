@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
-  CreditCard, Crown, Clock, Star, ArrowRight, QrCode, Link2, Link2Off,
+  CreditCard, Crown, Clock, Star, ArrowRight, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { PLANS, asaas } from "@/lib/asaas";
+import { PLANS } from "@/lib/asaas";
 import {
   googleCalendar,
   type GoogleCalendarStatus,
@@ -25,11 +26,10 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 
 type TribunalCredencial = Tables<"tribunal_credenciais">;
-type SubscriptionRow = Tables<"asaas_subscriptions">;
-type SubscriptionSummary = Pick<SubscriptionRow, "plan" | "status" | "trial_ends_at">;
 
 // ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
 const PERFIL_KEY = "lexia_perfil_advogado";
@@ -296,8 +296,15 @@ const tribunaisDisponiveis = [
 const emptyForm = { tribunal: "", token_acesso: "", numero_oab: "", seccional_oab: "", cpf: "" };
 
 const Configuracoes = () => {
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
+  const {
+    subscription,
+    plan: currentPlan,
+    status: currentStatus,
+    trialDaysLeft,
+  } = useSubscription();
   const { toast } = useToast();
   const [credenciais, setCredenciais] = useState<TribunalCredencial[]>([]);
   const [showCredForm, setShowCredForm] = useState(false);
@@ -312,12 +319,11 @@ const Configuracoes = () => {
   const [gcalLoading, setGcalLoading] = useState(false);
   const [showGcalDisconnectDialog, setShowGcalDisconnectDialog] = useState(false);
 
-  // Asaas / plano state
-  const [planData, setPlanData] = useState<SubscriptionSummary | null>(null);
-  const [showCheckout, setShowCheckout] = useState<string | null>(null); // plan key
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [pixQr, setPixQr] = useState<{ encodedImage: string; payload: string } | null>(null);
-  const [checkoutForm, setCheckoutForm] = useState({ nome: "", cpfCnpj: "", email: "" });
+  const planData = {
+    plan: currentPlan,
+    status: currentStatus,
+    trial_ends_at: subscription?.trial_ends_at ?? null,
+  };
 
   useEffect(() => {
     const oauthResult = googleCalendar.handleOAuthResult();
@@ -344,12 +350,6 @@ const Configuracoes = () => {
         .catch(() => setGcalConnected(false));
     }
 
-    // Load plan from Supabase
-    if (user) {
-      supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-        setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString() });
-      });
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -412,32 +412,6 @@ const Configuracoes = () => {
     } finally {
       setGcalLoading(false);
     }
-  };
-
-  const handleCheckout = async (planKey: string) => {
-    if (!checkoutForm.nome || !checkoutForm.cpfCnpj || !checkoutForm.email) {
-      toast({ title: "Preencha todos os campos", variant: "destructive" }); return;
-    }
-    setCheckoutLoading(true);
-    try {
-      const result = await asaas.createCheckout({
-        plan: planKey as keyof typeof PLANS,
-        billingType: "PIX",
-        customer: {
-          name: checkoutForm.nome,
-          cpfCnpj: checkoutForm.cpfCnpj,
-          email: checkoutForm.email,
-        },
-      });
-      if (!result.pix?.encodedImage || !result.pix.payload) {
-        throw new Error("Assinatura criada, mas o QR Code ainda não está disponível.");
-      }
-      setPixQr({ encodedImage: result.pix.encodedImage, payload: result.pix.payload });
-      toast({ title: "PIX gerado! Escaneie para ativar o plano." });
-    } catch (err) {
-      toast({ title: "Erro ao gerar cobrança", description: (err as Error).message, variant: "destructive" });
-    }
-    setCheckoutLoading(false);
   };
 
   // AI Custom Prompt (persisted in localStorage)
@@ -999,7 +973,7 @@ const Configuracoes = () => {
                   {planData?.status === "trial" && (
                     <span className="ml-auto text-xs bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {planData?.trial_ends_at ? `Trial — ${Math.max(0, Math.ceil((new Date(planData.trial_ends_at).getTime() - Date.now()) / 86400000))} dias restantes` : "Trial"}
+                      Trial — {Math.max(0, trialDaysLeft)} dias restantes
                     </span>
                   )}
                   {planData?.status === "active" && (
@@ -1040,68 +1014,20 @@ const Configuracoes = () => {
                         size="sm"
                         className="w-full mt-3 gap-1.5"
                         variant={("popular" in plan && plan.popular) ? "default" : "outline"}
-                        onClick={() => { setShowCheckout(key); setPixQr(null); }}
+                        onClick={() => navigate(`/checkout?plan=${key}`)}
                         disabled={planData?.plan === key && planData?.status === "active"}
                       >
-                        {planData?.plan === key && planData?.status === "active" ? "Plano atual" : "Assinar com PIX"}
+                        {planData?.plan === key && planData?.status === "active" ? "Plano atual" : "Ver contratação"}
                         {!(planData?.plan === key && planData?.status === "active") && <ArrowRight className="w-3 h-3" />}
                       </Button>
                     </div>
                   ))}
                 </div>
 
-                {/* Checkout form */}
-                {showCheckout && (
-                  <div className="border rounded-xl p-5 bg-muted/20 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-sm flex items-center gap-2">
-                        <QrCode className="w-4 h-4 text-primary" />
-                        Pagamento via PIX — {PLANS[showCheckout as keyof typeof PLANS]?.name}
-                      </p>
-                      <button onClick={() => { setShowCheckout(null); setPixQr(null); }} className="text-muted-foreground hover:text-foreground text-xs">Fechar</button>
-                    </div>
-
-                    {!pixQr ? (
-                      <div className="space-y-3">
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Nome completo *</Label>
-                            <Input value={checkoutForm.nome} onChange={e => setCheckoutForm({ ...checkoutForm, nome: e.target.value })} placeholder="Dr. Fulano de Tal" className="h-9 text-sm" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">CPF ou CNPJ *</Label>
-                            <Input value={checkoutForm.cpfCnpj} onChange={e => setCheckoutForm({ ...checkoutForm, cpfCnpj: e.target.value })} placeholder="000.000.000-00" className="h-9 text-sm" />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">E-mail *</Label>
-                          <Input type="email" value={checkoutForm.email} onChange={e => setCheckoutForm({ ...checkoutForm, email: e.target.value })} placeholder="seu@email.com.br" className="h-9 text-sm" />
-                        </div>
-                        <Button className="w-full gap-2" onClick={() => handleCheckout(showCheckout)} disabled={checkoutLoading}>
-                          <QrCode className="w-4 h-4" />
-                          {checkoutLoading ? "Gerando PIX..." : `Gerar PIX — R$ ${PLANS[showCheckout as keyof typeof PLANS]?.price}/mês`}
-                        </Button>
-                        <p className="text-[10px] text-center text-muted-foreground">Processado com segurança via Asaas · LGPD compliant</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="bg-white p-3 rounded-xl border shadow-sm">
-                          <img src={`data:image/png;base64,${pixQr.encodedImage}`} alt="QR Code PIX" className="w-48 h-48 object-contain" />
-                        </div>
-                        <div className="w-full space-y-2">
-                          <p className="text-xs font-medium text-center">Ou copie o código PIX:</p>
-                          <div className="flex gap-2">
-                            <Input value={pixQr.payload} readOnly className="text-xs h-8 font-mono" />
-                            <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => { navigator.clipboard.writeText(pixQr.payload); toast({ title: "Código PIX copiado!" }); }}>
-                              Copiar
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground text-center">Após o pagamento confirmado, seu plano será ativado automaticamente em até 5 minutos.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  No checkout você pode comparar mensal e anual, adicionar usuários,
+                  monitoramentos, créditos de IA e contratar white-label nos planos elegíveis.
+                </p>
               </CardContent>
             </Card>
 
