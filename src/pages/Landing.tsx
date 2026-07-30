@@ -7,6 +7,11 @@ import {
   TrendingUp, Award, Lock, Phone,
 } from "lucide-react";
 import { LogoMark } from "@/components/common/Logo";
+import {
+  BILLING_PLANS,
+  getMonthlyEquivalent,
+  type BillingPlanKey,
+} from "@/lib/billing-plans";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const Nav = () => {
@@ -99,7 +104,7 @@ const Hero = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-full px-4 py-1.5 mb-8">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-yellow-300 text-xs font-semibold tracking-wide">7 dias grátis · Sem cartão · Sem pegadinha</span>
+              <span className="text-yellow-300 text-xs font-semibold tracking-wide">14 dias de piloto · Sem cartão · Sem pegadinha</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold text-white leading-tight mb-6">
@@ -331,32 +336,16 @@ const HowItWorks = () => (
 );
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
-const plans = [
-  {
-    name: "Starter",
-    price: 97,
-    yearly: 77,
-    color: "border-gray-200",
-    popular: false,
-    features: ["1 advogado", "50 processos", "Agenda e Tarefas", "IA básica (50 consultas/mês)", "Suporte por e-mail", "Andamentos manuais"],
-  },
-  {
-    name: "Profissional",
-    price: 197,
-    yearly: 157,
-    color: "border-[#1a2a5e]",
-    popular: true,
-    features: ["3 advogados", "Processos ilimitados", "Todas as ferramentas", "IA avançada ilimitada", "Diário Oficial automático", "Andamentos automáticos DataJud", "Google Calendar sync", "Suporte prioritário"],
-  },
-  {
-    name: "Escritório",
-    price: 397,
-    yearly: 317,
-    color: "border-gray-200",
-    popular: false,
-    features: ["Advogados ilimitados", "Tudo do Profissional", "API personalizada", "Webhooks", "Relatórios customizados", "Gerente de conta dedicado", "Onboarding personalizado", "White-label opcional"],
-  },
-];
+const plans = (Object.entries(BILLING_PLANS) as [
+  BillingPlanKey,
+  (typeof BILLING_PLANS)[BillingPlanKey],
+][]).map(([key, plan]) => ({
+  key,
+  ...plan,
+  yearly: getMonthlyEquivalent(plan.annualTotal),
+  color: "popular" in plan && plan.popular ? "border-[#1a2a5e]" : "border-gray-200",
+  popular: "popular" in plan && plan.popular,
+}));
 
 const Pricing = () => {
   const [yearly, setYearly] = useState(false);
@@ -368,18 +357,18 @@ const Pricing = () => {
         <div className="text-center mb-12">
           <span className="inline-block text-xs font-bold tracking-widest text-green-700 uppercase bg-green-50 px-4 py-1.5 rounded-full border border-green-100 mb-4">Preços</span>
           <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">Simples e transparente</h2>
-          <p className="text-gray-500 mb-8">7 dias grátis, cancele quando quiser, sem burocracia</p>
+          <p className="text-gray-500 mb-8">14 dias de piloto assistido, sem cartão obrigatório</p>
 
           {/* Toggle */}
           <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1">
             <button onClick={() => setYearly(false)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${!yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>Mensal</button>
             <button onClick={() => setYearly(true)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>
-              Anual <span className="text-green-500 text-xs ml-1">-20%</span>
+              Anual <span className="text-green-500 text-xs ml-1">2 meses grátis</span>
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {plans.map((p) => (
             <div key={p.name} className={`relative bg-white rounded-2xl border-2 ${p.color} p-6 ${p.popular ? "shadow-xl scale-105 z-10" : "shadow-sm"} transition-all hover:shadow-lg`}>
               {p.popular && (
@@ -392,7 +381,7 @@ const Pricing = () => {
                 <span className="text-4xl font-bold text-[#1a2a5e]">R$ {yearly ? p.yearly : p.price}</span>
                 <span className="text-gray-400 text-sm mb-1">/mês</span>
               </div>
-              {yearly && <p className="text-xs text-green-600 font-medium mb-4">Cobrado anualmente</p>}
+              {yearly && <p className="text-xs text-green-600 font-medium mb-4">Total anual: R$ {p.annualTotal.toLocaleString("pt-BR")}</p>}
               {!yearly && <p className="text-xs text-gray-400 mb-4">&nbsp;</p>}
 
               <ul className="space-y-2.5 mb-6">
@@ -405,13 +394,13 @@ const Pricing = () => {
               </ul>
 
               <button
-                onClick={() => navigate("/login")}
+                onClick={() => navigate(`/login?plan=${p.key}`)}
                 className={`w-full py-3 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5 ${p.popular
                   ? "bg-[#1a2a5e] text-white hover:bg-[#243570] hover:shadow-lg"
                   : "border-2 border-[#1a2a5e] text-[#1a2a5e] hover:bg-[#1a2a5e] hover:text-white"
                 }`}
               >
-                Começar 7 dias grátis
+                Começar piloto de 14 dias
               </button>
             </div>
           ))}
@@ -419,7 +408,7 @@ const Pricing = () => {
 
         <p className="text-center text-xs text-gray-400 mt-8 flex items-center justify-center gap-2">
           <Lock className="w-3.5 h-3.5" />
-          Sem cartão de crédito necessário · Cancele a qualquer momento · Dados 100% seguros (LGPD)
+          Sem cartão no piloto · Processos cadastrados ilimitados · Dados protegidos pela LGPD
         </p>
       </div>
     </section>
@@ -497,7 +486,7 @@ const CTABanner = () => {
             onClick={() => navigate("/login")}
             className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-10 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
           >
-            Começar 7 dias grátis
+            Começar piloto de 14 dias
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>

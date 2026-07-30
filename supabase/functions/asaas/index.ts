@@ -11,9 +11,10 @@ const corsHeaders = {
 };
 
 const PLANS = {
-  starter: { name: "Starter", price: 97 },
-  profissional: { name: "Profissional", price: 197 },
-  escritorio: { name: "Escritório", price: 397 },
+  solo: { name: "Solo", price: 79 },
+  profissional: { name: "Profissional", price: 279 },
+  escritorio: { name: "Escritório", price: 619 },
+  performance: { name: "Performance", price: 1099 },
 } as const;
 
 type PlanKey = keyof typeof PLANS;

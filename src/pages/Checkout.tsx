@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { asaas, PLANS } from "@/lib/asaas";
+import { isBillingPlanKey } from "@/lib/billing-plans";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +17,6 @@ import { CheckCircle2, CreditCard, QrCode, FileText } from "lucide-react";
 
 type PlanKey = keyof typeof PLANS;
 
-const isPlanKey = (value: string | null): value is PlanKey =>
-  value !== null && Object.prototype.hasOwnProperty.call(PLANS, value);
-
 export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -26,7 +24,7 @@ export default function Checkout() {
   const { refresh } = useSubscription();
 
   const requestedPlan = searchParams.get("plan");
-  const initialPlan: PlanKey = isPlanKey(requestedPlan) ? requestedPlan : "profissional";
+  const initialPlan: PlanKey = isBillingPlanKey(requestedPlan) ? requestedPlan : "profissional";
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>(initialPlan);
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<{ qrCode: string; encodedImage: string } | null>(null);
@@ -131,11 +129,13 @@ export default function Checkout() {
 
   return (
     <AppLayout>
-      <div className="max-w-3xl mx-auto py-8">
+      <div className="max-w-6xl mx-auto py-8">
         <h1 className="text-2xl font-bold mb-2">Escolha seu plano</h1>
-        <p className="text-muted-foreground mb-6 text-sm">Cancele quando quiser. Sem fidelidade.</p>
+        <p className="text-muted-foreground mb-6 text-sm">
+          Processos cadastrados ilimitados em todos os planos. Cancele quando quiser.
+        </p>
 
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-8">
           {(Object.entries(PLANS) as [PlanKey, typeof PLANS[PlanKey]][]).map(([key, p]) => (
             <Card
               key={key}
@@ -144,7 +144,7 @@ export default function Checkout() {
             >
               <CardContent className="p-4">
                 {"popular" in p && p.popular && (
-                  <Badge className="mb-2 text-xs">Popular</Badge>
+                  <Badge className="mb-2 text-xs">Mais vendido</Badge>
                 )}
                 <p className="font-bold">{p.name}</p>
                 <p className="text-2xl font-bold text-primary mt-1">

@@ -3,8 +3,12 @@
 // Configure em: Supabase Dashboard → Edge Functions → Secrets → ASAAS_API_KEY
 
 import { supabase } from "@/integrations/supabase/client";
+import {
+  BILLING_PLANS,
+  type BillingPlanKey,
+} from "@/lib/billing-plans";
 
-export type PlanKey = keyof typeof PLANS;
+export type PlanKey = BillingPlanKey;
 export type BillingType = "CREDIT_CARD" | "PIX" | "BOLETO";
 
 export interface CheckoutInput {
@@ -79,25 +83,6 @@ export const asaas = {
   },
 };
 
-// Plan definitions
-export const PLANS = {
-  starter: {
-    name: "Starter",
-    price: 97,
-    yearlyPrice: 77,
-    features: ["1 advogado", "50 processos", "Agenda e Tarefas", "IA básica (50 consultas/mês)", "Suporte por e-mail"],
-  },
-  profissional: {
-    name: "Profissional",
-    price: 197,
-    yearlyPrice: 157,
-    popular: true,
-    features: ["3 advogados", "Processos ilimitados", "Todas as ferramentas", "IA avançada ilimitada", "Diário Oficial automático", "Andamentos automáticos", "Suporte prioritário"],
-  },
-  escritorio: {
-    name: "Escritório",
-    price: 397,
-    yearlyPrice: 317,
-    features: ["Advogados ilimitados", "Tudo do Profissional", "API personalizada", "Webhooks", "Relatórios customizados", "Gerente de conta dedicado", "Onboarding personalizado"],
-  },
-} as const;
+// Alias temporário para os consumidores existentes. O catálogo comercial
+// aprovado vive em billing-plans.ts; o backend continua sendo a autoridade.
+export const PLANS = BILLING_PLANS;

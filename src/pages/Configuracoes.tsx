@@ -347,7 +347,7 @@ const Configuracoes = () => {
     // Load plan from Supabase
     if (user) {
       supabase.from("asaas_subscriptions").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-        setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 7 * 86400000).toISOString() });
+        setPlanData(data || { plan: "trial", status: "trial", trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString() });
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1018,12 +1018,12 @@ const Configuracoes = () => {
                 )}
 
                 {/* Plans */}
-                <div className="grid sm:grid-cols-3 gap-3 mb-4">
+                <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
                   {(Object.entries(PLANS) as [string, typeof PLANS[keyof typeof PLANS]][]).map(([key, plan]) => (
                     <div key={key} className={`rounded-xl border p-4 relative transition-all hover:shadow-md ${"popular" in plan && plan.popular ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
                       {"popular" in plan && plan.popular && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-bold px-3 py-0.5 rounded-full">
-                          POPULAR
+                          MAIS VENDIDO
                         </div>
                       )}
                       <p className="font-serif font-bold text-sm">{plan.name}</p>

@@ -29,7 +29,7 @@ describe("subscription access", () => {
     })).toBe(false);
   });
 
-  it("restringe webhooks ao plano escritório ativo", () => {
+  it("restringe webhooks ao plano Performance ativo", () => {
     expect(canUseFeature({
       feature: "api_webhooks",
       plan: "profissional",
@@ -38,7 +38,7 @@ describe("subscription access", () => {
     })).toBe(false);
     expect(canUseFeature({
       feature: "api_webhooks",
-      plan: "escritorio",
+      plan: "performance",
       status: "active",
       trialDaysLeft: 0,
     })).toBe(true);

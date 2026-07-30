@@ -35,7 +35,7 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
   plan: "trial",
   status: "trial",
   isTrialExpired: false,
-  trialDaysLeft: 7,
+  trialDaysLeft: 14,
   isActive: false,
   canUse: () => true,
   loading: true,
@@ -78,7 +78,9 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
 
   const plan: PlanName = subscription?.plan ?? "trial";
   const status: PlanStatus = subscription?.status ?? "trial";
-  const trialEndsAt = subscription?.trial_ends_at ? new Date(subscription.trial_ends_at) : new Date(Date.now() + 7 * 86400000);
+  const trialEndsAt = subscription?.trial_ends_at
+    ? new Date(subscription.trial_ends_at)
+    : new Date(Date.now() + 14 * 86400000);
   const trialDaysLeft = getTrialDaysLeft(trialEndsAt.toISOString());
   const isTrialExpired = (status === "trial" || status === "pending") && trialDaysLeft <= 0;
   const isActive = status === "active";
