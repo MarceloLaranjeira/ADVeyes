@@ -3,12 +3,20 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Search, BookOpen, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Bell, Sparkles, Headphones,
+  ExternalLink, Settings, Sparkles, Headphones, UserCog, Link2,
+  type LucideIcon,
 } from "lucide-react";
 
 const sections: Array<{
   label?: string;
-  items: Array<{ label: string; icon: any; path: string; badge?: number; isNew?: boolean; ai?: boolean }>;
+  items: Array<{
+    label: string;
+    icon: LucideIcon;
+    path: string;
+    badge?: number;
+    isNew?: boolean;
+    ai?: boolean;
+  }>;
 }> = [
   {
     items: [
@@ -33,6 +41,7 @@ const sections: Array<{
     items: [
       { label: "Busca processual", icon: Search, path: "/busca" },
       { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
+      { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
     ],
   },
   {
@@ -40,6 +49,7 @@ const sections: Array<{
     items: [
       { label: "Financeiro", icon: Wallet, path: "/financeiro" },
       { label: "Controle de horas", icon: Clock, path: "/time-tracking" },
+      { label: "Gestão de equipe", icon: UserCog, path: "/equipe" },
       { label: "Contratos", icon: FileSignature, path: "/contratos" },
       { label: "Documentos", icon: FolderOpen, path: "/documentos" },
       { label: "Indicadores", icon: BarChart3, path: "/relatorios" },
@@ -103,7 +113,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       <div className="p-3 border-t border-border">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/60">
           <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" />
-          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">85+ tribunais ativos</span>
+          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
         </div>
       </div>
     </aside>

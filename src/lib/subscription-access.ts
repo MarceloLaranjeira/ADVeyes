@@ -1,0 +1,45 @@
+export type PlanName =
+  | "trial"
+  | "starter"
+  | "solo"
+  | "profissional"
+  | "escritorio"
+  | "performance";
+export type PlanStatus = "trial" | "pending" | "active" | "overdue" | "cancelled";
+
+export type PlanFeature =
+  | "adicionar_processo"
+  | "adicionar_cliente"
+  | "ia_juridica"
+  | "exportar_relatorio"
+  | "financeiro"
+  | "equipe"
+  | "api_webhooks";
+
+const FEATURE_MATRIX: Record<PlanFeature, PlanName[]> = {
+  adicionar_processo: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
+  adicionar_cliente: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
+  ia_juridica: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
+  exportar_relatorio: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
+  financeiro: ["trial", "starter", "profissional", "escritorio", "performance"],
+  equipe: ["profissional", "escritorio", "performance"],
+  api_webhooks: ["performance"],
+};
+
+export function getTrialDaysLeft(trialEndsAt: string, now = Date.now()): number {
+  return Math.ceil((new Date(trialEndsAt).getTime() - now) / 86400000);
+}
+
+export function canUseFeature(input: {
+  feature: PlanFeature;
+  plan: PlanName;
+  status: PlanStatus;
+  trialDaysLeft: number;
+}): boolean {
+  const { feature, plan, status, trialDaysLeft } = input;
+  const expired = (status === "trial" || status === "pending") && trialDaysLeft <= 0;
+  if (expired || status === "overdue" || status === "cancelled") return false;
+
+  const effectivePlan: PlanName = status === "pending" ? "trial" : plan;
+  return FEATURE_MATRIX[feature].includes(effectivePlan);
+}

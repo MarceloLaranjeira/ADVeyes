@@ -4,11 +4,12 @@
  * Fonte primária: Escavador API v2
  * Fallback: DataJud/CNJ (API pública)
  *
- * verify_jwt = false — aceita user_id no body como fallback
+ * Requer sessão Supabase válida; o user_id sempre vem do token autenticado.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,9 +26,7 @@ const ESC_HEADERS = {
 };
 
 // DataJud/CNJ — fallback gratuito
-const DATAJUD_KEY =
-  Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = getDataJudAuthorization();
 
 // Tribunais por estado OAB
 const OAB_ESTADO_TRIBUNAIS: Record<string, string[]> = {
@@ -357,6 +356,11 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const token = authHeader.replace("Bearer ", "");
 
     const supabase = createClient(
@@ -365,25 +369,18 @@ serve(async (req) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    let user: { id: string } | null = null;
-    try {
-      const r = await supabase.auth.getUser(token);
-      user = r.data.user;
-    } catch {
-      user = null;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const body = await req.json().catch(() => ({}));
     const oabNumero: string = (body.oab_numero || "").replace(/\D/g, "");
     const seccional: string = (body.seccional || "AM").toUpperCase();
     const nomeAdvogado: string = (body.nome_advogado || "").trim();
-    const userId: string = user?.id || (body.user_id as string) || "";
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "Não autenticado. Faça logout e login novamente." }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const userId = user.id;
     if (!oabNumero) {
       return new Response(JSON.stringify({ error: "Número OAB obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

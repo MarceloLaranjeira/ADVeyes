@@ -1,15 +1,24 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-cron-secret, content-type",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const expectedSecret = Deno.env.get("CRON_SECRET");
+    const receivedSecret = req.headers.get("x-cron-secret");
+    if (!expectedSecret || !receivedSecret || receivedSecret !== expectedSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -35,7 +44,7 @@ serve(async (req) => {
       return `https://api-publica.datajud.cnj.jus.br/api_publica_${key}/_search`;
     };
 
-    const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
+    const DATAJUD_KEY = getDataJudAuthorization();
     let totalUpdates = 0;
 
     // Processar em lotes de 10 para evitar timeout da Edge Function
@@ -92,7 +101,7 @@ serve(async (req) => {
               .maybeSingle();
 
             if (proc?.id) {
-              await (supabase.from as any)("andamentos").insert({
+              await supabase.from("andamentos").insert({
                 user_id: mon.user_id,
                 processo_id: proc.id,
                 numero_processo: mon.numero_processo,
@@ -101,7 +110,7 @@ serve(async (req) => {
                 data_andamento: now,
                 tribunal: mon.tribunal,
                 origem: "datajud_cron",
-              }).catch(() => null);
+              });
             }
           } else {
             await supabase.from("processo_monitoramento")

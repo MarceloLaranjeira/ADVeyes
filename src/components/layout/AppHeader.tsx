@@ -9,6 +9,8 @@ import {
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { NotificationPanel } from "@/components/notifications/NotificationPanel";
+import { LogoFull } from "@/components/common/Logo";
+import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
 
 /**
  * Topbar global no estilo Astrea.
@@ -36,13 +38,13 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2 shrink-0">
-        <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-          <span className="text-white font-extrabold text-sm leading-none">A</span>
-        </div>
-        <span className="text-foreground font-extrabold text-lg tracking-tight hidden sm:inline">
-          adveyes
-        </span>
+        <LogoFull size="sm" className="max-w-[160px]" />
       </Link>
+
+      <EnvironmentSwitcher
+        mode="tenant"
+        className="hidden xl:inline-flex"
+      />
 
       {/* Busca global */}
       <div className="flex-1 max-w-2xl mx-auto">

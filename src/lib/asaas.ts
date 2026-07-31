@@ -3,105 +3,145 @@
 // Configure em: Supabase Dashboard → Edge Functions → Secrets → ASAAS_API_KEY
 
 import { supabase } from "@/integrations/supabase/client";
+import {
+  BILLING_PLANS,
+  type BillingPlanKey,
+} from "@/lib/billing-plans";
 
-async function call(path: string, method = "GET", body?: object) {
+export type PlanKey = BillingPlanKey;
+export type BillingType = "CREDIT_CARD" | "PIX" | "BOLETO";
+export type BillingCycle = "monthly" | "annual";
+
+export interface CheckoutSelection {
+  extraUsers: number;
+  extraMonitoringPacks: number;
+  extraSearchTerms: number;
+  aiCreditPacks: number;
+  whiteLabel: boolean;
+}
+
+export interface CheckoutInput {
+  tenantId: string;
+  plan: PlanKey;
+  billingCycle: BillingCycle;
+  billingType: BillingType;
+  idempotencyKey: string;
+  selection: CheckoutSelection;
+  installmentCount?: number;
+  customer: {
+    name: string;
+    cpfCnpj: string;
+    email: string;
+    phone?: string;
+  };
+  creditCard?: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+    postalCode: string;
+    addressNumber: string;
+    phone: string;
+  };
+}
+
+export interface CheckoutResult {
+  ok: true;
+  subscription?: { id?: string };
+  payment?: {
+    id?: string;
+    bankSlipUrl?: string;
+    invoiceUrl?: string;
+  } | null;
+  pix?: {
+    payload?: string;
+    encodedImage?: string;
+  } | null;
+  pricing?: {
+    recurringTotalCents: number;
+    initialTotalCents: number;
+    activationFeeCents: number;
+    implementationFeeCents: number;
+    prepaidTotalCents: number;
+    recurringAddonsMonthlyCents: number;
+  };
+}
+
+export interface TenantSubscription {
+  id: string;
+  tenant_id: string;
+  status: "trialing" | "pending" | "active" | "past_due" | "canceled";
+  billing_cycle: BillingCycle | null;
+  trial_ends_at: string | null;
+  next_due_date: string | null;
+  billing_plans: {
+    code: PlanKey;
+    name: string;
+    version: number;
+    entitlements: Record<string, number | boolean>;
+    features: string[];
+  } | null;
+}
+
+export interface CatalogResult {
+  ok: true;
+  plans: Array<Record<string, unknown>>;
+  addons: Array<Record<string, unknown>>;
+  canManage: boolean;
+}
+
+export interface SubscriptionResult {
+  ok: true;
+  subscription: TenantSubscription | null;
+  canManage: boolean;
+}
+
+async function call<T>(body: object): Promise<T> {
   const { data: result, error } = await supabase.functions.invoke("asaas", {
-    body: { path, method, body },
+    body,
   });
-  if (error) throw new Error(error.message);
-  const payload = result?.data ?? result;
-  const status = result?.asaasStatus;
-  if (status && status >= 400) {
-    const msg = payload?.errors?.[0]?.description || payload?.message || JSON.stringify(payload);
-    throw new Error(`Asaas ${status}: ${msg}`);
+  if (error) {
+    let message = error.message;
+    if (error.context instanceof Response) {
+      try {
+        const payload = await error.context.clone().json() as { error?: string };
+        message = payload.error || message;
+      } catch {
+        // Mantém a mensagem padrão quando a resposta não é JSON.
+      }
+    }
+    throw new Error(message);
   }
-  if (payload?.errors) throw new Error(payload.errors[0]?.description || JSON.stringify(payload.errors));
-  return payload;
+  if (!result?.ok) {
+    const detail =
+      result?.details?.errors?.[0]?.description ||
+      result?.details?.message ||
+      result?.error ||
+      "Falha ao processar cobrança";
+    throw new Error(detail);
+  }
+  return result as T;
 }
 
 export const asaas = {
-  /** Create a customer in Asaas */
-  createCustomer(data: {
-    name: string;
-    cpfCnpj: string;
-    email?: string;
-    phone?: string;
-  }) {
-    return call("customers", "POST", data);
+  createCheckout(input: CheckoutInput) {
+    return call<CheckoutResult>({ action: "create_checkout", ...input });
   },
 
-  /** Create a recurring subscription */
-  createSubscription(data: {
-    customer: string;
-    billingType: "CREDIT_CARD" | "PIX" | "BOLETO";
-    value: number;
-    nextDueDate: string;
-    cycle: "MONTHLY" | "YEARLY";
-    description: string;
-    creditCard?: {
-      holderName: string;
-      number: string;
-      expiryMonth: string;
-      expiryYear: string;
-      ccv: string;
-    };
-    creditCardHolderInfo?: {
-      name: string;
-      email: string;
-      cpfCnpj: string;
-      postalCode: string;
-      addressNumber: string;
-      phone: string;
-    };
-  }) {
-    return call("subscriptions", "POST", data);
+  getCatalog(tenantId: string) {
+    return call<CatalogResult>({ action: "get_catalog", tenantId });
   },
 
-  /** Get subscription status */
-  getSubscription(subscriptionId: string) {
-    return call(`subscriptions/${subscriptionId}`);
+  getSubscription(tenantId: string) {
+    return call<SubscriptionResult>({ action: "get_subscription", tenantId });
   },
 
-  /** Cancel subscription */
-  cancelSubscription(subscriptionId: string) {
-    return call(`subscriptions/${subscriptionId}`, "DELETE");
-  },
-
-  /** Create a one-time PIX payment */
-  createPixPayment(data: {
-    customer: string;
-    value: number;
-    dueDate: string;
-    description: string;
-  }) {
-    return call("payments", "POST", { ...data, billingType: "PIX" });
-  },
-
-  /** Get PIX QR code for a payment */
-  getPixQrCode(paymentId: string) {
-    return call(`payments/${paymentId}/pixQrCode`);
+  cancelSubscription(tenantId: string) {
+    return call<{ ok: true }>({ action: "cancel_subscription", tenantId });
   },
 };
 
-// Plan definitions
-export const PLANS = {
-  starter: {
-    name: "Starter",
-    price: 97,
-    yearlyPrice: 77,
-    features: ["1 advogado", "50 processos", "Agenda e Tarefas", "IA básica (50 consultas/mês)", "Suporte por e-mail"],
-  },
-  profissional: {
-    name: "Profissional",
-    price: 197,
-    yearlyPrice: 157,
-    popular: true,
-    features: ["3 advogados", "Processos ilimitados", "Todas as ferramentas", "IA avançada ilimitada", "Diário Oficial automático", "Andamentos automáticos", "Suporte prioritário"],
-  },
-  escritorio: {
-    name: "Escritório",
-    price: 397,
-    yearlyPrice: 317,
-    features: ["Advogados ilimitados", "Tudo do Profissional", "API personalizada", "Webhooks", "Relatórios customizados", "Gerente de conta dedicado", "Onboarding personalizado"],
-  },
-} as const;
+// Alias temporário para os consumidores existentes. O catálogo comercial
+// aprovado vive em billing-plans.ts; o backend continua sendo a autoridade.
+export const PLANS = BILLING_PLANS;

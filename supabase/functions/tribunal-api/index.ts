@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,10 +142,7 @@ function detectTribunalFromCNJ(numero: string): string | null {
   return null;
 }
 
-const DATAJUD_KEY = Deno.env.get("DATAJUD_API_KEY") ?? "";
-if (!DATAJUD_KEY) {
-  console.error("DATAJUD_API_KEY secret not configured");
-}
+const DATAJUD_KEY = getDataJudAuthorization();
 
 function normalizeCNJ(numero: string): string {
   const digits = numero.replace(/\D/g, "");

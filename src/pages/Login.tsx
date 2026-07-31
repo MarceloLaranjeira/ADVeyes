@@ -3,28 +3,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Scale, HardDrive, Upload } from "lucide-react";
+import { HardDrive, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-
-const GoogleIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4" aria-hidden="true">
-    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-  </svg>
-);
+import { LogoFull } from "@/components/common/Logo";
+import { withTimeout } from "@/lib/async-timeout";
 
 const Login = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loadingToken, setLoadingToken] = useState(false);
   const [tokenFileName, setTokenFileName] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const requestedNext = new URLSearchParams(window.location.search).get("next");
+  const nextPath = requestedNext?.startsWith("/") &&
+      !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/";
 
   const handleTokenFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,14 +40,14 @@ const Login = () => {
         if (error) {
           toast({ title: "Token inválido ou expirado", description: error.message, variant: "destructive" });
         } else {
-          navigate("/");
+          navigate(nextPath);
         }
       } else if (data.email && data.password) {
         const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
         if (error) {
           toast({ title: "Credenciais inválidas", description: error.message, variant: "destructive" });
         } else {
-          navigate("/");
+          navigate(nextPath);
         }
       } else {
         toast({ title: "Arquivo inválido", description: "O arquivo não contém credenciais reconhecidas.", variant: "destructive" });
@@ -58,18 +56,6 @@ const Login = () => {
       toast({ title: "Erro ao ler arquivo", description: "Verifique se o arquivo é um JSON válido.", variant: "destructive" });
     } finally {
       setLoadingToken(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) {
-      toast({ title: "Erro ao entrar com Google", description: error.message, variant: "destructive" });
-      setLoading(false);
     }
   };
 
@@ -94,52 +80,57 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      if (error) {
-        toast({ title: "Erro ao cadastrar", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Cadastro realizado!", description: "Verifique seu e-mail para confirmar a conta." });
-      }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      toast({ title: "Erro ao entrar", description: error.message, variant: "destructive" });
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        toast({ title: "Erro ao entrar", description: error.message, variant: "destructive" });
-      } else {
-        navigate("/");
-      }
+      navigate(nextPath);
     }
     setLoading(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoadingGoogle(true);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}${nextPath}`,
+            skipBrowserRedirect: true,
+          },
+        }),
+      );
+      if (error) throw error;
+      if (!data.url) throw new Error("O Google não retornou uma URL de acesso.");
+      window.location.assign(data.url);
+    } catch (error) {
+      toast({
+        title: "Não foi possível entrar com Google",
+        description:
+          error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+      setLoadingGoogle(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <Scale className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold font-serif text-foreground">ALBERTINO</h1>
-          <p className="text-xs text-muted-foreground tracking-widest uppercase mt-1">
-            Advogados Associados
-          </p>
+          <LogoFull size="lg" className="mx-auto justify-center" />
         </div>
 
         <div className="bg-card rounded-lg border p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-center">
-            {isSignUp ? "Criar Conta" : "Entrar no Sistema"}
-          </h2>
+          <h2 className="text-lg font-semibold mb-4 text-center">Entrar no Sistema</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="advogado@albertino.com"
+                placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -148,16 +139,14 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                {!isSignUp && (
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:text-primary/80 transition-colors"
-                    onClick={handleForgotPassword}
-                    disabled={loading}
-                  >
-                    Esqueci minha senha
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                  onClick={handleForgotPassword}
+                  disabled={loading}
+                >
+                  Esqueci minha senha
+                </button>
               </div>
               <Input
                 id="password"
@@ -170,7 +159,7 @@ const Login = () => {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Aguarde..." : isSignUp ? "Cadastrar" : "Entrar"}
+              {loading ? "Aguarde..." : "Entrar"}
             </Button>
           </form>
 
@@ -186,12 +175,21 @@ const Login = () => {
           <Button
             type="button"
             variant="outline"
-            className="w-full gap-2"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
+            className="w-full gap-3"
+            onClick={handleGoogleLogin}
+            disabled={loadingGoogle || loading}
           >
-            <GoogleIcon />
-            Entrar com Google
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.6h3.3c1.9-1.8 2.9-4.4 2.9-7.5Z" />
+              <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.3l-3.3-2.6c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.5-4.1H3.1v2.7A10 10 0 0 0 12 22Z" />
+              <path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9.2L6.5 14Z" />
+              <path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9A9.7 9.7 0 0 0 3.1 7.5l3.4 2.7A5.9 5.9 0 0 1 12 6.1Z" />
+            </svg>
+            {loadingGoogle ? "Redirecionando..." : "Entrar com Google"}
           </Button>
 
           <div className="relative my-4">
@@ -199,7 +197,9 @@ const Login = () => {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">ou</span>
+              <span className="bg-card px-2 text-muted-foreground">
+                ou use um token
+              </span>
             </div>
           </div>
 
@@ -223,15 +223,6 @@ const Login = () => {
             <p className="text-xs text-muted-foreground text-center">Arquivo de token gerado pelo sistema (access_token + refresh_token)</p>
           </div>
 
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setIsSignUp(!isSignUp)}
-            >
-              {isSignUp ? "Já tem conta? Entrar" : "Não tem conta? Cadastre-se"}
-            </button>
-          </div>
         </div>
       </div>
     </div>

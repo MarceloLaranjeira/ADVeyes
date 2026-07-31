@@ -3,10 +3,12 @@
  * Busca processos por OAB, CPF ou Nome
  * Fonte primária: Escavador API v2
  * Fallback: DataJud/CNJ (API pública)
- * verify_jwt = false — não exige sessão ativa
+ * Requer sessão Supabase válida para proteger APIs externas e limitar abuso.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -23,9 +25,7 @@ const ESC_HEADERS = {
 };
 
 // DataJud fallback
-const DATAJUD_KEY =
-  Deno.env.get("DATAJUD_API_KEY") ||
-  "APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+const DATAJUD_KEY = getDataJudAuthorization();
 
 const ENDPOINTS: Record<string, string> = {
   tjac: "https://api-publica.datajud.cnj.jus.br/api_publica_tjac/_search",
@@ -344,6 +344,26 @@ serve(async (req) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
     const tipo = ((body.tipo as string) || "oab").toLowerCase() as "oab" | "cpf" | "nome";

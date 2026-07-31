@@ -3,7 +3,7 @@
 CREATE TABLE public.portal_acessos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   cliente_id uuid REFERENCES public.clientes(id) ON DELETE CASCADE NOT NULL,
-  token text UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  token text UNIQUE NOT NULL DEFAULT encode(extensions.gen_random_bytes(32), 'hex'),
   email text,
   ativo boolean NOT NULL DEFAULT true,
   ultimo_acesso timestamp with time zone,

@@ -1,192 +1,153 @@
-// Google Calendar Integration
-// Setup: Create OAuth 2.0 credentials at console.cloud.google.com
-// Required scopes: https://www.googleapis.com/auth/calendar
+import { supabase } from "@/integrations/supabase/client";
 
-interface GoogleCalendarEvent {
-  id?: string;
-  summary?: string;
-  start?: { dateTime?: string; date?: string };
-  end?: { dateTime?: string; date?: string };
-  htmlLink?: string;
+export type GoogleCalendarConnectionStatus =
+  | "connected"
+  | "reconnect_required"
+  | "disconnecting"
+  | "error";
+
+export interface GoogleCalendarStatus {
+  connected: boolean;
+  connection: {
+    google_email: string | null;
+    status: GoogleCalendarConnectionStatus;
+    connected_at: string;
+    last_sync_at: string | null;
+    last_error_code: string | null;
+    last_error_at: string | null;
+  } | null;
+  queue: {
+    pending: number;
+    processing: number;
+    retry: number;
+    failed: number;
+  };
 }
 
-interface CreateEventInput {
+interface LegacyGoogleEventInput {
   titulo: string;
   descricao?: string;
-  data_inicio: string;   // ISO string ou "YYYY-MM-DD"
+  data_inicio: string;
   local?: string;
-  colorId?: string;      // "2"=verde, "7"=petróleo, "9"=azul, "11"=vermelho
-  allDay?: boolean;      // true = evento de dia inteiro (prazo/vencimento)
+  colorId?: string;
+  allDay?: boolean;
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-const REDIRECT_URI = `${window.location.origin}/configuracoes`;
-const SCOPES = "https://www.googleapis.com/auth/calendar";
-const GCAL_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const STATUS_CACHE_KEY = "adveyes_google_calendar_status";
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function invoke<T>(
+  action: "status" | "connect" | "sync" | "disconnect",
+  extra: Record<string, unknown> = {},
+): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("google-calendar", {
+    body: { action, ...extra },
+  });
+  if (error) throw error;
+  return data as T;
+}
+
+function cacheStatus(connected: boolean) {
+  sessionStorage.setItem(STATUS_CACHE_KEY, connected ? "connected" : "disconnected");
+}
 
 export const googleCalendar = {
-  authorize() {
-    if (!GOOGLE_CLIENT_ID) {
-      console.warn("VITE_GOOGLE_CLIENT_ID not set");
-      return;
-    }
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      response_type: "token",
-      scope: SCOPES,
-      include_granted_scopes: "true",
-    });
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-  },
-
-  extractToken(): string | null {
-    const hash = window.location.hash.slice(1);
-    const params = new URLSearchParams(hash);
-    const token = params.get("access_token");
-    if (token) {
-      localStorage.setItem("google_calendar_token", token);
-      const expiresIn = params.get("expires_in");
-      if (expiresIn) {
-        const expiry = Date.now() + parseInt(expiresIn) * 1000;
-        localStorage.setItem("google_calendar_expiry", expiry.toString());
-      }
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-    return token;
-  },
-
-  getToken(): string | null {
-    const token = localStorage.getItem("google_calendar_token");
-    const expiry = localStorage.getItem("google_calendar_expiry");
-    if (!token || !expiry) return null;
-    if (Date.now() > parseInt(expiry)) {
-      localStorage.removeItem("google_calendar_token");
-      localStorage.removeItem("google_calendar_expiry");
-      return null;
-    }
-    return token;
+  async getStatus(): Promise<GoogleCalendarStatus> {
+    const status = await invoke<GoogleCalendarStatus>("status");
+    cacheStatus(status.connected && status.connection?.status === "connected");
+    return status;
   },
 
   isConnected(): boolean {
-    return !!this.getToken();
+    return sessionStorage.getItem(STATUS_CACHE_KEY) === "connected";
   },
 
-  disconnect() {
-    localStorage.removeItem("google_calendar_token");
-    localStorage.removeItem("google_calendar_expiry");
+  async connect(returnUrl = `${window.location.origin}/configuracoes`): Promise<void> {
+    const result = await invoke<{ authorizationUrl: string }>("connect", { returnUrl });
+    window.location.assign(result.authorizationUrl);
   },
 
-  async createEvent(input: CreateEventInput): Promise<{ id: string } | null> {
-    const token = this.getToken();
-    if (!token) return null;
-
-    let startField: { dateTime?: string; date?: string; timeZone?: string };
-    let endField: { dateTime?: string; date?: string; timeZone?: string };
-
-    if (input.allDay) {
-      const dateStr = input.data_inicio.slice(0, 10);
-      const [y, mo, d] = dateStr.split("-").map(Number);
-      const next = new Date(y, mo - 1, d + 1);
-      startField = { date: dateStr };
-      endField = {
-        date: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`,
-      };
-    } else {
-      const start = new Date(input.data_inicio);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      startField = { dateTime: start.toISOString(), timeZone: "America/Manaus" };
-      endField = { dateTime: end.toISOString(), timeZone: "America/Manaus" };
-    }
-
-    const body: Record<string, unknown> = {
-      summary: input.titulo,
-      description: input.descricao || "",
-      location: input.local || "",
-      start: startField,
-      end: endField,
-    };
-    if (input.colorId) body.colorId = input.colorId;
-
-    const res = await fetch(GCAL_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) return null;
-    return res.json();
+  async syncNow(): Promise<{
+    queued: number;
+    claimed: number;
+    completed: number;
+    retried: number;
+    failed: number;
+  }> {
+    return invoke("sync");
   },
 
-  async updateEvent(googleEventId: string, input: CreateEventInput): Promise<boolean> {
-    const token = this.getToken();
-    if (!token) return false;
-
-    let startField: { dateTime?: string; date?: string; timeZone?: string };
-    let endField: { dateTime?: string; date?: string; timeZone?: string };
-
-    if (input.allDay) {
-      const dateStr = input.data_inicio.slice(0, 10);
-      const [y, mo, d] = dateStr.split("-").map(Number);
-      const next = new Date(y, mo - 1, d + 1);
-      startField = { date: dateStr };
-      endField = {
-        date: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`,
-      };
-    } else {
-      const start = new Date(input.data_inicio);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      startField = { dateTime: start.toISOString(), timeZone: "America/Manaus" };
-      endField = { dateTime: end.toISOString(), timeZone: "America/Manaus" };
-    }
-
-    const body: Record<string, unknown> = {
-      summary: input.titulo,
-      description: input.descricao || "",
-      location: input.local || "",
-      start: startField,
-      end: endField,
-    };
-    if (input.colorId) body.colorId = input.colorId;
-
-    const res = await fetch(`${GCAL_URL}/${googleEventId}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    return res.ok;
+  requestSync(delayMs = 750): void {
+    if (!this.isConnected()) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      void this.syncNow().catch(() => {
+        // O worker agendado repetirá a operação; a UI mostra o erro no status.
+      });
+    }, delayMs);
   },
 
-  async deleteEvent(googleEventId: string): Promise<boolean> {
-    const token = this.getToken();
-    if (!token) return false;
-
-    const res = await fetch(`${GCAL_URL}/${googleEventId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    return res.status === 204;
+  async disconnect(removeEvents = false): Promise<{
+    removedFromGoogle: number;
+    failedRemovals: number;
+  }> {
+    const result = await invoke<{
+      removedFromGoogle: number;
+      failedRemovals: number;
+    }>("disconnect", { removeEvents });
+    cacheStatus(false);
+    return result;
   },
 
-  async listEvents(maxResults = 20): Promise<GoogleCalendarEvent[]> {
-    const token = this.getToken();
-    if (!token) return [];
+  handleOAuthResult(): { connected: boolean; errorCode?: string } | null {
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get("google_calendar");
+    if (!result) return null;
 
-    const params = new URLSearchParams({
-      maxResults: maxResults.toString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      timeMin: new Date().toISOString(),
-    });
+    const errorCode = url.searchParams.get("google_calendar_error") ?? undefined;
+    url.searchParams.delete("google_calendar");
+    url.searchParams.delete("google_calendar_error");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 
-    const res = await fetch(`${GCAL_URL}?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const connected = result === "connected";
+    cacheStatus(connected);
+    return { connected, errorCode };
+  },
 
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.items || [];
+  // Compatibilidade temporária enquanto páginas antigas passam a depender
+  // exclusivamente da fila do backend.
+  authorize(): void {
+    void this.connect();
+  },
+
+  extractToken(): string | null {
+    return this.handleOAuthResult()?.connected ? "server-managed" : null;
+  },
+
+  getToken(): string | null {
+    return this.isConnected() ? "server-managed" : null;
+  },
+
+  async createEvent(_input: LegacyGoogleEventInput): Promise<null> {
+    this.requestSync();
+    return null;
+  },
+
+  async updateEvent(
+    _googleEventId: string,
+    _input: LegacyGoogleEventInput,
+  ): Promise<boolean> {
+    this.requestSync();
+    return true;
+  },
+
+  async deleteEvent(_googleEventId: string): Promise<boolean> {
+    this.requestSync();
+    return true;
+  },
+
+  async listEvents(_maxResults = 20): Promise<[]> {
+    return [];
   },
 };

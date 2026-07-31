@@ -12,15 +12,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { recognizeDocument, type DocumentInfo } from "@/lib/document-recognition";
+import { buildTenantDocumentPath } from "@/lib/tenant-storage";
+import { useTenant } from "@/contexts/TenantContext";
+import type { Tables } from "@/integrations/supabase/types";
 
 const tiposDoc = ["Petição", "Contestação", "Recurso", "HC", "Alegações", "Procuração", "Contrato", "Parecer", "Decisão", "Outros"];
 
+type Documento = Tables<"documentos">;
+type ProcessoOption = Pick<
+  Tables<"processos">,
+  "id" | "numero" | "cliente_nome"
+>;
+
 const Documentos = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [documentos, setDocumentos] = useState<Record<string, any>[]>([]);
-  const [processos, setProcessos] = useState<Record<string, any>[]>([]);
+  const [documentos, setDocumentos] = useState<Documento[]>([]);
+  const [processos, setProcessos] = useState<ProcessoOption[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -80,8 +90,22 @@ const Documentos = () => {
     }
     setLoading(true);
 
-    const fileExt = selectedFile.name.split(".").pop();
-    const filePath = `${user!.id}/${Date.now()}.${fileExt}`;
+    if (!currentTenant) {
+      toast({
+        title: "Escritório não identificado",
+        description: "Sua conta precisa estar vinculada a um escritório ativo.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const documentId = crypto.randomUUID();
+    const filePath = buildTenantDocumentPath({
+      tenantId: currentTenant.tenantId,
+      documentId,
+      fileName: selectedFile.name,
+    });
 
     const { error: uploadError } = await supabase.storage.from("documentos").upload(filePath, selectedFile);
     if (uploadError) {
@@ -92,6 +116,7 @@ const Documentos = () => {
 
     const processo = processos.find(p => p.id === form.processo_id);
     const { error } = await supabase.from("documentos").insert({
+      id: documentId,
       nome: form.nome,
       tipo: form.tipo,
       processo_id: form.processo_id || null,
@@ -99,9 +124,11 @@ const Documentos = () => {
       arquivo_path: filePath,
       tamanho: selectedFile.size,
       user_id: user!.id,
+      tenant_id: currentTenant.tenantId,
     });
 
     if (error) {
+      await supabase.storage.from("documentos").remove([filePath]);
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Documento enviado com sucesso!" });

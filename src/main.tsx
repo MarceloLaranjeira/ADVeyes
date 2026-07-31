@@ -2,7 +2,6 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { inicializarHorus } from "@/services/horus";
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -44,7 +43,7 @@ class ErrorBoundary extends React.Component<
             }}
           >
             <h2 style={{ color: "#ef4444", marginBottom: "16px", fontSize: "20px" }}>
-              ⚠️ Erro no Sistema ADVeyes
+              ⚠️ Erro no sistema
             </h2>
             <p style={{ color: "#94a3b8", marginBottom: "16px", fontSize: "14px" }}>
               Ocorreu um erro inesperado. Por favor, recarregue a página.
@@ -88,11 +87,6 @@ class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
-
-// 🦅 Inicializar Horus ao carregar o app
-inicializarHorus().catch((error) => {
-  console.error("❌ Erro ao inicializar Horus:", error);
-});
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>

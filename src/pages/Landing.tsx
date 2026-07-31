@@ -7,6 +7,11 @@ import {
   TrendingUp, Award, Lock, Phone,
 } from "lucide-react";
 import { LogoMark } from "@/components/common/Logo";
+import {
+  BILLING_PLANS,
+  getMonthlyEquivalent,
+  type BillingPlanKey,
+} from "@/lib/billing-plans";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const Nav = () => {
@@ -27,7 +32,7 @@ const Nav = () => {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <LogoMark size="sm" />
-            <span className="font-serif font-bold text-[#1a2a5e] tracking-widest text-lg uppercase">LEXIA</span>
+            <span className="font-serif font-bold text-[#1a2a5e] tracking-widest text-lg uppercase">ADVeyes</span>
           </div>
 
           {/* Desktop nav */}
@@ -99,7 +104,7 @@ const Hero = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-full px-4 py-1.5 mb-8">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-yellow-300 text-xs font-semibold tracking-wide">7 dias grátis · Sem cartão · Sem pegadinha</span>
+              <span className="text-yellow-300 text-xs font-semibold tracking-wide">14 dias de piloto · Sem cartão · Sem pegadinha</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold text-white leading-tight mb-6">
@@ -242,7 +247,7 @@ const features = [
     icon: Calendar,
     color: "bg-green-50 text-green-600",
     title: "Agenda Inteligente",
-    desc: "Compromissos, prazos e audiências em views Mês/Semana/Dia. Integração com Google Calendar.",
+    desc: "Conecte sua própria conta Google uma vez e sincronize automaticamente os eventos que você criar no ADVeyes.",
   },
   {
     icon: Bot,
@@ -300,8 +305,8 @@ const Features = () => (
 // ─── How It Works ─────────────────────────────────────────────────────────────
 const steps = [
   { n: "01", title: "Cadastre-se em 2 minutos", desc: "Crie sua conta gratuitamente. Sem cartão de crédito. Sem formulário complicado." },
-  { n: "02", title: "Importe seus processos", desc: "Adicione processos manualmente ou deixe o LEXIA buscar automaticamente nos tribunais pelo seu número OAB." },
-  { n: "03", title: "Deixe o LEXIA trabalhar", desc: "Andamentos automáticos, alertas de prazo, publicações e IA jurídica sempre ao seu lado." },
+  { n: "02", title: "Importe seus processos", desc: "Adicione processos manualmente ou deixe o ADVeyes buscar automaticamente nos tribunais pelo seu número OAB." },
+  { n: "03", title: "Deixe o ADVeyes trabalhar", desc: "Andamentos automáticos, alertas de prazo, publicações e IA jurídica sempre ao seu lado." },
 ];
 
 const HowItWorks = () => (
@@ -331,32 +336,16 @@ const HowItWorks = () => (
 );
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
-const plans = [
-  {
-    name: "Starter",
-    price: 97,
-    yearly: 77,
-    color: "border-gray-200",
-    popular: false,
-    features: ["1 advogado", "50 processos", "Agenda e Tarefas", "IA básica (50 consultas/mês)", "Suporte por e-mail", "Andamentos manuais"],
-  },
-  {
-    name: "Profissional",
-    price: 197,
-    yearly: 157,
-    color: "border-[#1a2a5e]",
-    popular: true,
-    features: ["3 advogados", "Processos ilimitados", "Todas as ferramentas", "IA avançada ilimitada", "Diário Oficial automático", "Andamentos automáticos DataJud", "Google Calendar sync", "Suporte prioritário"],
-  },
-  {
-    name: "Escritório",
-    price: 397,
-    yearly: 317,
-    color: "border-gray-200",
-    popular: false,
-    features: ["Advogados ilimitados", "Tudo do Profissional", "API personalizada", "Webhooks", "Relatórios customizados", "Gerente de conta dedicado", "Onboarding personalizado", "White-label opcional"],
-  },
-];
+const plans = (Object.entries(BILLING_PLANS) as [
+  BillingPlanKey,
+  (typeof BILLING_PLANS)[BillingPlanKey],
+][]).map(([key, plan]) => ({
+  key,
+  ...plan,
+  yearly: getMonthlyEquivalent(plan.annualTotal),
+  color: "popular" in plan && plan.popular ? "border-[#1a2a5e]" : "border-gray-200",
+  popular: "popular" in plan && plan.popular,
+}));
 
 const Pricing = () => {
   const [yearly, setYearly] = useState(false);
@@ -368,18 +357,18 @@ const Pricing = () => {
         <div className="text-center mb-12">
           <span className="inline-block text-xs font-bold tracking-widest text-green-700 uppercase bg-green-50 px-4 py-1.5 rounded-full border border-green-100 mb-4">Preços</span>
           <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">Simples e transparente</h2>
-          <p className="text-gray-500 mb-8">7 dias grátis, cancele quando quiser, sem burocracia</p>
+          <p className="text-gray-500 mb-8">14 dias de piloto assistido, sem cartão obrigatório</p>
 
           {/* Toggle */}
           <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1">
             <button onClick={() => setYearly(false)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${!yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>Mensal</button>
             <button onClick={() => setYearly(true)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>
-              Anual <span className="text-green-500 text-xs ml-1">-20%</span>
+              Anual <span className="text-green-500 text-xs ml-1">2 meses grátis</span>
             </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {plans.map((p) => (
             <div key={p.name} className={`relative bg-white rounded-2xl border-2 ${p.color} p-6 ${p.popular ? "shadow-xl scale-105 z-10" : "shadow-sm"} transition-all hover:shadow-lg`}>
               {p.popular && (
@@ -392,7 +381,7 @@ const Pricing = () => {
                 <span className="text-4xl font-bold text-[#1a2a5e]">R$ {yearly ? p.yearly : p.price}</span>
                 <span className="text-gray-400 text-sm mb-1">/mês</span>
               </div>
-              {yearly && <p className="text-xs text-green-600 font-medium mb-4">Cobrado anualmente</p>}
+              {yearly && <p className="text-xs text-green-600 font-medium mb-4">Total anual: R$ {p.annualTotal.toLocaleString("pt-BR")}</p>}
               {!yearly && <p className="text-xs text-gray-400 mb-4">&nbsp;</p>}
 
               <ul className="space-y-2.5 mb-6">
@@ -405,13 +394,13 @@ const Pricing = () => {
               </ul>
 
               <button
-                onClick={() => navigate("/login")}
+                onClick={() => navigate(`/login?plan=${p.key}`)}
                 className={`w-full py-3 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5 ${p.popular
                   ? "bg-[#1a2a5e] text-white hover:bg-[#243570] hover:shadow-lg"
                   : "border-2 border-[#1a2a5e] text-[#1a2a5e] hover:bg-[#1a2a5e] hover:text-white"
                 }`}
               >
-                Começar 7 dias grátis
+                Começar piloto de 14 dias
               </button>
             </div>
           ))}
@@ -419,7 +408,7 @@ const Pricing = () => {
 
         <p className="text-center text-xs text-gray-400 mt-8 flex items-center justify-center gap-2">
           <Lock className="w-3.5 h-3.5" />
-          Sem cartão de crédito necessário · Cancele a qualquer momento · Dados 100% seguros (LGPD)
+          Sem cartão no piloto · Processos cadastrados ilimitados · Dados protegidos pela LGPD
         </p>
       </div>
     </section>
@@ -431,7 +420,7 @@ const testimonials = [
   {
     name: "Dr. Rodrigo Figueiredo",
     role: "Advogado Criminalista · OAB/AM 12.305",
-    text: "O LEXIA mudou completamente minha rotina. Os andamentos automáticos do TJAM me economizam pelo menos 2 horas por dia. A IA jurídica é impressionante para redigir recursos.",
+    text: "O ADVeyes mudou completamente minha rotina. Os andamentos automáticos do TJAM me economizam pelo menos 2 horas por dia. A IA jurídica é impressionante para redigir recursos.",
     stars: 5,
   },
   {
@@ -443,7 +432,7 @@ const testimonials = [
   {
     name: "Dr. André Santana",
     role: "Advogado Trabalhista · OAB/BA 28.907",
-    text: "A integração com o DataJud é perfeita. Todos os andamentos chegam automáticos. Nunca mais perdi um prazo desde que comecei a usar o LEXIA.",
+    text: "A integração com o DataJud é perfeita. Todos os andamentos chegam automáticos. Nunca mais perdi um prazo desde que comecei a usar o ADVeyes.",
     stars: 5,
   },
 ];
@@ -490,14 +479,14 @@ const CTABanner = () => {
           Pronto para transformar<br />seu escritório?
         </h2>
         <p className="text-blue-200/70 text-lg mb-8">
-          Junte-se a centenas de advogados que já usam o LEXIA para trabalhar melhor.
+          Junte-se a centenas de advogados que já usam o ADVeyes para trabalhar melhor.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={() => navigate("/login")}
             className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-10 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
           >
-            Começar 7 dias grátis
+            Começar piloto de 14 dias
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
@@ -517,17 +506,17 @@ const Footer = () => (
         <div className="flex items-center gap-3">
           <LogoMark dark size="sm" />
           <div>
-            <div className="font-serif font-bold tracking-widest text-sm uppercase text-white/80">LEXIA</div>
+            <div className="font-serif font-bold tracking-widest text-sm uppercase text-white/80">ADVeyes</div>
             <div className="text-[9px] tracking-widest uppercase text-white/30">Gestão Jurídica</div>
           </div>
         </div>
         <div className="flex gap-6 text-xs">
-          <a href="#" className="hover:text-white transition-colors">Termos de Uso</a>
-          <a href="#" className="hover:text-white transition-colors">Privacidade (LGPD)</a>
-          <a href="#" className="hover:text-white transition-colors">Contato</a>
-          <a href="#" className="hover:text-white transition-colors">Suporte</a>
+          <Link to="/termos" className="hover:text-white transition-colors">Termos de Uso</Link>
+          <Link to="/privacidade" className="hover:text-white transition-colors">Privacidade (LGPD)</Link>
+          <a href="mailto:marcelolaranjeira33@gmail.com" className="hover:text-white transition-colors">Contato</a>
+          <a href="mailto:marcelolaranjeira33@gmail.com" className="hover:text-white transition-colors">Suporte</a>
         </div>
-        <p className="text-xs">© 2025 LEXIA · Albertino e Advogados Associados</p>
+        <p className="text-xs">© 2026 ADVeyes · Operado pela Automatikus</p>
       </div>
     </div>
   </footer>

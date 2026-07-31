@@ -8,14 +8,31 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getAuthenticatedFunctionHeaders,
+  getFunctionUrl,
+} from "@/integrations/supabase/client";
 
 type Msg = { role: "user" | "assistant"; content: string; timestamp?: number };
 type TtsProvider = "browser" | "elevenlabs" | "openai" | "google";
 type VoiceState = "idle" | "listening" | "speaking" | "processing";
+type SpeechRecognitionConstructor = new () => {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  maxAlternatives: number;
+  onstart: (() => void) | null;
+  onresult: ((event: Event & { results: SpeechRecognitionResultList }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
 
-const SUPABASE_BASE_URL = "https://yjfhuuovxhqpcpheivgv.supabase.co";
-const CHAT_URL = `${SUPABASE_BASE_URL}/functions/v1/chat`;
+type WindowWithSpeechRecognition = Window & typeof globalThis & {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
 
 const modes = [
   { value: "assistente", label: "Assistente Jurídico", icon: Bot, desc: "Legislação e jurisprudência" },
@@ -169,7 +186,7 @@ const IAJuridica = () => {
   }, [messages]);
 
   const initRecognition = useCallback(() => {
-    const w = window as any;
+    const w = window as WindowWithSpeechRecognition;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) return null;
     const recognition = new SpeechRecognition();
@@ -192,7 +209,7 @@ const IAJuridica = () => {
   }, []);
 
   const toggleVoice = () => {
-    const w = window as any;
+    const w = window as WindowWithSpeechRecognition;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast({ title: "Voz não suportada", description: "Use Chrome ou Edge.", variant: "destructive" });
@@ -219,16 +236,9 @@ const IAJuridica = () => {
     setVoiceState("processing");
 
     try {
-      // Use authenticated session token — never expose anon key as bearer
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhd2ZybXVpdGRpcW1kamV6eWx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NDk4NzQsImV4cCI6MjA4ODMyNTg3NH0.tRm-_Gl2W9yWVnM7Jrs4flyhdwN1UlMo8OYcE373Fp8";
-
-      const resp = await fetch(CHAT_URL, {
+      const resp = await fetch(getFunctionUrl("chat"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${authToken}`,
-        },
+        headers: await getAuthenticatedFunctionHeaders(),
         body: JSON.stringify({
           messages: newMessages,
           mode,

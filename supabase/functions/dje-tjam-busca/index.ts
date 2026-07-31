@@ -466,22 +466,26 @@ serve(async (req) => {
   }
 
   try {
-    // Auth (opcional — permite uso sem sessão JWT em modo demo)
     const authHeader = req.headers.get("Authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const token = authHeader.replace("Bearer ", "");
 
-    let userId: string | null = null;
-    if (token) {
-      try {
-        const supabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_ANON_KEY")!,
-          { global: { headers: { Authorization: `Bearer ${token}` } } }
-        );
-        const { data: { user } } = await supabase.auth.getUser(token);
-        userId = user?.id ?? null;
-      } catch { /* ignora erro de auth */ }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    const userId = user.id;
 
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
@@ -504,7 +508,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[dje-tjam-busca] user=${userId ?? "anon"} periodo=${dataInicio}→${dataFim} palavraChave="${palavraChave}" oab="${oab}"`);
+    console.log(`[dje-tjam-busca] user=${userId} periodo=${dataInicio}→${dataFim} palavraChave="${palavraChave}" oab="${oab}"`);
 
     const publicacoes = await buscarDjeTjam({ dataInicio, dataFim, palavraChave, oab });
 

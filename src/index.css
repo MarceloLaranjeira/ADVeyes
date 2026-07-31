@@ -171,6 +171,7 @@
 
 @layer base {
   * { @apply border-border; }
+  html[data-brand-ready="true"] { accent-color: hsl(var(--primary)); }
   body { @apply bg-background text-foreground font-sans antialiased; }
   body, button, input, select, textarea {
     font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -182,6 +183,25 @@
   }
   /* Números tabulares para KPIs */
   .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Estado neutro enquanto o subdomínio resolve sua marca pública. */
+  .brand-bootstrap {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f8fafc;
+  }
+  .brand-bootstrap__indicator {
+    width: 2rem;
+    height: 2rem;
+    border: 3px solid #cbd5e1;
+    border-top-color: #475569;
+    border-radius: 9999px;
+    animation: brand-bootstrap-spin 0.8s linear infinite;
+  }
+  @keyframes brand-bootstrap-spin {
+    to { transform: rotate(360deg); }
+  }
 }
 
 @layer components {
@@ -250,6 +270,79 @@
   .metric-card:hover {
     box-shadow: 0 6px 16px hsl(222 30% 20% / 0.08), 0 2px 4px hsl(222 30% 20% / 0.04);
     transform: translateY(-1px);
+  }
+
+  /* === DASHBOARD CARDS 3D === */
+  .depth-card,
+  .metric-card {
+    position: relative;
+    isolation: isolate;
+    transform-style: preserve-3d;
+    transform: translateZ(0);
+    background:
+      linear-gradient(145deg, hsl(var(--card) / 0.98), hsl(var(--card))),
+      hsl(var(--card));
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.85) inset,
+      0 12px 24px -18px hsl(var(--foreground) / 0.35),
+      0 5px 12px -10px hsl(var(--foreground) / 0.24);
+  }
+
+  .depth-card::before,
+  .metric-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      120deg,
+      hsl(0 0% 100% / 0.38),
+      transparent 34%,
+      hsl(var(--primary) / 0.035) 74%,
+      transparent
+    );
+  }
+
+  .depth-card--interactive,
+  .metric-card {
+    cursor: pointer;
+    transition:
+      transform 190ms cubic-bezier(0.2, 0.75, 0.25, 1),
+      box-shadow 190ms ease,
+      border-color 190ms ease;
+    will-change: transform;
+  }
+
+  .depth-card--interactive:focus-visible,
+  .metric-card:focus-visible {
+    outline: 3px solid hsl(var(--ring) / 0.32);
+    outline-offset: 3px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .depth-card--interactive:hover,
+    .metric-card:hover {
+      transform: perspective(900px) translateY(-4px) rotateX(1.25deg) rotateY(-0.75deg);
+      border-color: hsl(var(--primary) / 0.22);
+      box-shadow:
+        0 1px 0 hsl(0 0% 100% / 0.92) inset,
+        0 24px 42px -25px hsl(var(--foreground) / 0.42),
+        0 12px 20px -16px hsl(var(--primary) / 0.34);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .depth-card--interactive,
+    .metric-card {
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .depth-card--interactive:hover,
+    .metric-card:hover {
+      transform: none;
+    }
   }
 
   /* === QUICK ACTIONS === */
