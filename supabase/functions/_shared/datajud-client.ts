@@ -37,6 +37,37 @@ const STATE_COURT_BY_CODE: Record<string, string> = {
   "27": "to",
 };
 
+/** Índices consultados na descoberta por OAB, por seccional. */
+const COURTS_BY_OAB_STATE: Record<string, string[]> = {
+  AC: ["tjac", "trf1", "trt14"],
+  AL: ["tjal", "trf5", "trt19"],
+  AM: ["tjam", "trf1", "trt11"],
+  AP: ["tjap", "trf1", "trt8"],
+  BA: ["tjba", "trf1", "trt5"],
+  CE: ["tjce", "trf5", "trt7"],
+  DF: ["tjdft", "trf1", "trt10"],
+  ES: ["tjes", "trf2", "trt17"],
+  GO: ["tjgo", "trf1", "trt18"],
+  MA: ["tjma", "trf1", "trt16"],
+  MG: ["tjmg", "trf1", "trt3"],
+  MS: ["tjms", "trf3", "trt24"],
+  MT: ["tjmt", "trf1", "trt23"],
+  PA: ["tjpa", "trf1", "trt8"],
+  PB: ["tjpb", "trf5", "trt13"],
+  PE: ["tjpe", "trf5", "trt6"],
+  PI: ["tjpi", "trf1", "trt22"],
+  PR: ["tjpr", "trf4", "trt9"],
+  RJ: ["tjrj", "trf2", "trt1"],
+  RN: ["tjrn", "trf5", "trt21"],
+  RO: ["tjro", "trf1", "trt14"],
+  RR: ["tjrr", "trf1", "trt11"],
+  RS: ["tjrs", "trf4", "trt4"],
+  SC: ["tjsc", "trf4", "trt12"],
+  SE: ["tjse", "trf5", "trt20"],
+  SP: ["tjsp", "trf3", "trt2"],
+  TO: ["tjto", "trf1", "trt10"],
+};
+
 export class DataJudApiError extends Error {
   constructor(
     public readonly status: number,
@@ -165,4 +196,128 @@ function errorCodeForStatus(status: number): string {
   if (status === 401 || status === 403) return "datajud_unauthorized";
   if (status === 429) return "datajud_rate_limited";
   return "datajud_request_failed";
+}
+
+/** Índices onde faz sentido procurar processos de uma OAB. */
+export function courtsForOabState(oabState: string): string[] {
+  return COURTS_BY_OAB_STATE[oabState.trim().toUpperCase()] ?? [];
+}
+
+/**
+ * Consulta por OAB no índice público. O campo de advogado não é preenchido de
+ * forma uniforme pelos tribunais, então a busca cobre as grafias conhecidas.
+ */
+export function buildOabQuery(
+  oabNumber: string,
+  oabState: string,
+): Record<string, unknown> {
+  const digits = oabNumber.replace(/\D/g, "");
+  const uf = oabState.trim().toUpperCase();
+  const variants = [digits, `${digits}/${uf}`, `${uf}${digits}`, `${uf} ${digits}`];
+
+  return {
+    bool: {
+      should: variants.flatMap((variant) => [
+        { match: { "partes.advogados.inscricaoOab": variant } },
+        { match: { "partes.advogados.oab": variant } },
+      ]),
+      minimum_should_match: 1,
+    },
+  };
+}
+
+export interface DiscoveredProcess {
+  numeroProcesso: string;
+  court: string;
+  tribunal: string | null;
+  classe: string | null;
+  orgaoJulgador: string | null;
+  dataAjuizamento: string | null;
+  ultimaAtualizacao: string | null;
+  poloAtivo: string | null;
+  poloPassivo: string | null;
+}
+
+interface DataJudParty {
+  nome?: string;
+  polo?: string;
+  tipo?: string;
+}
+
+function partyByPole(parties: DataJudParty[], pole: string): string | null {
+  const found = parties.find((party) =>
+    (party.polo ?? party.tipo ?? "").toUpperCase().startsWith(pole)
+  );
+  return found?.nome ?? null;
+}
+
+/**
+ * Descobre processos de um advogado nos índices da seccional informada.
+ * Retorna candidatos: a confirmação de vínculo continua sendo humana.
+ */
+export async function discoverProcessesByOab(input: {
+  authorization: string;
+  oabNumber: string;
+  oabState: string;
+  pageSize?: number;
+  timeoutMs?: number;
+}): Promise<DiscoveredProcess[]> {
+  const courts = courtsForOabState(input.oabState);
+  if (!courts.length) {
+    throw new DataJudApiError(400, "datajud_court_not_supported");
+  }
+
+  const query = buildOabQuery(input.oabNumber, input.oabState);
+  const found = new Map<string, DiscoveredProcess>();
+
+  for (const court of courts) {
+    const response = await fetch(
+      `${DATAJUD_BASE}/api_publica_${court}/_search`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: input.authorization,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query, size: input.pageSize ?? 50 }),
+        signal: AbortSignal.timeout(input.timeoutMs ?? 15_000),
+      },
+    );
+
+    // Um índice indisponível não invalida os demais.
+    if (!response.ok) continue;
+
+    const payload = await response.json() as DataJudSearchResponse;
+    for (const hit of payload.hits?.hits ?? []) {
+      const source = hit._source;
+      if (!source || typeof source.numeroProcesso !== "string") continue;
+
+      const parties = Array.isArray(source.partes)
+        ? source.partes as DataJudParty[]
+        : [];
+      const orgao = source.orgaoJulgador as { nome?: string } | undefined;
+      const classe = source.classe as { nome?: string } | undefined;
+
+      found.set(source.numeroProcesso, {
+        numeroProcesso: source.numeroProcesso,
+        court,
+        tribunal: typeof source.tribunal === "string"
+          ? source.tribunal
+          : court.toUpperCase(),
+        classe: classe?.nome ?? null,
+        orgaoJulgador: orgao?.nome ?? null,
+        dataAjuizamento: typeof source.dataAjuizamento === "string"
+          ? source.dataAjuizamento
+          : null,
+        ultimaAtualizacao: typeof source.dataHoraUltimaAtualizacao === "string"
+          ? source.dataHoraUltimaAtualizacao
+          : null,
+        poloAtivo: partyByPole(parties, "A"),
+        poloPassivo: partyByPole(parties, "P"),
+      });
+    }
+  }
+
+  return Array.from(found.values());
 }

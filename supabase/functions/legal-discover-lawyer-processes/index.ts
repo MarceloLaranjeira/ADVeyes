@@ -8,6 +8,13 @@ import {
   EscavadorApiError,
   type EscavadorProcessItem,
 } from "../_shared/escavador-client.ts";
+import { normalizeDataJudAuthorization } from "../_shared/datajud-auth.ts";
+import {
+  DataJudApiError,
+  type DiscoveredProcess,
+  discoverProcessesByOab,
+} from "../_shared/datajud-client.ts";
+import { formatCnj } from "../_shared/legal-normalization.ts";
 
 const OAB_TYPES = new Set([
   "ADVOGADO",
@@ -63,6 +70,34 @@ function discoveryRow(
     last_movement_at: item.data_ultima_movimentacao ?? null,
     provider_fetched_at: new Date().toISOString(),
     provider_payload: item,
+  };
+}
+
+/**
+ * Candidato descoberto na base pública do DataJud. Continua sendo candidato:
+ * o vínculo com o escritório exige confirmação humana.
+ */
+function dataJudDiscoveryRow(
+  tenantId: string,
+  registrationId: string,
+  item: DiscoveredProcess,
+) {
+  const numeroCnj = formatCnj(item.numeroProcesso);
+  if (!CNJ_PATTERN.test(numeroCnj)) return null;
+  return {
+    tenant_id: tenantId,
+    lawyer_registration_id: registrationId,
+    numero_cnj: numeroCnj,
+    provider: "datajud",
+    state: "candidate",
+    title_active_party: item.poloAtivo,
+    title_passive_party: item.poloPassivo,
+    tribunal: item.tribunal,
+    court_unit: item.orgaoJulgador,
+    process_status: null,
+    last_movement_at: item.ultimaAtualizacao,
+    provider_fetched_at: new Date().toISOString(),
+    provider_payload: item as unknown as Record<string, unknown>,
   };
 }
 
@@ -127,11 +162,87 @@ Deno.serve(async (request) => {
 
   const token = Deno.env.get("ESCAVADOR_API_TOKEN");
   if (!token) {
-    return json({
-      error: "integration_not_configured",
-      registrationId: registration.id,
-      registrationSaved: true,
-    }, 503);
+    // Sem o Escavador ainda é possível descobrir processos na base pública do
+    // DataJud. Publicações e intimações continuam dependendo do provedor.
+    let authorization: string;
+    try {
+      authorization = normalizeDataJudAuthorization(
+        Deno.env.get("DATAJUD_API_KEY"),
+      );
+    } catch {
+      return json({
+        error: "integration_not_configured",
+        registrationId: registration.id,
+        registrationSaved: true,
+      }, 503);
+    }
+
+    try {
+      const discovered = await discoverProcessesByOab({
+        authorization,
+        oabNumber: input.oabNumber,
+        oabState: input.oabState,
+      });
+      const rows = discovered
+        .map((item) =>
+          dataJudDiscoveryRow(input.tenantId, registration.id, item)
+        )
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      if (rows.length > 0) {
+        const { error: discoveryError } = await auth.admin
+          .from("process_discoveries")
+          .upsert(rows, {
+            onConflict: "tenant_id,lawyer_registration_id,numero_cnj,provider",
+            ignoreDuplicates: false,
+          });
+        if (discoveryError) {
+          console.error("legal-discovery: datajud candidate upsert failed");
+          return json({ error: "operation_failed" }, 500);
+        }
+      }
+
+      const discoveredAt = new Date().toISOString();
+      await Promise.all([
+        auth.admin.from("lawyer_registrations").update({
+          last_discovery_at: discoveredAt,
+        }).eq("id", registration.id).eq("tenant_id", input.tenantId),
+        auth.admin.from("legal_usage_events").insert({
+          tenant_id: input.tenantId,
+          provider: "datajud",
+          operation: "oab_discovery",
+          quantity: 1,
+          external_reference: registration.id,
+          metadata: { candidates: rows.length },
+        }),
+        auth.admin.from("tenant_audit_events").insert({
+          tenant_id: input.tenantId,
+          actor_user_id: auth.user.id,
+          action: "legal.oab_discovered",
+          target_type: "lawyer_registration",
+          target_id: registration.id,
+          metadata: { candidates: rows.length, provider: "datajud" },
+        }),
+      ]);
+
+      return json({
+        registrationId: registration.id,
+        registrationSaved: true,
+        totalCandidates: rows.length,
+        providerUsed: "datajud",
+        pendingProvider: "escavador",
+      });
+    } catch (error) {
+      if (error instanceof DataJudApiError) {
+        return json({
+          error: error.code,
+          registrationId: registration.id,
+          registrationSaved: true,
+        }, error.status === 400 ? 422 : 502);
+      }
+      console.error("legal-discovery: datajud discovery failed");
+      return json({ error: "datajud_request_failed" }, 502);
+    }
   }
 
   try {

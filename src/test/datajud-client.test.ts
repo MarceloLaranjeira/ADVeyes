@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveDataJudEndpoint } from "../../supabase/functions/_shared/datajud-client.ts";
+import {
+  buildOabQuery,
+  courtsForOabState,
+  resolveDataJudEndpoint,
+} from "../../supabase/functions/_shared/datajud-client.ts";
 
 describe("resolveDataJudEndpoint", () => {
   it("prioriza o tribunal informado no cadastro do processo", () => {
@@ -41,5 +45,53 @@ describe("resolveDataJudEndpoint", () => {
   it("retorna null quando o DataJud não cobre a origem", () => {
     expect(resolveDataJudEndpoint({ cnj: "0000123-45.2024.6.11.0001" })).toBeNull();
     expect(resolveDataJudEndpoint({ cnj: "123" })).toBeNull();
+  });
+});
+
+describe("courtsForOabState", () => {
+  it("cobre a justiça estadual, federal e trabalhista da seccional", () => {
+    expect(courtsForOabState("AM")).toEqual(["tjam", "trf1", "trt11"]);
+    expect(courtsForOabState("sp")).toEqual(["tjsp", "trf3", "trt2"]);
+  });
+
+  it("retorna vazio para seccional desconhecida", () => {
+    expect(courtsForOabState("XX")).toEqual([]);
+    expect(courtsForOabState("")).toEqual([]);
+  });
+});
+
+describe("buildOabQuery", () => {
+  it("procura as grafias conhecidas do campo de advogado", () => {
+    const query = buildOabQuery("10099", "AM") as {
+      bool: {
+        should: Array<Record<string, Record<string, string>>>;
+        minimum_should_match: number;
+      };
+    };
+
+    const values = query.bool.should.map((clause) =>
+      Object.values(clause.match)[0]
+    );
+    expect(new Set(values)).toEqual(
+      new Set(["10099", "10099/AM", "AM10099", "AM 10099"]),
+    );
+
+    const fields = new Set(
+      query.bool.should.map((clause) => Object.keys(clause.match)[0]),
+    );
+    expect(fields).toEqual(
+      new Set(["partes.advogados.inscricaoOab", "partes.advogados.oab"]),
+    );
+    expect(query.bool.minimum_should_match).toBe(1);
+  });
+
+  it("ignora pontuação do número e caixa da seccional", () => {
+    const query = buildOabQuery("10.099", "am") as {
+      bool: { should: Array<Record<string, Record<string, string>>> };
+    };
+    const values = query.bool.should.map((clause) =>
+      Object.values(clause.match)[0]
+    );
+    expect(values).toContain("10099/AM");
   });
 });

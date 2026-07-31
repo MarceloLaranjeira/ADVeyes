@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Search, ExternalLink, Loader2, FileText, Calendar, Bell,
-  Send, Shield, Zap, AlertCircle, ChevronDown, Globe, Filter, X, Info,
+  Send, Shield, Zap, AlertCircle, ChevronDown, Globe, Filter, X, Info, Scale,
 } from "lucide-react";
 
 // CNJ number format: NNNNNNN-DD.AAAA.J.TT.OOOO
@@ -135,6 +135,17 @@ const tribunalGroups = [
 ];
 
 const sistemasEspeciais = [
+  {
+    id: "pje",
+    nome: "PJe",
+    fullName: "Processo Judicial Eletrônico",
+    desc: "Tribunal detectado pelo número CNJ — consulta via DataJud/CNJ",
+    color: "text-amber-500",
+    borderColor: "border-amber-500/30",
+    bgColor: "bg-amber-500/8",
+    badgeClass: "tribunal-badge-pje",
+    icon: Scale,
+  },
   {
     id: "projudi-tjam",
     nome: "PROJUDI TJAM",
@@ -408,7 +419,7 @@ const BuscaJurisprudencia = () => {
         <div className="mb-6">
           <h1 className="text-4xl font-bold font-serif tracking-tight">Busca Processual</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Consulte processos via <span className="font-semibold text-foreground">DataJud / CNJ</span> — todos os tribunais, SEEU e Projudi
+            Consulte processos na base pública do <span className="font-semibold text-foreground">DataJud / CNJ</span> — inclusive os que tramitam em PJe, Projudi e SEEU
           </p>
         </div>
 
@@ -510,6 +521,14 @@ const BuscaJurisprudencia = () => {
                   {t.nome}
                 </button>
               ))}
+              <button
+                onClick={() => setTribunal("pje")}
+                className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                  tribunal === "pje" ? "tribunal-badge-pje" : "border-amber-500/30 text-amber-600 hover:bg-amber-50"
+                }`}
+              >
+                PJe
+              </button>
               <button
                 onClick={() => setTribunal("seeu")}
                 className={`px-3 py-1 text-xs rounded-full border transition-all ${
