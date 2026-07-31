@@ -427,6 +427,12 @@
     color: hsl(var(--muted-foreground));
     border: 1px solid hsl(var(--border));
   }
+  .tribunal-badge-pje {
+    @apply inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full;
+    background: hsl(var(--secondary));
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
 }
 
 /* === KEYFRAMES === */

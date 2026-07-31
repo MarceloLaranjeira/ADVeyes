@@ -163,6 +163,16 @@ const PROJUDI_TRTS: Record<string, string> = {
   trt13: "https://projudi.trt13.jus.br",
 };
 
+// === Portais PJe ===
+// Apenas instâncias confirmadas; os demais tribunais caem no portal nacional
+// do CNJ, que lista o endereço correto de cada PJe.
+const PJE_PORTALS: Record<string, string> = {
+  nacional: "https://www.pje.jus.br",
+  tjam: "https://pje.tjam.jus.br",
+  stj: "https://pje.stj.jus.br",
+  tst: "https://pje.tst.jus.br",
+};
+
 /**
  * Detecta o tribunal DataJud a partir do número CNJ padrão.
  * Formato: NNNNNNN-DD.AAAA.J.TT.OOOO
@@ -342,6 +352,35 @@ serve(async (req) => {
         info: "O SEEU não possui endpoint DataJud independente. O número do processo não segue o padrão CNJ ou não foi possível detectar o tribunal. Acesse o portal diretamente.",
         portais_seeu: SEEU_PORTALS,
         portal_seeu: SEEU_PORTALS.nacional,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // === PJe: não tem endpoint DataJud próprio — detectar pelo número CNJ ===
+    if (inputKey === "pje") {
+      const detected = detectTribunalFromCNJ(normalizeCNJ(numero) || numero);
+      const endpoint = detected ? DATAJUD_ENDPOINTS[detected] : null;
+
+      if (endpoint) {
+        const result = await queryDataJud(endpoint, numero);
+        if (result.data) {
+          const processos = mapHits(result.data.hits?.hits, detected!);
+          const portalUrl = PJE_PORTALS[detected!] || PJE_PORTALS.nacional;
+          return new Response(JSON.stringify({
+            processos,
+            total: result.data.hits?.total?.value || 0,
+            info: `PJe: processo do ${detected!.toUpperCase()} encontrado via DataJud/CNJ.`,
+            portal_pje: portalUrl,
+            tribunal_detectado: detected,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
+      return new Response(JSON.stringify({
+        processos: [],
+        total: 0,
+        info: "O PJe não possui endpoint DataJud independente. Informe o número no padrão CNJ ou acesse o portal do tribunal.",
+        portais_pje: PJE_PORTALS,
+        portal_pje: PJE_PORTALS.nacional,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
