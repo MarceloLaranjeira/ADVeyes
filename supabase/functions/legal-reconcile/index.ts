@@ -183,17 +183,18 @@ async function reconcileProcessSource(
 
   const { data: process, error } = await context.admin
     .from("processos")
-    .select("id, numero, tribunal")
+    .select("id, numero")
     .eq("tenant_id", source.tenant_id)
     .eq("id", source.process_id)
     .maybeSingle();
   if (error) throw error;
   if (!process) throw new Error("process_not_found");
 
+  // `processos` não guarda a sigla do tribunal; o índice público é derivado
+  // do segmento e do código do próprio número CNJ.
   const found = await fetchDataJudProcess({
     authorization: context.dataJudAuthorization,
     cnj: source.reference,
-    tribunal: process.tribunal,
   });
   if (!found) return { received: 0, created: 0, ignored: 0 };
 
