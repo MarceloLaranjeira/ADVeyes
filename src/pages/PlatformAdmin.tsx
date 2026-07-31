@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DepthCard } from "@/components/dashboard/DepthCard";
+import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
 import {
   Table,
   TableBody,
@@ -28,7 +30,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const statusLabel: Record<string, string> = {
@@ -40,6 +42,8 @@ const statusLabel: Record<string, string> = {
   archived: "Arquivado",
 };
 
+type TenantListMode = "all" | "active" | "members" | "monitored" | "failures";
+
 const PlatformAdmin = () => {
   const { user, signOut } = useAuth();
   const { host, memberships, selectTenant } = useTenant();
@@ -47,6 +51,7 @@ const PlatformAdmin = () => {
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [listMode, setListMode] = useState<TenantListMode>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,7 +75,7 @@ const PlatformAdmin = () => {
 
     if (shouldNavigateTenantInPlace(host)) {
       selectTenant(membership);
-      navigate("/processos");
+      navigate("/");
       return;
     }
 
@@ -82,6 +87,60 @@ const PlatformAdmin = () => {
       }),
     );
   };
+
+  const displayedTenants = useMemo(() => {
+    const tenants = [...(overview?.tenants ?? [])];
+    if (listMode === "active") {
+      return tenants.filter((tenant) =>
+        ["active", "trialing"].includes(tenant.status),
+      );
+    }
+    if (listMode === "failures") {
+      return tenants.filter((tenant) => tenant.integrationFailures > 0);
+    }
+    if (listMode === "members") {
+      return tenants.sort((a, b) => b.activeMembers - a.activeMembers);
+    }
+    if (listMode === "monitored") {
+      return tenants.sort(
+        (a, b) => b.monitoredProcesses - a.monitoredProcesses,
+      );
+    }
+    return tenants;
+  }, [listMode, overview]);
+
+  const metricCards = [
+    {
+      label: "Escritórios",
+      value: overview?.totals.tenants ?? 0,
+      icon: Building2,
+      mode: "all" as const,
+    },
+    {
+      label: "Escritórios ativos",
+      value: overview?.totals.activeTenants ?? 0,
+      icon: ShieldCheck,
+      mode: "active" as const,
+    },
+    {
+      label: "Usuários ativos",
+      value: overview?.totals.activeMembers ?? 0,
+      icon: Users,
+      mode: "members" as const,
+    },
+    {
+      label: "Processos monitorados",
+      value: overview?.totals.monitoredProcesses ?? 0,
+      icon: Scale,
+      mode: "monitored" as const,
+    },
+    {
+      label: "Falhas de integração",
+      value: overview?.totals.integrationFailures ?? 0,
+      icon: AlertTriangle,
+      mode: "failures" as const,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -95,6 +154,11 @@ const PlatformAdmin = () => {
               <p className="font-semibold">ADVeyes — Conta geral</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>
             </div>
+            <EnvironmentSwitcher
+              mode="platform"
+              onTenantSelect={(tenant) => openTenant(tenant.tenantId)}
+              className="ml-3 hidden sm:inline-flex"
+            />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void load()}>
@@ -134,34 +198,14 @@ const PlatformAdmin = () => {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              {[
-                {
-                  label: "Escritórios",
-                  value: overview?.totals.tenants ?? 0,
-                  icon: Building2,
-                },
-                {
-                  label: "Escritórios ativos",
-                  value: overview?.totals.activeTenants ?? 0,
-                  icon: ShieldCheck,
-                },
-                {
-                  label: "Usuários ativos",
-                  value: overview?.totals.activeMembers ?? 0,
-                  icon: Users,
-                },
-                {
-                  label: "Processos monitorados",
-                  value: overview?.totals.monitoredProcesses ?? 0,
-                  icon: Scale,
-                },
-                {
-                  label: "Falhas de integração",
-                  value: overview?.totals.integrationFailures ?? 0,
-                  icon: AlertTriangle,
-                },
-              ].map(({ label, value, icon: Icon }) => (
-                <Card key={label}>
+              {metricCards.map(({ label, value, icon: Icon, mode }) => (
+                <DepthCard
+                  key={label}
+                  interactive
+                  onActivate={() => setListMode(mode)}
+                  aria-label={`${label}: ${value}. Filtrar escritórios`}
+                  className={listMode === mode ? "border-primary/40" : ""}
+                >
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">{label}</CardTitle>
                     <Icon className="h-4 w-4 text-muted-foreground" />
@@ -171,13 +215,24 @@ const PlatformAdmin = () => {
                       {loading ? "—" : value}
                     </div>
                   </CardContent>
-                </Card>
+                </DepthCard>
               ))}
             </div>
 
-            <Card>
+            <DepthCard>
               <CardHeader>
-                <CardTitle>Escritórios</CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle>Escritórios</CardTitle>
+                  {listMode !== "all" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setListMode("all")}
+                    >
+                      Limpar filtro
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -194,7 +249,7 @@ const PlatformAdmin = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(overview?.tenants ?? []).map((tenant) => {
+                    {displayedTenants.map((tenant) => {
                       const canOpen = memberships.some(
                         (item) => item.tenantId === tenant.id,
                       );
@@ -238,7 +293,7 @@ const PlatformAdmin = () => {
                         </TableRow>
                       );
                     })}
-                    {!loading && (overview?.tenants.length ?? 0) === 0 ? (
+                    {!loading && displayedTenants.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="py-10 text-center">
                           Nenhum escritório cadastrado.
@@ -248,7 +303,7 @@ const PlatformAdmin = () => {
                   </TableBody>
                 </Table>
               </CardContent>
-            </Card>
+            </DepthCard>
           </>
         )}
       </main>

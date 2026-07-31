@@ -83,6 +83,7 @@ describe("TenantProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    localStorage.clear();
     invokeMock.mockResolvedValue({
       data: {
         hostname: "localhost",
@@ -122,7 +123,7 @@ describe("TenantProvider", () => {
     expect(screen.getByTestId("count")).toHaveTextContent("1");
   });
 
-  it("exige seleção no host central quando existem vários tenants", async () => {
+  it("seleciona o primeiro tenant quando não existe preferência local", async () => {
     useAuthMock.mockReturnValue({ user: { id: "user-a" } });
     rpcMock.mockResolvedValue({
       data: [
@@ -137,13 +138,16 @@ describe("TenantProvider", () => {
     await waitFor(() =>
       expect(screen.getByTestId("count")).toHaveTextContent("2"),
     );
-    expect(screen.getByTestId("current")).toHaveTextContent("nenhum");
+    expect(screen.getByTestId("current")).toHaveTextContent("albertino");
 
     fireEvent.click(screen.getByText("selecionar oliveira"));
 
     expect(screen.getByTestId("current")).toHaveTextContent("oliveira");
     expect(
       sessionStorage.getItem("adveyes:selected-tenant:user-a"),
+    ).toBe("oliveira");
+    expect(
+      localStorage.getItem("adveyes:selected-tenant:user-a"),
     ).toBe("oliveira");
   });
 

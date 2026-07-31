@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
+import { DepthCard } from "@/components/dashboard/DepthCard";
 import { TrialBanner } from "@/components/TrialBanner";
 import {
   ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
@@ -238,7 +239,7 @@ const Index = () => {
 
         {/* Row 1: Processos + Operacional */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-4">
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/processos")}>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/processos")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Processos</p>
@@ -247,8 +248,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconProcessos size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/clientes")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/clientes")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Clientes</p>
@@ -257,8 +258,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconClientes size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/crm")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/crm")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Leads</p>
@@ -267,8 +268,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconLeads size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/time-tracking")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/time-tracking")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Horas/Mês</p>
@@ -277,8 +278,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconHoras size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Prazos</p>
@@ -287,8 +288,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconAgenda size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 border-destructive/20 cursor-pointer" onClick={() => navigate("/tarefas")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4 border-destructive/20" interactive onActivate={() => navigate("/tarefas")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Urgentes</p>
@@ -297,8 +298,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-destructive/10"><IconAlerta size={20} className="text-destructive" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/audiencias")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/audiencias")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Audiências</p>
@@ -307,8 +308,8 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><IconAudiencias size={20} className="text-muted-foreground" /></div>
             </div>
-          </div>
-          <div className="metric-card p-4 cursor-pointer" onClick={() => navigate("/tarefas")}>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Hoje</p>
@@ -317,12 +318,12 @@ const Index = () => {
               </div>
               <div className="p-2 rounded-lg bg-secondary"><CheckCircle2 className="w-4 h-4 text-muted-foreground" /></div>
             </div>
-          </div>
+          </DepthCard>
         </div>
 
         {/* Row 2: Financial KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
+          <DepthCard interactive onActivate={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                 <TrendingUp className="w-4 h-4 text-muted-foreground" />
@@ -332,8 +333,8 @@ const Index = () => {
                 <p className="text-lg font-bold text-foreground leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.recebido)}</p>
               </div>
             </CardContent>
-          </Card>
-          <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
+          </DepthCard>
+          <DepthCard interactive onActivate={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                 <Clock className="w-4 h-4 text-muted-foreground" />
@@ -343,8 +344,8 @@ const Index = () => {
                 <p className="text-lg font-bold text-foreground leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.pendente)}</p>
               </div>
             </CardContent>
-          </Card>
-          <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
+          </DepthCard>
+          <DepthCard interactive onActivate={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
                 <Receipt className="w-4 h-4 text-destructive" />
@@ -354,8 +355,8 @@ const Index = () => {
                 <p className="text-lg font-bold text-destructive leading-tight" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(financeiro.atrasado)}</p>
               </div>
             </CardContent>
-          </Card>
-          <Card className="cursor-pointer" onClick={() => navigate("/financeiro")}>
+          </DepthCard>
+          <DepthCard interactive onActivate={() => navigate("/financeiro")}>
             <CardContent className="p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${resultadoLiquido >= 0 ? "bg-secondary" : "bg-destructive/10"}`}>
                 <Wallet className={`w-4 h-4 ${resultadoLiquido >= 0 ? "text-muted-foreground" : "text-destructive"}`} />
@@ -365,7 +366,7 @@ const Index = () => {
                 <p className={`text-lg font-bold leading-tight ${resultadoLiquido >= 0 ? "text-foreground" : "text-destructive"}`} style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{formatCurrency(resultadoLiquido)}</p>
               </div>
             </CardContent>
-          </Card>
+          </DepthCard>
         </div>
 
         {/* Meta do mês */}

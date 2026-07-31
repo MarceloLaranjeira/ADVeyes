@@ -205,7 +205,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
       const storedSlug = sessionStorage.getItem(
         `adveyes:selected-tenant:${user.id}`,
-      );
+      ) ?? localStorage.getItem(`adveyes:selected-tenant:${user.id}`);
       const selected =
         (host.mode === "tenant"
           ? nextMemberships.find(
@@ -214,9 +214,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           : nextMemberships.find(
               (membership: TenantMembership) => membership.slug === storedSlug,
             )) ??
-        (host.mode === "central" && nextMemberships.length === 1
-          ? nextMemberships[0]
-          : null);
+        (host.mode === "central" ? nextMemberships[0] : null);
 
       setCurrentTenant(selected ?? null);
     } catch {
@@ -245,6 +243,10 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       if (!user) return;
 
       sessionStorage.setItem(
+        `adveyes:selected-tenant:${user.id}`,
+        tenant.slug,
+      );
+      localStorage.setItem(
         `adveyes:selected-tenant:${user.id}`,
         tenant.slug,
       );
