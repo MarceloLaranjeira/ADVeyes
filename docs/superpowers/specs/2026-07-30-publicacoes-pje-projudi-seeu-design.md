@@ -312,6 +312,22 @@ O dashboard operacional existente em `Index.tsx` será preservado e evoluído, n
 - A rota `/admin` continua protegida e representa somente a conta geral.
 - A rota `/` não redireciona automaticamente um administrador para `/admin`.
 
+### 10.5 Cards 3D profissionais
+
+Os cards de indicadores dos dois dashboards usarão profundidade visual discreta e consistente com um produto jurídico:
+
+- sombras em camadas para separar card, superfície e fundo;
+- borda superior sutilmente iluminada e gradiente de baixa intensidade;
+- elevação máxima de quatro pixels ao passar o ponteiro;
+- inclinação em perspectiva limitada a dois graus, sem prejudicar a leitura;
+- transições curtas, entre 160 e 220 milissegundos;
+- cores semânticas de alerta, sucesso e pendência preservadas;
+- foco por teclado tão evidente quanto o estado de hover;
+- ausência de inclinação em dispositivos touch;
+- animação e transformação desativadas quando `prefers-reduced-motion` estiver ativo.
+
+O efeito será implementado como estilo reutilizável, evitando lógica duplicada em cada dashboard. Cards não clicáveis manterão profundidade, mas não apresentarão elevação que sugira uma ação inexistente.
+
 ## 11. Segurança e isolamento
 
 - Todas as novas tabelas públicas terão RLS habilitada.
@@ -374,6 +390,10 @@ O dashboard operacional existente em `Index.tsx` será preservado e evoluído, n
 - Todos os indicadores clicáveis levam a telas filtradas pelo ambiente ativo.
 - Trocar o ambiente invalida consultas e recarrega os indicadores com o novo `tenant_id`.
 - O dashboard do Albertino e o dashboard da conta geral exibem dados distintos e coerentes.
+- Cards clicáveis apresentam profundidade e resposta de interação sem deslocar o layout.
+- Cards não clicáveis não simulam interatividade.
+- Navegação por teclado mantém foco visível e executa a mesma ação do clique.
+- `prefers-reduced-motion` e dispositivos touch não recebem inclinação animada.
 
 ### Prazos
 
