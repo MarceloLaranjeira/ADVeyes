@@ -113,7 +113,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       <div className="p-3 border-t border-border">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/60">
           <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" />
-          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">85+ tribunais ativos</span>
+          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
         </div>
       </div>
     </aside>

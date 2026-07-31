@@ -30,6 +30,7 @@ const IconSistema = Activity;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Prazo {
   tipo: string;
@@ -43,7 +44,9 @@ interface Prazo {
 
 const Index = () => {
   const navigate = useNavigate();
+  const { currentTenant } = useTenant();
   const [stats, setStats] = useState({ processos: 0, clientes: 0, documentos: 0 });
+  const [processAreas, setProcessAreas] = useState<Array<{ name: string; count: number }>>([]);
   const [financeiro, setFinanceiro] = useState({ recebido: 0, pendente: 0, atrasado: 0, despesas: 0 });
   const [prazos, setPrazos] = useState<Prazo[]>([]);
   const [audienciasProximas, setAudienciasProximas] = useState<Record<string, any>[]>([]);
@@ -55,11 +58,15 @@ const Index = () => {
   const [nomeAdvogado, setNomeAdvogado] = useState("");
   const [horusMetrics, setHorusMetrics] = useState({
     processosMonitorados: 0,
-    tribunaisAtivos: 6,
-    ultimaVerificacao: new Date(),
+    tribunaisAtivos: 0,
+    ultimaVerificacao: null as Date | null,
   });
 
   useEffect(() => {
+    if (!currentTenant?.tenantId) return;
+
+    const tenantId = currentTenant.tenantId;
+    const tenantTable = (table: string) => (supabase.from as any)(table);
     const now = new Date();
     const em7dias = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -76,36 +83,46 @@ const Index = () => {
       }
     }
 
-    // Carregar métricas do Horus
-    const processosData = localStorage.getItem("adveyes_processos");
-    if (processosData) {
-      try {
-        const processos = JSON.parse(processosData);
-        setHorusMetrics({
-          processosMonitorados: Array.isArray(processos) ? processos.length : 0,
-          tribunaisAtivos: 6, // STF, STJ, TST, TJAM, TRF1, TRT11
-          ultimaVerificacao: new Date(),
-        });
-      } catch (e) {
-        console.error("Erro ao carregar processos:", e);
-      }
-    }
-
     Promise.all([
-      supabase.from("processos").select("id", { count: "exact", head: true }),
-      supabase.from("clientes").select("id", { count: "exact", head: true }),
-      supabase.from("documentos").select("id", { count: "exact", head: true }),
-      supabase.from("tarefas").select("*").neq("status", "concluída").not("data_limite", "is", null).lte("data_limite", em7dias.slice(0, 10)).order("data_limite"),
-      supabase.from("audiencias").select("*").gte("data_hora", now.toISOString()).lte("data_hora", em7dias).order("data_hora").limit(5),
-      supabase.from("financeiro").select("*").eq("status", "pendente").not("data_vencimento", "is", null).lte("data_vencimento", em7dias.slice(0, 10)).order("data_vencimento"),
-      supabase.from("notificacoes").select("*").eq("lida", false).order("created_at", { ascending: false }).limit(5),
-      supabase.from("financeiro").select("tipo, status, valor"),
-      (supabase.from as any)("leads").select("id", { count: "exact", head: true }).eq("status", "novo"),
-      (supabase.from as any)("time_entries").select("horas").gte("created_at", inicioMes),
-      (supabase.from as any)("metas_financeiras").select("*").eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).single(),
-      supabase.from("tarefas").select("id", { count: "exact", head: true }).eq("data_limite", hoje).neq("status", "concluída"),
-    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes]) => {
-      setStats({ processos: proc.count || 0, clientes: cli.count || 0, documentos: doc.count || 0 });
+      tenantTable("processos").select("id, area, status").eq("tenant_id", tenantId),
+      tenantTable("clientes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+      tenantTable("documentos").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+      tenantTable("tarefas").select("*").eq("tenant_id", tenantId).neq("status", "concluída").not("data_limite", "is", null).lte("data_limite", em7dias.slice(0, 10)).order("data_limite"),
+      tenantTable("audiencias").select("*").eq("tenant_id", tenantId).gte("data_hora", now.toISOString()).lte("data_hora", em7dias).order("data_hora").limit(5),
+      tenantTable("financeiro").select("*").eq("tenant_id", tenantId).eq("status", "pendente").not("data_vencimento", "is", null).lte("data_vencimento", em7dias.slice(0, 10)).order("data_vencimento"),
+      tenantTable("notificacoes").select("*").eq("tenant_id", tenantId).eq("lida", false).order("created_at", { ascending: false }).limit(5),
+      tenantTable("financeiro").select("tipo, status, valor").eq("tenant_id", tenantId),
+      tenantTable("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "novo"),
+      tenantTable("time_entries").select("horas").eq("tenant_id", tenantId).gte("created_at", inicioMes),
+      tenantTable("metas_financeiras").select("*").eq("tenant_id", tenantId).eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).maybeSingle(),
+      tenantTable("tarefas").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("data_limite", hoje).neq("status", "concluída"),
+      tenantTable("processo_monitoramento").select("tribunal, ultima_verificacao, ativo").eq("tenant_id", tenantId).eq("ativo", true),
+    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes, monitoramento]) => {
+      const processRows = proc.data || [];
+      setStats({ processos: processRows.length, clientes: cli.count || 0, documentos: doc.count || 0 });
+      const areaCounts = processRows.reduce((counts: Record<string, number>, process: any) => {
+        const area = process.area?.trim() || "Não informada";
+        counts[area] = (counts[area] || 0) + 1;
+        return counts;
+      }, {});
+      setProcessAreas(
+        Object.entries(areaCounts).map(([name, count]) => ({ name, count: Number(count) })),
+      );
+
+      const monitoredRows = monitoramento.data || [];
+      const activeCourts = new Set(
+        monitoredRows.map((row: any) => row.tribunal).filter(Boolean),
+      );
+      const lastVerification = monitoredRows
+        .map((row: any) => row.ultima_verificacao)
+        .filter(Boolean)
+        .map((value: string) => new Date(value))
+        .sort((left: Date, right: Date) => right.getTime() - left.getTime())[0] || null;
+      setHorusMetrics({
+        processosMonitorados: monitoredRows.length,
+        tribunaisAtivos: activeCourts.size,
+        ultimaVerificacao: lastVerification,
+      });
 
       // Financial KPIs
       const finData = allFin.data || [];
@@ -134,7 +151,7 @@ const Index = () => {
       setMetaMes(meta.data || null);
       setTarefasHoje(tarefasHojeRes.count || 0);
     });
-  }, []);
+  }, [currentTenant?.tenantId]);
 
   const prazosUrgentes = prazos.filter(p => p.dias <= 2).length;
   const resultadoLiquido = financeiro.recebido - financeiro.despesas;
@@ -231,7 +248,16 @@ const Index = () => {
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Última Verificação</p>
-                <p className="text-sm font-medium tabular-nums">{horusMetrics.ultimaVerificacao.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+                <p className="text-sm font-medium tabular-nums">
+                  {horusMetrics.ultimaVerificacao
+                    ? horusMetrics.ultimaVerificacao.toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Sem verificação"}
+                </p>
               </div>
             </div>
           </div>
@@ -596,18 +622,18 @@ const Index = () => {
             </Card>
 
             <div onClick={() => navigate("/relatorios")} className="cursor-pointer">
-              <AreaDistribution />
+              <AreaDistribution areas={processAreas} />
             </div>
           </div>
         </div>
 
-        {/* APIs Tribunais Status */}
+        {/* Cobertura de consulta processual */}
         <Card className="mb-4">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <IconSistema size={18} className="text-muted-foreground" />
-              <h3 className="font-serif font-semibold text-sm">APIs dos Tribunais — Status</h3>
-              <span className="text-xs text-muted-foreground ml-auto">via DataJud/CNJ</span>
+              <h3 className="font-serif font-semibold text-sm">Cobertura de consulta processual</h3>
+              <span className="text-xs text-muted-foreground ml-auto">índices DataJud/CNJ</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {["STF","STJ","TST","TRF1","TRF2","TRF3","TRF4","TRF5","TJAM","TJSP","TJRJ","TJMG","TJBA","TJPR","TJRS","SEEU","Projudi"].map((t) => (
@@ -627,7 +653,7 @@ const Index = () => {
                 onClick={() => navigate("/busca")}
                 className="cursor-pointer text-xs font-medium px-2 py-0.5 rounded-full border border-dashed text-muted-foreground hover:text-foreground transition-colors"
               >
-                +68 tribunais →
+                Ver demais índices →
               </span>
             </div>
           </CardContent>
