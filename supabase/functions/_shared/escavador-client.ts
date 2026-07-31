@@ -110,6 +110,74 @@ export async function discoverLawyerProcesses(input: {
   };
 }
 
+interface EscavadorPublicationPage {
+  items?: Record<string, unknown>[];
+  links?: { next?: string | null };
+  meta?: { current_page?: number; last_page?: number };
+}
+
+const MAX_PUBLICATION_PAGES = 10;
+
+/**
+ * Lista as publicações e intimações associadas a uma OAB.
+ * A paginação é limitada para respeitar o consumo do plano contratado.
+ */
+export async function fetchLawyerPublications(input: {
+  token: string;
+  oabNumber: string;
+  oabState: string;
+}): Promise<Record<string, unknown>[]> {
+  // O recorte por data só será enviado depois de confirmar o contrato real da
+  // API com o token contratado. Até lá a deduplicação garante a idempotência.
+  const first = new URL(`${ESCAVADOR_API_BASE}/advogado/diarios`);
+  first.searchParams.set("oab_numero", input.oabNumber);
+  first.searchParams.set("oab_estado", input.oabState);
+  first.searchParams.set("limit", "100");
+
+  const publications: Record<string, unknown>[] = [];
+  let next: string | null = first.toString();
+  let page = 0;
+
+  while (next && page < MAX_PUBLICATION_PAGES) {
+    const response = await fetch(next, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${input.token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new EscavadorApiError(
+        response.status,
+        errorCodeForStatus(response.status),
+      );
+    }
+
+    const payload = await response.json() as EscavadorPublicationPage;
+    publications.push(...(payload.items ?? []));
+
+    if (payload.links?.next) {
+      next = safeNextUrl(payload.links.next);
+    } else if (
+      payload.meta?.current_page && payload.meta.last_page &&
+      payload.meta.current_page < payload.meta.last_page
+    ) {
+      const following = new URL(first);
+      following.searchParams.set("page", String(payload.meta.current_page + 1));
+      next = following.toString();
+    } else {
+      next = null;
+    }
+    page += 1;
+  }
+
+  if (next) {
+    throw new EscavadorApiError(502, "escavador_pagination_limit");
+  }
+
+  return publications;
+}
+
 interface EscavadorMonitorResponse {
   id: number | string;
   numero?: string;

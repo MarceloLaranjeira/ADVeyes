@@ -115,3 +115,8 @@ verify_jwt = false
 
 [functions.review-publication-deadline]
 verify_jwt = true
+
+# Reconciliação a cada seis horas (x-cron-secret) e sincronização manual
+# (JWT do usuário validado dentro da função, junto do vínculo com o escritório).
+[functions.legal-reconcile]
+verify_jwt = false

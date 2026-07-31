@@ -92,7 +92,42 @@ interface SyncRun {
   records_created: number;
   started_at: string;
   finished_at: string | null;
+  error_code: string | null;
 }
+
+interface SyncSource {
+  id: string;
+  source_kind: "oab" | "process";
+  provider: "escavador" | "datajud";
+  reference: string;
+  active: boolean;
+  next_sync_at: string;
+  last_success_at: string | null;
+  failure_count: number;
+  last_error_code: string | null;
+  paused_reason: string | null;
+}
+
+const providerLabels: Record<string, string> = {
+  escavador: "Escavador",
+  datajud: "DataJud/CNJ",
+  manual: "Manual",
+  legacy: "Importação anterior",
+};
+
+const failureLabels: Record<string, string> = {
+  integration_not_configured: "Aguardando token do provedor",
+  escavador_unauthorized: "Token do Escavador recusado",
+  escavador_insufficient_balance: "Escavador sem saldo",
+  escavador_rate_limited: "Limite de consultas atingido",
+  escavador_request_failed: "Escavador indisponível",
+  datajud_unauthorized: "Chave do DataJud recusada",
+  datajud_rate_limited: "Limite do DataJud atingido",
+  datajud_request_failed: "DataJud indisponível",
+  datajud_court_not_supported: "Tribunal sem cobertura no DataJud",
+  max_retries: "Interrompida após cinco tentativas",
+  provider_error: "Falha do provedor",
+};
 
 const sourceLabels: Record<string, string> = {
   pje: "PJe",
@@ -117,6 +152,11 @@ function formattedDate(value: string | null) {
   return format(parsed, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
+function failureLabel(code: string | null) {
+  if (!code) return null;
+  return failureLabels[code] ?? "Falha registrada";
+}
+
 const Publicacoes = () => {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
@@ -125,6 +165,7 @@ const Publicacoes = () => {
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
   const [processos, setProcessos] = useState<Map<string, Processo>>(new Map());
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
+  const [syncSources, setSyncSources] = useState<SyncSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
@@ -144,8 +185,13 @@ const Publicacoes = () => {
     if (!currentTenant) return;
     setLoading(true);
     const tenantId = currentTenant.tenantId;
-    const [publicationsResult, movementsResult, processesResult, runsResult] =
-      await Promise.all([
+    const [
+      publicationsResult,
+      movementsResult,
+      processesResult,
+      runsResult,
+      sourcesResult,
+    ] = await Promise.all([
         (supabase as any)
           .from("publicacoes")
           .select("*")
@@ -163,17 +209,25 @@ const Publicacoes = () => {
         (supabase as any)
           .from("legal_sync_runs")
           .select(
-            "id, provider, sync_kind, status, records_created, started_at, finished_at",
+            "id, provider, sync_kind, status, records_created, started_at, finished_at, error_code",
           )
           .eq("tenant_id", tenantId)
           .order("started_at", { ascending: false })
           .limit(8),
+        (supabase as any)
+          .from("legal_sync_sources")
+          .select(
+            "id, source_kind, provider, reference, active, next_sync_at, last_success_at, failure_count, last_error_code, paused_reason",
+          )
+          .eq("tenant_id", tenantId)
+          .order("next_sync_at", { ascending: true }),
       ]);
 
     const firstError = publicationsResult.error ??
       movementsResult.error ??
       processesResult.error ??
-      runsResult.error;
+      runsResult.error ??
+      sourcesResult.error;
     if (firstError) {
       toast({
         title: "Não foi possível carregar o acompanhamento jurídico",
@@ -192,6 +246,7 @@ const Publicacoes = () => {
         ),
       );
       setSyncRuns(runsResult.data ?? []);
+      setSyncSources(sourcesResult.data ?? []);
     }
     setLoading(false);
   }, [currentTenant, toast]);
@@ -250,23 +305,23 @@ const Publicacoes = () => {
   const synchronize = async () => {
     if (!currentTenant) return;
     setSyncing(true);
-    const { data, error } = await supabase.functions.invoke(
-      "capturar-publicacoes",
-      { body: { tenantId: currentTenant.tenantId } },
-    );
+    const { data, error } = await supabase.functions.invoke("legal-reconcile", {
+      body: { tenantId: currentTenant.tenantId },
+    });
     if (error) {
-      const message = data?.error === "integration_not_configured"
-        ? "O token do Escavador ainda está pendente. A estrutura já está pronta."
-        : "Não foi possível sincronizar agora.";
       toast({
         title: "Sincronização não concluída",
-        description: message,
+        description: "Não foi possível sincronizar agora.",
         variant: "destructive",
       });
     } else {
+      const failed = typeof data?.failed === "number" ? data.failed : 0;
       toast({
-        title: "Sincronização concluída",
+        title: failed > 0
+          ? "Sincronização concluída parcialmente"
+          : "Sincronização concluída",
         description: data?.message ?? "Dados atualizados.",
+        variant: failed > 0 ? "destructive" : undefined,
       });
       await load();
     }
@@ -340,6 +395,36 @@ const Publicacoes = () => {
     }
     setSavingReview(false);
   };
+
+  const syncPanel = useMemo(() => {
+    const active = syncSources.filter((source) => source.active);
+    const nextRun = active
+      .map((source) => source.next_sync_at)
+      .sort()
+      .at(0) ?? null;
+    const lastSuccess = syncSources
+      .map((source) => source.last_success_at)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+
+    return {
+      monitoredOabs: active.filter((source) => source.source_kind === "oab")
+        .length,
+      monitoredProcesses:
+        active.filter((source) => source.source_kind === "process").length,
+      nextRun,
+      lastSuccess,
+      pending: syncSources.filter((source) =>
+        source.last_error_code === "integration_not_configured"
+      ),
+      failing: syncSources.filter((source) =>
+        source.last_error_code &&
+        source.last_error_code !== "integration_not_configured"
+      ),
+      stopped: syncSources.filter((source) => !source.active),
+    };
+  }, [syncSources]);
 
   const lastSync = syncRuns[0];
 
@@ -426,24 +511,89 @@ const Publicacoes = () => {
         </div>
 
         <DepthCard>
-          <CardContent className="flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">
-                  DataJud/CNJ consulta processos e andamentos
+          <CardContent className="space-y-4 p-5 text-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium">Situação da sincronização</p>
+                  <p className="text-xs text-muted-foreground">
+                    O DataJud/CNJ traz andamentos; as publicações chegam pelo
+                    Escavador. Nenhum prazo é criado sem revisão humana.
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground sm:text-right">
+                <p>
+                  Última execução:{" "}
+                  {lastSync
+                    ? formattedDate(lastSync.started_at)
+                    : "nenhuma registrada"}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Publicações chegam pelo Escavador. Nenhum prazo é criado sem
-                  revisão humana.
+                <p>
+                  Próxima reconciliação:{" "}
+                  {syncPanel.nextRun
+                    ? formattedDate(syncPanel.nextRun)
+                    : "sem fonte ativa"}
                 </p>
               </div>
             </div>
-            <div className="text-xs text-muted-foreground">
-              {lastSync
-                ? `Última sincronização: ${formattedDate(lastSync.started_at)}`
-                : "Nenhuma sincronização registrada"}
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SyncMetric
+                label="OABs monitoradas"
+                value={syncPanel.monitoredOabs}
+              />
+              <SyncMetric
+                label="Processos monitorados"
+                value={syncPanel.monitoredProcesses}
+              />
+              <SyncMetric
+                label="Fontes com falha"
+                value={syncPanel.failing.length}
+                tone={syncPanel.failing.length > 0 ? "warning" : "neutral"}
+              />
+              <SyncMetric
+                label="Fontes interrompidas"
+                value={syncPanel.stopped.length}
+                tone={syncPanel.stopped.length > 0 ? "danger" : "neutral"}
+              />
             </div>
+
+            {syncPanel.pending.length > 0 && (
+              <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                {syncPanel.pending.length} fonte(s) aguardam a configuração do
+                provedor. Os andamentos disponíveis continuam sendo atualizados.
+              </p>
+            )}
+
+            {(syncPanel.failing.length > 0 || syncPanel.stopped.length > 0) && (
+              <ul className="space-y-1 text-xs">
+                {[...syncPanel.stopped, ...syncPanel.failing]
+                  .filter((source, index, list) =>
+                    list.findIndex((item) => item.id === source.id) === index
+                  )
+                  .slice(0, 6)
+                  .map((source) => (
+                    <li
+                      key={source.id}
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      <Badge variant={source.active ? "outline" : "destructive"}>
+                        {providerLabels[source.provider] ?? source.provider}
+                      </Badge>
+                      <span className="font-medium">{source.reference}</span>
+                      <span className="text-muted-foreground">
+                        {failureLabel(
+                          source.paused_reason ?? source.last_error_code,
+                        )}
+                        {source.failure_count > 0 &&
+                          ` · ${source.failure_count} tentativa(s)`}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
           </CardContent>
         </DepthCard>
 
@@ -552,7 +702,9 @@ const Publicacoes = () => {
                           {" · "}
                           {formattedDate(publication.data_publicacao)}
                           {" · "}
-                          Fonte: {publication.provider}
+                          Fonte:{" "}
+                          {providerLabels[publication.provider] ??
+                            publication.provider}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -626,9 +778,8 @@ const Publicacoes = () => {
                               : "Andamento"}
                           </Badge>
                           <Badge variant="secondary">
-                            {movement.provider === "datajud"
-                              ? "DataJud/CNJ"
-                              : movement.provider}
+                            {providerLabels[movement.provider] ??
+                              movement.provider}
                           </Badge>
                         </div>
                         <CardTitle className="text-base">
@@ -767,6 +918,31 @@ const Publicacoes = () => {
     </AppLayout>
   );
 };
+
+const SyncMetric = ({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "warning" | "danger";
+}) => (
+  <div className="rounded-lg border bg-muted/30 px-3 py-2">
+    <p className="text-xs text-muted-foreground">{label}</p>
+    <p
+      className={`text-xl font-semibold ${
+        tone === "danger"
+          ? "text-destructive"
+          : tone === "warning"
+          ? "text-amber-600"
+          : ""
+      }`}
+    >
+      {value}
+    </p>
+  </div>
+);
 
 const EmptyState = ({
   icon: Icon,

@@ -16,6 +16,24 @@ Especificação aprovada:
 - Não expor `service_role`, token Escavador ou chaves de provedores.
 - Cada consulta empresarial deve usar o `tenant_id` ativo.
 
+## Estado atual
+
+| Fase | Situação |
+|---|---|
+| 1 — contexto e dashboards | concluída (`bcbd633`, `69a26cf`) |
+| 2 — modelo jurídico | concluída (`5b01b7a`, migration `20260731002104`) |
+| 3 — provedores e ingestão | concluída (módulos compartilhados + adaptador DataJud) |
+| 4 — automação | 4.1 e 4.2 concluídas; 4.3 concluída na interface |
+| 5 — interface jurídica | 5.1, 5.2 e 5.3 entregues em versão inicial |
+| 6 — validação e rollout | pendente: testes SQL, advisors e validação em produção |
+
+Pendências conhecidas antes do rollout:
+
+- executar as migrations `20260731020147` e `20260731021207` no projeto remoto;
+- registrar `project_url` e `cron_secret` no Vault caso ainda não existam;
+- validar uma amostra real do DataJud e o Escavador quando o token existir;
+- cobrir isolamento por escritório com testes SQL (Tarefa 2.1) — ainda não escritos.
+
 ## Fase 1 — contexto e dashboards
 
 ### Tarefa 1.1 — testes de navegação por ambiente
@@ -107,21 +125,30 @@ Especificação aprovada:
 
 ### Tarefa 3.1 — contratos internos
 
-Criar tipos normalizados independentes dos formatos Escavador e DataJud.
+`supabase/functions/_shared/legal-normalization.ts` concentra os contratos
+`NormalizedPublication` e `NormalizedMovement`, a classificação de origem por
+evidência, a detecção de possível prazo, a impressão digital determinística e a
+escala de retentativas. Coberto por `src/test/legal-normalization.test.ts`.
 
 ### Tarefa 3.2 — adaptador DataJud
 
-Persistir somente processos e andamentos.
+`supabase/functions/_shared/datajud-client.ts` resolve o índice público pelo
+tribunal cadastrado ou pelo segmento do número CNJ e devolve apenas processo e
+movimentos. `normalizeDataJudMovements` marca todo item como `ANDAMENTO` e nunca
+deduz sistema de origem a partir do tribunal. Coberto por
+`src/test/datajud-client.test.ts`.
 
 ### Tarefa 3.3 — adaptador Escavador
 
-Preparar cliente V2 com paginação, consumo e erros tipados. Ativação real
-depende do secret `ESCAVADOR_API_TOKEN`.
+`fetchLawyerPublications` foi movido para `_shared/escavador-client.ts`, com
+paginação limitada e erros tipados. Ativação real continua dependendo do secret
+`ESCAVADOR_API_TOKEN`.
 
 ### Tarefa 3.4 — ingestor idempotente
 
-Deduplicar por ID externo e hash determinístico; preservar evidência de
-provedor e sinalizar divergências.
+`supabase/functions/_shared/legal-ingestion.ts` deduplica por ID externo e, na
+ausência dele, pela impressão digital do conteúdo. Webhook, captura manual e
+reconciliação usam o mesmo caminho de gravação.
 
 ## Fase 4 — automação
 
@@ -132,12 +159,27 @@ sem confiar em `tenant_id` livre do payload.
 
 ### Tarefa 4.2 — reconciliação
 
-Executar a cada seis horas, separar trabalho por tenant/fonte e aplicar
-retentativas de 1 minuto, 5 minutos, 30 minutos, 2 horas e 6 horas.
+`public.legal_sync_sources` (migration `20260731020147`) guarda as OABs e os
+processos monitorados com estado de ativação, cursor, última execução
+bem-sucedida e próximo horário. Gatilhos mantêm a tabela sincronizada com
+`lawyer_registrations` e `processos`.
+
+A Edge Function `legal-reconcile` processa fonte a fonte: uma falha isolada não
+interrompe as demais, sucesso reagenda em seis horas e falha transitória aplica
+1 minuto, 5 minutos, 30 minutos, 2 horas e 6 horas. Falha permanente (token
+recusado, saldo insuficiente, tribunal sem cobertura) interrompe a fonte e fica
+visível no painel. Integração ainda não configurada não conta como falha.
+
+O agendamento fica em `20260731021207`, no mesmo padrão do monitoramento já
+existente (pg_cron + Vault, sem expor `service_role`).
 
 ### Tarefa 4.3 — sincronização manual e monitor
 
-Exibir última/próxima execução, achados, falhas, disponibilidade e consumo.
+`legal-reconcile` também atende à sincronização manual: valida o JWT do usuário
+e o vínculo ativo com o escritório, e ignora o agendamento apenas do tenant
+solicitado. O painel de `Publicações e andamentos` mostra última execução,
+próxima reconciliação, OABs e processos monitorados, fontes com falha e fontes
+interrompidas, com motivo legível por fonte.
 
 ## Fase 5 — interface jurídica
 
