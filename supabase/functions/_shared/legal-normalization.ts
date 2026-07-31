@@ -305,10 +305,11 @@ export function normalizeDataJudMovements(
       const occurredAt = isoOrNull(movement.dataHora);
       const complements = (movement.complementosTabelados ?? [])
         .map((complement) => {
-          const label = collapse(complement.nome);
-          // `descricao` traz o rótulo legível; `valor` costuma ser um código.
-          const value = collapse(complement.descricao) ||
-            collapse(complement.valor);
+          // No DataJud, `descricao` nomeia o complemento (por exemplo
+          // "tipo_de_documento") e `nome` traz o valor legível ("Certidão").
+          // `valor` é o código numérico correspondente.
+          const label = collapse(complement.descricao);
+          const value = collapse(complement.nome) || collapse(complement.valor);
           if (!label && !value) return "";
           return label && value ? `${label}: ${value}` : label || value;
         })

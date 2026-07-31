@@ -219,16 +219,18 @@ describe("normalizeDataJudMovements", () => {
           codigo: 123,
           nome: "Juntada",
           dataHora: "2026-07-02T09:30:00.000Z",
+          // Formato real do DataJud: `descricao` nomeia o complemento e
+          // `nome` traz o valor legível; `valor` é o código.
           complementosTabelados: [
-            { codigo: 7, nome: "tipo_documento", valor: 5, descricao: "Petição" },
-            { codigo: 9, nome: "quantidade", valor: 2 },
+            { codigo: 7, nome: "Certidão", valor: 24, descricao: "tipo_de_documento" },
+            { codigo: 9, valor: 2, descricao: "quantidade" },
           ],
         } as never,
       ],
     });
 
     expect(movements).toHaveLength(1);
-    expect(movements[0].content).toContain("tipo_documento: Petição");
+    expect(movements[0].content).toContain("tipo_de_documento: Certidão");
     expect(movements[0].content).toContain("quantidade: 2");
   });
 
