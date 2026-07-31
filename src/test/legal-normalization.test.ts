@@ -174,7 +174,9 @@ describe("normalizeDataJudMovements", () => {
           codigo: 26,
           nome: "Distribuição",
           dataHora: "2026-07-02T10:00:00.000Z",
-          complementosTabelados: [{ nome: "tipo", valor: "sorteio" }],
+          complementosTabelados: [
+            { descricao: "tipo", nome: "sorteio", valor: 1 },
+          ],
         },
         {
           nome: "Juntada de petição",
