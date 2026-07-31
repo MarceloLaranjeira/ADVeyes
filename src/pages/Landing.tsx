@@ -2,7 +2,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
   Scale, Zap, Calendar, Bell, DollarSign, FileText, Bot,
-  CheckCircle, ArrowRight, Star, Shield, Globe, ChevronDown,
+  CheckCircle, ArrowRight, Shield, Globe, ChevronDown,
   BarChart3, Users, Clock, Search, Menu, X, Gavel, ListTodo,
   TrendingUp, Award, Lock, Phone,
 } from "lucide-react";
@@ -115,7 +115,7 @@ const Hero = () => {
 
             <p className="text-lg text-blue-200/80 mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0">
               Controle processos, agenda, honorários e use IA jurídica avançada — tudo em um só lugar.
-              Andamentos automáticos de 85+ tribunais, Diário Oficial e muito mais.
+              Andamentos processuais consultados na base pública do DataJud/CNJ.
             </p>
 
             {/* CTAs */}
@@ -137,7 +137,7 @@ const Hero = () => {
             <div className="mt-10 flex items-center gap-6 justify-center lg:justify-start flex-wrap">
               {[
                 { icon: Shield, text: "Dados criptografados" },
-                { icon: Globe, text: "85+ tribunais" },
+                { icon: Globe, text: "Base pública DataJud/CNJ" },
                 { icon: Bot, text: "IA jurídica inclusa" },
               ].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-2 text-blue-200/60 text-xs">
@@ -211,7 +211,7 @@ const Hero = () => {
 
               {/* Floating badge */}
               <div className="absolute -top-4 -right-4 bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
-                85+ tribunais ✓
+                DataJud/CNJ ✓
               </div>
             </div>
           </div>
@@ -241,7 +241,7 @@ const features = [
     icon: Zap,
     color: "bg-yellow-50 text-yellow-600",
     title: "Andamentos Automáticos",
-    desc: "Captura automática via DataJud de 85+ tribunais, SEEU e Projudi. Processos sempre atualizados.",
+    desc: "Consulta automática de andamentos na base pública do DataJud/CNJ, com a origem de cada registro identificada.",
   },
   {
     icon: Calendar,
@@ -415,55 +415,6 @@ const Pricing = () => {
   );
 };
 
-// ─── Testimonials ─────────────────────────────────────────────────────────────
-const testimonials = [
-  {
-    name: "Dr. Rodrigo Figueiredo",
-    role: "Advogado Criminalista · OAB/AM 12.305",
-    text: "O ADVeyes mudou completamente minha rotina. Os andamentos automáticos do TJAM me economizam pelo menos 2 horas por dia. A IA jurídica é impressionante para redigir recursos.",
-    stars: 5,
-  },
-  {
-    name: "Dra. Camila Resende",
-    role: "Sócia · Resende & Associados · OAB/SP 45.210",
-    text: "Gerencio 3 advogados e 400 processos com facilidade. O Dashboard me dá visibilidade total do escritório. O suporte é excelente e responsivo.",
-    stars: 5,
-  },
-  {
-    name: "Dr. André Santana",
-    role: "Advogado Trabalhista · OAB/BA 28.907",
-    text: "A integração com o DataJud é perfeita. Todos os andamentos chegam automáticos. Nunca mais perdi um prazo desde que comecei a usar o ADVeyes.",
-    stars: 5,
-  },
-];
-
-const Testimonials = () => (
-  <section className="py-24 bg-white">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="text-center mb-12">
-        <span className="inline-block text-xs font-bold tracking-widest text-yellow-600 uppercase bg-yellow-50 px-4 py-1.5 rounded-full border border-yellow-100 mb-4">Depoimentos</span>
-        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">O que os advogados dizem</h2>
-      </div>
-      <div className="grid md:grid-cols-3 gap-6">
-        {testimonials.map(t => (
-          <div key={t.name} className="bg-gray-50 border border-gray-100 rounded-2xl p-6 hover:shadow-md transition-all">
-            <div className="flex gap-0.5 mb-4">
-              {Array.from({ length: t.stars }).map((_, i) => (
-                <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              ))}
-            </div>
-            <p className="text-gray-600 text-sm leading-relaxed mb-5 italic">"{t.text}"</p>
-            <div>
-              <p className="font-semibold text-[#1a2a5e] text-sm">{t.name}</p>
-              <p className="text-gray-400 text-xs mt-0.5">{t.role}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-);
-
 // ─── CTA Banner ───────────────────────────────────────────────────────────────
 const CTABanner = () => {
   const navigate = useNavigate();
@@ -530,7 +481,6 @@ const Landing = () => (
     <Features />
     <HowItWorks />
     <Pricing />
-    <Testimonials />
     <CTABanner />
     <Footer />
   </div>
