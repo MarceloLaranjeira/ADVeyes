@@ -22,6 +22,30 @@ function secureEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
+async function sha256(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function inferOriginSystem(source: string, content: string) {
+  const searchable = `${source} ${content}`.toLocaleLowerCase("pt-BR");
+  if (searchable.includes("projudi")) return "projudi";
+  if (searchable.includes("seeu")) return "seeu";
+  if (searchable.includes("pje")) return "pje";
+  if (searchable.includes("diário") || searchable.includes("diario")) {
+    return "dje";
+  }
+  return "unknown";
+}
+
+function mentionsPossibleDeadline(content: string) {
+  return /\b(prazo|intimad[oa]s?|dias?\s+(?:úteis|uteis|corridos)|sob pena de)\b/i
+    .test(content);
+}
+
 interface EscavadorCallback {
   event?: string;
   uuid?: string;
@@ -140,50 +164,72 @@ Deno.serve(async (request) => {
 
   if (eventType === "nova_movimentacao" && payload.movimentacao?.id != null) {
     const movement = payload.movimentacao;
-    const movementType = movement.tipo === "PUBLICACAO"
-      ? "PUBLICACAO"
-      : "ANDAMENTO";
-    const { data: insertedMovement, error: movementError } = await admin
-      .from("process_movements")
-      .upsert({
-        tenant_id: monitor.tenant_id,
-        process_id: monitor.process_id,
-        provider: "escavador",
-        external_id: String(movement.id),
-        movement_type: movementType,
-        occurred_at: movement.data ?? null,
-        title: movement.texto_categoria ?? movement.tipo_publicacao ?? null,
-        content: movement.conteudo ?? "Movimentação sem conteúdo.",
-        source_name: movement.fonte?.nome ?? movement.fonte?.sigla ?? null,
-        provider_payload: movement,
-      }, {
-        onConflict: "tenant_id,process_id,provider,external_id",
-        ignoreDuplicates: true,
-      })
-      .select("id")
-      .maybeSingle();
-    if (movementError) return response({ error: "operation_failed" }, 500);
+    const content = movement.conteudo ?? "Movimentação sem conteúdo.";
+    const sourceName = movement.fonte?.nome ?? movement.fonte?.sigla ?? "";
 
-    if (insertedMovement && movementType === "PUBLICACAO") {
-      const { data: process } = await admin.from("processos")
+    if (movement.tipo === "PUBLICACAO") {
+      const { data: process, error: processError } = await admin
+        .from("processos")
         .select("user_id, numero, cliente_nome")
         .eq("tenant_id", monitor.tenant_id)
         .eq("id", monitor.process_id)
         .single();
-      if (process) {
-        await admin.from("publicacoes").insert({
+      if (processError || !process) {
+        return response({ error: "operation_failed" }, 500);
+      }
+
+      const contentHash = await sha256(
+        `${monitor.tenant_id}:${movement.id}:${content}`,
+      );
+      const possibleDeadline = mentionsPossibleDeadline(content);
+      const { error: publicationError } = await admin
+        .from("publicacoes")
+        .upsert({
           tenant_id: monitor.tenant_id,
           user_id: process.user_id,
+          process_id: monitor.process_id,
           tipo: movement.tipo_publicacao?.toLowerCase() ?? "publicacao",
-          tribunal: movement.fonte?.sigla ?? "Escavador",
+          tribunal: movement.fonte?.sigla ?? sourceName ?? "Escavador",
           numero_processo: process.numero,
           cliente_nome: process.cliente_nome,
           data_publicacao: movement.data ?? callbackAt,
-          conteudo: movement.conteudo ?? "Publicação sem conteúdo.",
+          conteudo: content,
           conteudo_simplificado: movement.texto_categoria ?? null,
-          status: "nova",
+          status: possibleDeadline ? "urgente" : "nova",
+          provider: "escavador",
+          external_id: String(movement.id),
+          content_hash: contentHash,
+          origin_system: inferOriginSystem(sourceName, content),
+          source_name: sourceName || null,
+          provider_payload: movement,
+          review_status: "pending_review",
+          possible_deadline: possibleDeadline,
+        }, {
+          onConflict: "tenant_id,provider,external_id",
+          ignoreDuplicates: true,
         });
+      if (publicationError) {
+        return response({ error: "operation_failed" }, 500);
       }
+    } else {
+      const { error: movementError } = await admin
+        .from("process_movements")
+        .upsert({
+        tenant_id: monitor.tenant_id,
+        process_id: monitor.process_id,
+        provider: "escavador",
+        external_id: String(movement.id),
+        movement_type: "ANDAMENTO",
+        occurred_at: movement.data ?? null,
+        title: movement.texto_categoria ?? movement.tipo_publicacao ?? null,
+        content,
+        source_name: sourceName || null,
+        provider_payload: movement,
+      }, {
+        onConflict: "tenant_id,process_id,provider,external_id",
+        ignoreDuplicates: true,
+        });
+      if (movementError) return response({ error: "operation_failed" }, 500);
     }
   }
 
@@ -211,6 +257,24 @@ Deno.serve(async (request) => {
     status: "processed",
     processed_at: new Date().toISOString(),
   }).eq("id", event.id);
+
+  await admin.from("legal_sync_runs").insert({
+    tenant_id: monitor.tenant_id,
+    provider: "escavador",
+    sync_kind: eventType === "nova_movimentacao" &&
+        payload.movimentacao?.tipo === "PUBLICACAO"
+      ? "publication"
+      : "movement",
+    trigger_type: "webhook",
+    status: "succeeded",
+    records_received: 1,
+    records_created: 1,
+    finished_at: new Date().toISOString(),
+    metadata: {
+      external_event_id: externalEventId,
+      event_type: eventType,
+    },
+  });
 
   return response({ received: true });
 });

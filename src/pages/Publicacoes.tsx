@@ -1,866 +1,791 @@
-import { useState, useEffect, useMemo } from "react";
+import { DepthCard } from "@/components/dashboard/DepthCard";
 import { AppLayout } from "@/components/layout/AppLayout";
-import {
-  getAuthenticatedFunctionHeaders,
-  getFunctionUrl,
-  supabase,
-} from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Bell, Search, RefreshCw, Bot, CheckCheck, AlertTriangle,
-  Calendar, Scale, ChevronDown, ChevronUp, Sparkles, ListTodo,
-  FileText, Clock, Eye, Zap, Filter, Trash2,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTenant } from "@/contexts/TenantContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertTriangle,
+  Bell,
+  CalendarClock,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  FileClock,
+  FileText,
+  RefreshCw,
+  Search,
+  Scale,
+  ShieldCheck,
 } from "lucide-react";
-import { format, addDays } from "date-fns";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-type PerfilMonitorado = {
-  id: string;
-  tipo: "oab" | "cpf" | "nome";
-  valor: string;
-  tribunais: string[];
-  criadoEm: string;
-};
+type FeedTab = "publicacoes" | "andamentos";
 
-type ResultadoBusca = {
-  tribunal: string;
-  numero_processo: string;
-  classe: string;
-  assuntos: string;
-  orgao: string;
-  data_ajuizamento: string | null;
-  partes: { nome: string; tipo: string }[];
-  ultimos_movimentos: { nome: string; data: string; tipo: string }[];
-};
-
-type Publicacao = {
+interface Publicacao {
   id: string;
-  user_id: string;
+  tenant_id: string;
+  process_id: string | null;
   tipo: string;
   tribunal: string;
   numero_processo: string | null;
   cliente_nome: string | null;
-  data_publicacao: string;
+  data_publicacao: string | null;
   conteudo: string;
   conteudo_simplificado: string | null;
   status: string;
   prazo_dias: number | null;
   data_prazo: string | null;
-  tarefa_gerada: boolean;
-  created_at: string;
-};
-
-const PERFIL_KEY = "lexia_perfil_advogado";
-
-function getPerfilOAB(): { oab_numero: string; seccional: string } | null {
-  try {
-    const perfil = JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}");
-    if (perfil.numero_oab) {
-      return { oab_numero: perfil.numero_oab, seccional: (perfil.seccional || "AM").toUpperCase() };
-    }
-  } catch { /* ignore */ }
-  return null;
+  tarefa_gerada: boolean | null;
+  provider: "escavador" | "manual" | "legacy";
+  origin_system: "pje" | "projudi" | "seeu" | "dje" | "other" | "unknown";
+  review_status: "pending_review" | "reviewed" | "dismissed" | "no_deadline";
+  possible_deadline: boolean;
+  source_name: string | null;
 }
 
-const tipoLabels: Record<string, { label: string; color: string }> = {
-  intimacao: { label: "Intimação", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
-  despacho: { label: "Despacho", color: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
-  sentenca: { label: "Sentença", color: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
-  acordao: { label: "Acórdão", color: "bg-red-500/10 text-red-600 border-red-500/20" },
-  edital: { label: "Edital", color: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20" },
-  publicacao: { label: "Publicação", color: "bg-gray-500/10 text-gray-600 border-gray-500/20" },
+interface Movimento {
+  id: string;
+  tenant_id: string;
+  process_id: string;
+  provider: "escavador" | "datajud" | "manual";
+  movement_type: "ANDAMENTO" | "DOCUMENTO";
+  occurred_at: string | null;
+  title: string | null;
+  content: string;
+  source_name: string | null;
+  source_url: string | null;
+}
+
+interface Processo {
+  id: string;
+  numero: string;
+  cliente_nome: string | null;
+}
+
+interface SyncRun {
+  id: string;
+  provider: "escavador" | "datajud";
+  sync_kind: string;
+  status: "running" | "succeeded" | "partial" | "failed";
+  records_created: number;
+  started_at: string;
+  finished_at: string | null;
+}
+
+const sourceLabels: Record<string, string> = {
+  pje: "PJe",
+  projudi: "Projudi",
+  seeu: "SEEU",
+  dje: "Diário de Justiça",
+  other: "Outra fonte",
+  unknown: "Origem a confirmar",
 };
 
-const MOCK_DATA = [
-  {
-    tipo: "intimacao",
-    tribunal: "TJAM",
-    numero_processo: "0001234-56.2024.8.04.0001",
-    cliente_nome: "João Carlos da Silva",
-    data_publicacao: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    conteudo: `INTIMAÇÃO — 3ª Vara Cível da Comarca de Manaus. Processo nº 0001234-56.2024.8.04.0001. Intimam-se as partes e seus respectivos patronos de que fica DESIGNADA Audiência de Instrução e Julgamento para o dia 15 de abril de 2025, às 14h00, perante este Juízo. Fica, ainda, intimada a parte autora para que apresente rol de testemunhas no prazo improrrogável de 05 (cinco) dias úteis, sob pena de preclusão. Cumpra-se e intimem-se. Manaus/AM, 18 de março de 2026.`,
-    status: "urgente",
-    prazo_dias: 5,
-    data_prazo: addDays(new Date(), 5).toISOString(),
-  },
-  {
-    tipo: "despacho",
-    tribunal: "TJAM",
-    numero_processo: "0007891-23.2023.8.04.0002",
-    cliente_nome: "Maria Aparecida Santos",
-    data_publicacao: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    conteudo: `DESPACHO — 2ª Vara de Família e Sucessões. Processo nº 0007891-23.2023.8.04.0002. Considerando a juntada de documentos às fls. 234/256, intime-se a parte requerida para que, no prazo de 15 (quinze) dias, manifeste-se sobre os documentos juntados pela parte autora, especialmente quanto ao laudo de avaliação do imóvel objeto da partilha. Após, venham conclusos para decisão. Manaus/AM, 18 de março de 2026.`,
-    status: "nova",
-    prazo_dias: 15,
-    data_prazo: addDays(new Date(), 15).toISOString(),
-  },
-  {
-    tipo: "sentenca",
-    tribunal: "TJAM",
-    numero_processo: "0003456-78.2022.8.04.0001",
-    cliente_nome: "Empresa XYZ Comércio Ltda",
-    data_publicacao: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    conteudo: `SENTENÇA — 5ª Vara Cível de Manaus. Processo nº 0003456-78.2022.8.04.0001. Vistos etc. Trata-se de ação de cobrança c/c reparação de danos movida por Empresa XYZ Comércio Ltda em face de Construtora ABC S.A. (...) DISPOSITIVO: Ante o exposto, julgo PROCEDENTE o pedido para condenar a requerida ao pagamento da quantia de R$ 85.400,00 (oitenta e cinco mil e quatrocentos reais), acrescida de correção monetária pelo IPCA e juros de mora de 1% ao mês, desde a citação. Condeno ainda ao pagamento das custas e honorários advocatícios fixados em 15% do valor da condenação. Prazo para recurso de Apelação: 15 (quinze) dias. Cumpra-se. Manaus/AM, 18 de março de 2026.`,
-    status: "nova",
-    prazo_dias: 15,
-    data_prazo: addDays(new Date(), 15).toISOString(),
-  },
-  {
-    tipo: "intimacao",
-    tribunal: "SEEU",
-    numero_processo: "0002109-44.2021.8.04.0001",
-    cliente_nome: "Pedro Augusto Ferreira",
-    data_publicacao: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    conteudo: `INTIMAÇÃO — Vara de Execuções Penais da Comarca de Manaus — SEEU. Processo nº 0002109-44.2021.8.04.0001. Intima-se o patrono do apenado PEDRO AUGUSTO FERREIRA de que foi deferido o benefício de SAÍDA TEMPORÁRIA pelo período de 05 (cinco) dias a partir desta data. Outrossim, intime-se para que apresente relatório de acompanhamento do monitoramento eletrônico no prazo de 10 (dez) dias após o retorno. Cumpra-se. Manaus/AM, 18 de março de 2026.`,
-    status: "lida",
-    prazo_dias: 10,
-    data_prazo: addDays(new Date(), 10).toISOString(),
-  },
-  {
-    tipo: "acordao",
-    tribunal: "TRF1",
-    numero_processo: "1001234-55.2020.4.01.3200",
-    cliente_nome: "José Roberto Lima",
-    data_publicacao: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    conteudo: `ACÓRDÃO — Tribunal Regional Federal da 1ª Região — 1ª Turma. Processo nº 1001234-55.2020.4.01.3200. ADMINISTRATIVO. SERVIDOR PÚBLICO. REVISÃO DE APOSENTADORIA. INCORPORAÇÃO DE GRATIFICAÇÕES. DIREITO ADQUIRIDO. POSSIBILIDADE. RECURSO PROVIDO. (...) ACORDAM os membros da Primeira Turma do Tribunal Regional Federal da 1ª Região, por unanimidade, DAR PROVIMENTO à apelação do autor para reconhecer o direito à incorporação das gratificações pleiteadas nos termos do voto do relator. Honorários recursais majorados para 12% do valor da condenação. Data da sessão: 17/03/2026.`,
-    status: "processada",
-    prazo_dias: null,
-    data_prazo: null,
-    tarefa_gerada: true,
-  },
-  {
-    tipo: "edital",
-    tribunal: "TJAM",
-    numero_processo: "0009871-11.2024.8.04.0001",
-    cliente_nome: null,
-    data_publicacao: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    conteudo: `EDITAL DE CITAÇÃO — 7ª Vara Cível da Comarca de Manaus. O MM. Juiz de Direito da 7ª Vara Cível, no processo nº 0009871-11.2024.8.04.0001, FAZ SABER a todos que o presente edital, com prazo de 20 (vinte) dias, será afixado e publicado na forma da lei, ficando CITADO o réu NOME DESCONHECIDO (ou cujo endereço é ignorado) para responder à ação de usucapião. O não comparecimento implicará nomeação de curador especial. Manaus/AM, 16 de março de 2026.`,
-    status: "lida",
-    prazo_dias: 20,
-    data_prazo: addDays(new Date(), 18).toISOString(),
-  },
-];
+const statusLabels: Record<string, string> = {
+  nova: "Nova",
+  urgente: "Revisar prazo",
+  lida: "Lida",
+  processada: "Processada",
+};
+
+function formattedDate(value: string | null) {
+  if (!value) return "Data não informada";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Data não informada";
+  return format(parsed, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+}
 
 const Publicacoes = () => {
-  const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
-  const [filterStatus, setFilterStatus] = useState("todas");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [movimentos, setMovimentos] = useState<Movimento[]>([]);
+  const [processos, setProcessos] = useState<Map<string, Processo>>(new Map());
+  const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("todos");
+  const [source, setSource] = useState("todas");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loadingCaptura, setLoadingCaptura] = useState(false);
-  const [loadingTriage, setLoadingTriage] = useState<string | null>(null);
-  const [triagemDialog, setTriagemDialog] = useState(false);
-  const [triagemResult, setTriagemResult] = useState<{ pub: Publicacao; sugestao: string } | null>(null);
-  const [tarefaForm, setTarefaForm] = useState({ titulo: "", prazo: "", prioridade: "alta" });
-  const [criandoTarefa, setCriandoTarefa] = useState(false);
+  const [reviewing, setReviewing] = useState<Publicacao | null>(null);
+  const [reviewForm, setReviewForm] = useState({
+    deadline: "",
+    days: "",
+    reason: "",
+    title: "",
+  });
+  const [savingReview, setSavingReview] = useState(false);
 
-  // ─── Busca por OAB/CPF/Nome ─────────────────────────────────────────────────
-  const [buscaTipo, setBuscaTipo] = useState<"oab" | "cpf" | "nome">("oab");
-  const [buscaValor, setBuscaValor] = useState("");
-  const [loadingBusca, setLoadingBusca] = useState(false);
-  const [salvandoBusca, setSalvandoBusca] = useState(false);
-  const [buscaResultados, setBuscaResultados] = useState<ResultadoBusca[]>([]);
-  const [buscaFeita, setBuscaFeita] = useState(false);
-  const [perfisSalvos, setPerfisSalvos] = useState<PerfilMonitorado[]>([]);
+  const load = useCallback(async () => {
+    if (!currentTenant) return;
+    setLoading(true);
+    const tenantId = currentTenant.tenantId;
+    const [publicationsResult, movementsResult, processesResult, runsResult] =
+      await Promise.all([
+        (supabase as any)
+          .from("publicacoes")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("data_publicacao", { ascending: false }),
+        (supabase as any)
+          .from("process_movements")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("occurred_at", { ascending: false }),
+        (supabase as any)
+          .from("processos")
+          .select("id, numero, cliente_nome")
+          .eq("tenant_id", tenantId),
+        (supabase as any)
+          .from("legal_sync_runs")
+          .select(
+            "id, provider, sync_kind, status, records_created, started_at, finished_at",
+          )
+          .eq("tenant_id", tenantId)
+          .order("started_at", { ascending: false })
+          .limit(8),
+      ]);
 
-  const fetchPublicacoes = async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any).from("publicacoes").select("*").order("data_publicacao", { ascending: false });
-    if (data) setPublicacoes(data);
-  };
-
-  useEffect(() => { fetchPublicacoes(); }, []);
+    const firstError = publicationsResult.error ??
+      movementsResult.error ??
+      processesResult.error ??
+      runsResult.error;
+    if (firstError) {
+      toast({
+        title: "Não foi possível carregar o acompanhamento jurídico",
+        description: "Tente novamente em alguns instantes.",
+        variant: "destructive",
+      });
+    } else {
+      setPublicacoes(publicationsResult.data ?? []);
+      setMovimentos(movementsResult.data ?? []);
+      setProcessos(
+        new Map(
+          (processesResult.data ?? []).map((process: Processo) => [
+            process.id,
+            process,
+          ]),
+        ),
+      );
+      setSyncRuns(runsResult.data ?? []);
+    }
+    setLoading(false);
+  }, [currentTenant, toast]);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("lexia_perfis_monitorados");
-      if (saved) setPerfisSalvos(JSON.parse(saved));
-    } catch { /* ignore */ }
+    void load();
+  }, [load]);
 
-    // Se o usuário salvou o perfil em Configurações, pré-preenche o campo OAB
-    try {
-      const perfil = JSON.parse(localStorage.getItem("lexia_perfil_advogado") || "{}");
-      if (perfil.numero_oab && perfil.seccional) {
-        setBuscaValor(`${perfil.numero_oab}/${perfil.seccional}`.toUpperCase());
-        setBuscaTipo("oab");
-      } else if (perfil.cpf) {
-        setBuscaValor(perfil.cpf);
-        setBuscaTipo("cpf");
+  const filteredPublications = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase("pt-BR");
+    return publicacoes.filter((publication) => {
+      if (status !== "todos" && publication.status !== status) return false;
+      if (source !== "todas" && publication.origin_system !== source) {
+        return false;
       }
-    } catch { /* ignore */ }
-  }, []);
+      if (!normalized) return true;
+      return [
+        publication.numero_processo,
+        publication.cliente_nome,
+        publication.tribunal,
+        publication.conteudo,
+        publication.source_name,
+      ].some((value) =>
+        value?.toLocaleLowerCase("pt-BR").includes(normalized)
+      );
+    });
+  }, [publicacoes, search, source, status]);
 
-  const buscarPorPerfil = async (tipo?: string, valor?: string) => {
-    const t = (tipo || buscaTipo) as "oab" | "cpf" | "nome";
-    const v = (valor !== undefined ? valor : buscaValor).trim();
-    if (!v) {
-      toast({ title: "Informe um valor para busca", variant: "destructive" });
-      return;
-    }
-    setLoadingBusca(true);
-    setBuscaFeita(false);
-    setBuscaResultados([]);
-    try {
-      const { data: result, error } = await supabase.functions.invoke("busca-oab", {
-        body: { tipo: t, valor: v },
-      });
-      if (error) throw error;
-      setBuscaResultados(result?.resultados || []);
-      setBuscaFeita(true);
-      if ((result?.resultados || []).length === 0) {
-        toast({ title: "Nenhum processo encontrado", description: `Sem resultados para ${t.toUpperCase()}: ${v}` });
-      } else {
-        toast({ title: `${result?.total} processo(s) encontrado(s)`, description: `Fonte: ${result?.fonte || "DataJud/CNJ"}` });
-      }
-    } catch {
-      toast({ title: "Erro de conexão", description: "Não foi possível contatar o servidor.", variant: "destructive" });
-    } finally {
-      setLoadingBusca(false);
-    }
-  };
+  const filteredMovements = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase("pt-BR");
+    return movimentos.filter((movement) => {
+      if (source !== "todas" && movement.provider !== source) return false;
+      if (!normalized) return true;
+      const process = processos.get(movement.process_id);
+      return [
+        movement.title,
+        movement.content,
+        movement.source_name,
+        process?.numero,
+        process?.cliente_nome,
+      ].some((value) =>
+        value?.toLocaleLowerCase("pt-BR").includes(normalized)
+      );
+    });
+  }, [movimentos, processos, search, source]);
 
-  const salvarResultadosNoBanco = async () => {
-    const t = buscaTipo;
-    const v = buscaValor.trim();
-    if (!v || buscaResultados.length === 0) return;
-    setSalvandoBusca(true);
-    try {
-      const perfilOAB = getPerfilOAB();
-      const { data: result, error } = await supabase.functions.invoke("capturar-publicacoes", {
-        body: {
-          busca: { tipo: t, valor: v, salvar: true },
-          ...(perfilOAB ?? {}),
-        },
-      });
-      if (error) throw error;
-      const salvos = result?.publicacoesSalvas || 0;
+  const stats = useMemo(() => ({
+    total: publicacoes.length,
+    pending: publicacoes.filter((item) => item.status === "nova").length,
+    deadline: publicacoes.filter((item) =>
+      item.possible_deadline && item.review_status === "pending_review"
+    ).length,
+    movements: movimentos.length,
+  }), [movimentos, publicacoes]);
+
+  const synchronize = async () => {
+    if (!currentTenant) return;
+    setSyncing(true);
+    const { data, error } = await supabase.functions.invoke(
+      "capturar-publicacoes",
+      { body: { tenantId: currentTenant.tenantId } },
+    );
+    if (error) {
+      const message = data?.error === "integration_not_configured"
+        ? "O token do Escavador ainda está pendente. A estrutura já está pronta."
+        : "Não foi possível sincronizar agora.";
       toast({
-        title: salvos > 0 ? `${salvos} publicação(ões) salva(s)!` : "Publicações já registradas",
-        description: salvos > 0 ? "As movimentações foram adicionadas ao módulo Publicações." : "Não há publicações novas para salvar.",
+        title: "Sincronização não concluída",
+        description: message,
+        variant: "destructive",
       });
-      if (salvos > 0) fetchPublicacoes();
-    } catch {
-      toast({ title: "Erro de conexão", variant: "destructive" });
-    } finally {
-      setSalvandoBusca(false);
-    }
-  };
-
-  const salvarPerfil = () => {
-    if (!buscaValor.trim()) return;
-    const novoPerfil: PerfilMonitorado = {
-      id: Date.now().toString(),
-      tipo: buscaTipo,
-      valor: buscaValor.trim(),
-      tribunais: [],
-      criadoEm: new Date().toISOString(),
-    };
-    const novos = [...perfisSalvos, novoPerfil];
-    setPerfisSalvos(novos);
-    localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(novos));
-    toast({ title: "Perfil salvo!", description: `Monitorando ${buscaTipo.toUpperCase()}: ${buscaValor.trim()}` });
-  };
-
-  const removerPerfil = (id: string) => {
-    const novos = perfisSalvos.filter((p) => p.id !== id);
-    setPerfisSalvos(novos);
-    localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(novos));
-  };
-
-  const capturarPublicacoes = async () => {
-    setLoadingCaptura(true);
-    try {
-      const perfilOAB = getPerfilOAB();
-      const { data: result, error } = await supabase.functions.invoke("capturar-publicacoes", {
-        body: perfilOAB ?? {},
+    } else {
+      toast({
+        title: "Sincronização concluída",
+        description: data?.message ?? "Dados atualizados.",
       });
-      if (error) throw error;
-
-      if ((result?.capturadas ?? 0) > 0) {
-        toast({ title: `${result.capturadas} movimentação(ões) capturada(s)!`, description: result.message });
-        fetchPublicacoes();
-      } else {
-        toast({ title: "Consulta realizada", description: result.message || "Nenhuma movimentação nova encontrada. Cadastre processos no módulo Processos." });
-      }
-
-      if (result.erros?.length > 0) {
-        console.warn("Erros na captura:", result.erros);
-      }
-    } catch (err) {
-      console.error("Erro inesperado:", err);
-      toast({ title: "Erro inesperado", description: "Tente novamente.", variant: "destructive" });
-    } finally {
-      setLoadingCaptura(false);
+      await load();
     }
+    setSyncing(false);
   };
 
-  const limparDadosDemo = async () => {
-    const mockNumeros = MOCK_DATA.map((m) => m.numero_processo);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markAsRead = async (publication: Publicacao) => {
+    if (!currentTenant) return;
     const { error } = await (supabase as any)
       .from("publicacoes")
-      .delete()
-      .eq("user_id", user!.id)
-      .in("numero_processo", mockNumeros);
+      .update({ status: "lida" })
+      .eq("tenant_id", currentTenant.tenantId)
+      .eq("id", publication.id);
     if (!error) {
-      toast({ title: "Dados de demonstração removidos." });
-      fetchPublicacoes();
-    }
-  };
-
-  const marcarComoLida = async (id: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("publicacoes").update({ status: "lida" }).eq("id", id);
-    setPublicacoes((prev) => prev.map((p) => p.id === id ? { ...p, status: "lida" } : p));
-  };
-
-  const triarComIA = async (pub: Publicacao) => {
-    setLoadingTriage(pub.id);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) { toast({ title: "Sessão expirada", variant: "destructive" }); return; }
-
-      const prompt = `Analise esta publicação judicial e responda de forma objetiva:
-
-PUBLICAÇÃO:
-Tribunal: ${pub.tribunal}
-Processo: ${pub.numero_processo || "Não identificado"}
-Cliente: ${pub.cliente_nome || "Não identificado"}
-Tipo: ${tipoLabels[pub.tipo]?.label || pub.tipo}
-Texto: ${pub.conteudo}
-
-Responda no seguinte formato exato:
-PRAZO: [número em dias ou "Sem prazo"]
-URGÊNCIA: [ALTA/MÉDIA/BAIXA]
-AÇÃO NECESSÁRIA: [descrição em 1 frase do que o advogado deve fazer]
-TAREFA SUGERIDA: [título objetivo da tarefa a ser criada, ex: "Apresentar rol de testemunhas - Proc. 0001234"]
-RESUMO SIMPLES: [explicação em 2-3 frases em linguagem simples para o cliente]`;
-
-      const response = await fetch(getFunctionUrl("chat"), {
-        method: "POST",
-        headers: await getAuthenticatedFunctionHeaders(),
-        body: JSON.stringify({ messages: [{ role: "user", content: prompt }], mode: "assistente" }),
-      });
-
-      if (!response.ok) throw new Error("Erro na API de IA");
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ") && !line.includes("[DONE]")) {
-            try {
-              const json = JSON.parse(line.slice(6));
-              const delta = json.choices?.[0]?.delta?.content;
-              if (delta) fullText += delta;
-            } catch { /* ignore parse errors */ }
-          }
-        }
-      }
-
-      setTriagemResult({ pub, sugestao: fullText });
-
-      // Pre-fill task form from AI response
-      const tarefaMatch = fullText.match(/TAREFA SUGERIDA:\s*(.+)/);
-      const prazoMatch = fullText.match(/PRAZO:\s*(\d+)/);
-      const urgenciaMatch = fullText.match(/URGÊNCIA:\s*(ALTA|MÉDIA|BAIXA)/i);
-
-      setTarefaForm({
-        titulo: tarefaMatch ? tarefaMatch[1].trim() : `Verificar publicação — ${pub.numero_processo || pub.tribunal}`,
-        prazo: prazoMatch ? format(addDays(new Date(), parseInt(prazoMatch[1])), "yyyy-MM-dd") : "",
-        prioridade: urgenciaMatch ? (urgenciaMatch[1].toLowerCase() === "alta" ? "alta" : urgenciaMatch[1].toLowerCase() === "média" ? "media" : "baixa") : "alta",
-      });
-
-      setTriagemDialog(true);
-
-      // Save simplified content
-      const resumoMatch = fullText.match(/RESUMO SIMPLES:\s*([\s\S]+?)(?:$|(?=\n[A-Z]+:))/);
-      if (resumoMatch) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from("publicacoes").update({ conteudo_simplificado: resumoMatch[1].trim(), status: "lida" }).eq("id", pub.id);
-        fetchPublicacoes();
-      }
-    } catch (err) {
-      toast({ title: "Erro na triagem", description: "Verifique se a IA está configurada.", variant: "destructive" });
-    } finally {
-      setLoadingTriage(null);
-    }
-  };
-
-  const criarTarefa = async () => {
-    if (!triagemResult || !tarefaForm.titulo.trim()) return;
-    setCriandoTarefa(true);
-    try {
-      const { error } = await supabase.from("tarefas").insert({
-        user_id: user!.id,
-        titulo: tarefaForm.titulo,
-        descricao: `Gerada automaticamente da publicação ${triagemResult.pub.tribunal} — Processo: ${triagemResult.pub.numero_processo || "N/A"}\n\nPublicação original:\n${triagemResult.pub.conteudo.slice(0, 500)}...`,
-        prioridade: tarefaForm.prioridade,
-        status: "pendente",
-        data_limite: tarefaForm.prazo || null,
-      });
-      if (error) throw error;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from("publicacoes").update({ tarefa_gerada: true, status: "processada" }).eq("id", triagemResult.pub.id);
-
-      toast({ title: "Tarefa criada com sucesso!", description: tarefaForm.titulo });
-      setTriagemDialog(false);
-      setTriagemResult(null);
-      fetchPublicacoes();
-    } catch (err) {
-      toast({ title: "Erro ao criar tarefa", description: (err as Error).message, variant: "destructive" });
-    } finally {
-      setCriandoTarefa(false);
-    }
-  };
-
-  const filtered = useMemo(() => {
-    return publicacoes.filter((p) => {
-      const matchStatus = filterStatus === "todas" || p.status === filterStatus;
-      const matchSearch = !searchQuery || [p.numero_processo, p.cliente_nome, p.tribunal, p.conteudo].some(
-        (f) => f?.toLowerCase().includes(searchQuery.toLowerCase())
+      setPublicacoes((items) =>
+        items.map((item) =>
+          item.id === publication.id ? { ...item, status: "lida" } : item
+        )
       );
-      return matchStatus && matchSearch;
-    });
-  }, [publicacoes, filterStatus, searchQuery]);
-
-  const counts = useMemo(() => ({
-    todas: publicacoes.length,
-    nova: publicacoes.filter((p) => p.status === "nova").length,
-    urgente: publicacoes.filter((p) => p.status === "urgente").length,
-    lida: publicacoes.filter((p) => p.status === "lida").length,
-    processada: publicacoes.filter((p) => p.status === "processada").length,
-  }), [publicacoes]);
-
-  const getStatusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      nova: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-      urgente: "bg-red-500/10 text-red-600 border-red-500/20",
-      lida: "bg-gray-500/10 text-gray-500 border-gray-500/20",
-      processada: "bg-green-500/10 text-green-600 border-green-500/20",
-    };
-    const labels: Record<string, string> = { nova: "Nova", urgente: "Urgente", lida: "Lida", processada: "Processada" };
-    return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] || ""}`}>{labels[status] || status}</span>;
+    }
   };
+
+  const openDeadlineReview = (publication: Publicacao) => {
+    setReviewing(publication);
+    setReviewForm({
+      deadline: publication.data_prazo
+        ? publication.data_prazo.slice(0, 10)
+        : "",
+      days: publication.prazo_dias?.toString() ?? "",
+      reason: "",
+      title:
+        `Cumprir prazo — ${publication.numero_processo ?? publication.tribunal}`,
+    });
+  };
+
+  const submitReview = async (decision: "confirm" | "reject") => {
+    if (!currentTenant || !reviewing || !reviewForm.reason.trim()) return;
+    if (decision === "confirm" && !reviewForm.deadline) return;
+    setSavingReview(true);
+    const { error } = await supabase.functions.invoke(
+      "review-publication-deadline",
+      {
+        body: {
+          tenantId: currentTenant.tenantId,
+          publicationId: reviewing.id,
+          decision,
+          proposedDate: decision === "confirm"
+            ? new Date(`${reviewForm.deadline}T12:00:00`).toISOString()
+            : null,
+          proposedDays: reviewForm.days
+            ? Number.parseInt(reviewForm.days, 10)
+            : null,
+          reason: reviewForm.reason,
+          taskTitle: reviewForm.title,
+        },
+      },
+    );
+    if (error) {
+      toast({
+        title: "Não foi possível registrar a revisão",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: decision === "confirm"
+          ? "Prazo confirmado e tarefa criada"
+          : "Publicação revisada sem prazo",
+      });
+      setReviewing(null);
+      await load();
+    }
+    setSavingReview(false);
+  };
+
+  const lastSync = syncRuns[0];
 
   return (
     <AppLayout>
-      <div className="animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <div className="space-y-6 p-5 lg:p-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-4xl font-bold font-serif tracking-tight">Publicações</h1>
-            <p className="text-muted-foreground text-sm mt-1">Captura e triagem automática de publicações e intimações dos Diários de Justiça</p>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Publicações e andamentos
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Acompanhamento real e isolado de {currentTenant?.displayName}.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            {publicacoes.some(p => MOCK_DATA.map(m => m.numero_processo).includes(p.numero_processo ?? "")) && (
-              <Button variant="outline" size="sm" onClick={limparDadosDemo} className="gap-2 text-muted-foreground hover:text-destructive hover:border-destructive">
-                <Trash2 className="w-4 h-4" /> Limpar dados demo
-              </Button>
-            )}
-            <Button onClick={capturarPublicacoes} disabled={loadingCaptura} className="gap-2">
-              {loadingCaptura ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              {loadingCaptura ? "Capturando..." : "Capturar Publicações"}
-            </Button>
-          </div>
-        </div>
-
-        {/* ─── Busca por OAB/CPF/Nome ─────────────────────────────────────────── */}
-        <Card className="mb-6">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Search className="w-4 h-4 text-primary" />
-              <div>
-                <h3 className="font-semibold text-sm">Buscar por OAB / CPF / Nome</h3>
-                <p className="text-xs text-muted-foreground">Consulta direta no DataJud/CNJ — sem necessidade de configurar token</p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <select
-                className="h-10 px-3 rounded-md border border-input bg-background text-sm shrink-0 w-full sm:w-36"
-                value={buscaTipo}
-                onChange={(e) => setBuscaTipo(e.target.value as "oab" | "cpf" | "nome")}
-              >
-                <option value="oab">Nº OAB</option>
-                <option value="cpf">CPF</option>
-                <option value="nome">Nome</option>
-              </select>
-              <Input
-                placeholder={buscaTipo === "oab" ? "Ex: 12345/AM" : buscaTipo === "cpf" ? "000.000.000-00" : "Nome do advogado"}
-                value={buscaValor}
-                onChange={(e) => setBuscaValor(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && buscarPorPerfil()}
-                className="flex-1"
-              />
-              <Button onClick={() => buscarPorPerfil()} disabled={loadingBusca || !buscaValor.trim()} className="gap-2 shrink-0">
-                {loadingBusca ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                {loadingBusca ? "Buscando..." : "Buscar"}
-              </Button>
-              <Button variant="outline" onClick={salvarPerfil} disabled={!buscaValor.trim()} className="gap-2 shrink-0">
-                <Bell className="w-4 h-4" /> Monitorar
-              </Button>
-            </div>
-
-            {/* Perfis monitorados */}
-            {perfisSalvos.length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Perfis monitorados</p>
-                <div className="flex flex-wrap gap-2">
-                  {perfisSalvos.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => { setBuscaTipo(p.tipo); setBuscaValor(p.valor); buscarPorPerfil(p.tipo, p.valor); }}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors group"
-                    >
-                      <span className="uppercase font-bold text-[10px] opacity-60">{p.tipo}</span>
-                      {p.valor}
-                      <span
-                        onClick={(e) => { e.stopPropagation(); removerPerfil(p.id); }}
-                        className="ml-1 opacity-50 group-hover:opacity-100 hover:text-red-500 transition-colors"
-                      >×</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Resultados da busca */}
-            {buscaFeita && (
-              <div className="mt-4 pt-4 border-t">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    {buscaResultados.length > 0 ? `${buscaResultados.length} processo(s) encontrado(s) no DataJud` : "Nenhum processo encontrado"}
-                  </p>
-                  {buscaResultados.length > 0 && (
-                    <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7" onClick={salvarResultadosNoBanco} disabled={salvandoBusca}>
-                      {salvandoBusca ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Bell className="w-3 h-3" />}
-                      {salvandoBusca ? "Salvando..." : "Salvar publicações"}
-                    </Button>
-                  )}
-                </div>
-                {buscaResultados.length > 0 && (
-                  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                    {buscaResultados.map((r, i) => (
-                      <div key={i} className="p-3 rounded-lg border bg-muted/30 text-sm">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{r.tribunal}</span>
-                          <span className="font-medium text-xs font-mono">{r.numero_processo}</span>
-                          {r.classe && <span className="text-xs text-muted-foreground">{r.classe}</span>}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{r.orgao}</p>
-                        {r.partes.length > 0 && (
-                          <p className="text-xs text-foreground/70 mt-1">{r.partes.map((p) => p.nome).join(" × ")}</p>
-                        )}
-                        {r.ultimos_movimentos.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Último mov.: {r.ultimos_movimentos[0].nome}
-                            {r.ultimos_movimentos[0].data && ` (${format(new Date(r.ultimos_movimentos[0].data), "dd/MM/yyyy", { locale: ptBR })})`}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          {[
-            { label: "Total", value: counts.todas, icon: Bell, color: "text-primary" },
-            { label: "Novas", value: counts.nova, icon: Eye, color: "text-blue-600" },
-            { label: "Urgentes", value: counts.urgente, icon: AlertTriangle, color: "text-red-600" },
-            { label: "Lidas", value: counts.lida, icon: CheckCheck, color: "text-gray-500" },
-            { label: "Processadas", value: counts.processada, icon: ListTodo, color: "text-green-600" },
-          ].map((stat) => (
-            <Card key={stat.label} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setFilterStatus(stat.label === "Total" ? "todas" : stat.label.toLowerCase())}>
-              <CardContent className="p-4 flex items-center gap-3">
-                <stat.icon className={`w-4 h-4 shrink-0 ${stat.color}`} />
-                <div>
-                  <p className="text-xl font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Integration info when empty */}
-        {publicacoes.length === 0 && (
-          <Card className="mb-6">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-lg bg-[hsl(var(--info))]/10 flex items-center justify-center shrink-0">
-                  <Bell className="w-5 h-5 text-[hsl(var(--info))]" />
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Integração com Diários de Justiça</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Este módulo consulta a <strong>API pública DataJud/CNJ</strong> e captura movimentações reais dos seus processos cadastrados.
-                    Clique em <strong>Capturar Publicações</strong> para buscar as últimas movimentações dos últimos 30 dias.
-                    {" "}<span className="text-amber-600 font-medium">Para dados reais, cadastre seus processos no módulo Processos.</span>
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {["DataJud (CNJ)", "API PJe", "TJAM", "TRF1", "STJ", "STF", "SEEU", "Projudi"].map((api) => (
-                      <span key={api} className="text-xs bg-muted px-2.5 py-1 rounded-full font-medium">{api}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por processo, cliente, tribunal..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+          <Button onClick={() => void synchronize()} disabled={syncing}>
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`}
             />
-          </div>
-          <Tabs value={filterStatus} onValueChange={setFilterStatus}>
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="todas" className="text-xs">Todas <span className="ml-1 text-muted-foreground">({counts.todas})</span></TabsTrigger>
-              <TabsTrigger value="urgente" className="text-xs text-red-600">Urgentes <span className="ml-1">({counts.urgente})</span></TabsTrigger>
-              <TabsTrigger value="nova" className="text-xs">Novas <span className="ml-1 text-muted-foreground">({counts.nova})</span></TabsTrigger>
-              <TabsTrigger value="lida" className="text-xs">Lidas <span className="ml-1 text-muted-foreground">({counts.lida})</span></TabsTrigger>
-              <TabsTrigger value="processada" className="text-xs">Processadas <span className="ml-1 text-muted-foreground">({counts.processada})</span></TabsTrigger>
+            {syncing ? "Sincronizando..." : "Sincronizar agora"}
+          </Button>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DepthCard
+            interactive
+            onActivate={() => {
+              setActiveTab("publicacoes");
+              setStatus("todos");
+            }}
+          >
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Publicações</p>
+                <p className="mt-1 text-3xl font-bold">{stats.total}</p>
+              </div>
+              <Bell className="h-6 w-6 text-primary" />
+            </CardContent>
+          </DepthCard>
+          <DepthCard
+            interactive
+            onActivate={() => {
+              setActiveTab("publicacoes");
+              setStatus("nova");
+            }}
+          >
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Novas</p>
+                <p className="mt-1 text-3xl font-bold">{stats.pending}</p>
+              </div>
+              <FileText className="h-6 w-6 text-blue-600" />
+            </CardContent>
+          </DepthCard>
+          <DepthCard
+            interactive
+            onActivate={() => {
+              setActiveTab("publicacoes");
+              setStatus("urgente");
+            }}
+          >
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Prazos para revisar
+                </p>
+                <p className="mt-1 text-3xl font-bold">{stats.deadline}</p>
+              </div>
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
+            </CardContent>
+          </DepthCard>
+          <DepthCard
+            interactive
+            onActivate={() => setActiveTab("andamentos")}
+          >
+            <CardContent className="flex items-center justify-between p-5">
+              <div>
+                <p className="text-sm text-muted-foreground">Andamentos</p>
+                <p className="mt-1 text-3xl font-bold">{stats.movements}</p>
+              </div>
+              <Scale className="h-6 w-6 text-emerald-600" />
+            </CardContent>
+          </DepthCard>
+        </div>
+
+        <DepthCard>
+          <CardContent className="flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium">
+                  DataJud/CNJ consulta processos e andamentos
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Publicações chegam pelo Escavador. Nenhum prazo é criado sem
+                  revisão humana.
+                </p>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {lastSync
+                ? `Última sincronização: ${formattedDate(lastSync.started_at)}`
+                : "Nenhuma sincronização registrada"}
+            </div>
+          </CardContent>
+        </DepthCard>
+
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              setActiveTab(value as FeedTab);
+              setSource("todas");
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="publicacoes">
+                Publicações ({publicacoes.length})
+              </TabsTrigger>
+              <TabsTrigger value="andamentos">
+                Andamentos ({movimentos.length})
+              </TabsTrigger>
             </TabsList>
           </Tabs>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative min-w-72">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Processo, cliente, tribunal ou texto"
+                className="pl-9"
+              />
+            </div>
+            {activeTab === "publicacoes" && (
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="nova">Novas</SelectItem>
+                  <SelectItem value="urgente">Revisar prazo</SelectItem>
+                  <SelectItem value="lida">Lidas</SelectItem>
+                  <SelectItem value="processada">Processadas</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={source} onValueChange={setSource}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Origem" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as origens</SelectItem>
+                {activeTab === "publicacoes" ? (
+                  <>
+                    <SelectItem value="pje">PJe</SelectItem>
+                    <SelectItem value="projudi">Projudi</SelectItem>
+                    <SelectItem value="seeu">SEEU</SelectItem>
+                    <SelectItem value="dje">Diário de Justiça</SelectItem>
+                    <SelectItem value="unknown">A confirmar</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="datajud">DataJud/CNJ</SelectItem>
+                    <SelectItem value="escavador">Escavador</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Publication List */}
-        {filtered.length === 0 ? (
-          <div className="text-center py-16 bg-card rounded-lg border">
-            <Bell className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-            <h3 className="font-semibold text-lg mb-2">
-              {publicacoes.length === 0 ? "Nenhuma publicação capturada" : "Nenhuma publicação encontrada"}
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              {publicacoes.length === 0
-                ? "Clique em Capturar Publicações para simular a integração com os Diários de Justiça."
-                : "Tente ajustar os filtros de busca."}
-            </p>
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <RefreshCw className="h-7 w-7 animate-spin text-primary" />
+          </div>
+        ) : activeTab === "publicacoes" ? (
+          <div className="space-y-3">
+            {filteredPublications.map((publication) => {
+              const expanded = expandedId === publication.id;
+              return (
+                <DepthCard key={publication.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {sourceLabels[publication.origin_system]}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {publication.tribunal}
+                          </Badge>
+                          <Badge
+                            variant={publication.status === "urgente"
+                              ? "destructive"
+                              : "outline"}
+                          >
+                            {statusLabels[publication.status] ??
+                              publication.status}
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-base">
+                          {publication.numero_processo ??
+                            "Processo ainda não vinculado"}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {publication.cliente_nome ?? "Cliente não identificado"}
+                          {" · "}
+                          {formattedDate(publication.data_publicacao)}
+                          {" · "}
+                          Fonte: {publication.provider}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {publication.possible_deadline &&
+                          publication.review_status === "pending_review" && (
+                            <Button
+                              size="sm"
+                              onClick={() => openDeadlineReview(publication)}
+                            >
+                              <CalendarClock className="mr-2 h-4 w-4" />
+                              Revisar possível prazo
+                            </Button>
+                          )}
+                        {publication.status !== "lida" &&
+                          publication.status !== "processada" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void markAsRead(publication)}
+                            >
+                              <CheckCheck className="mr-2 h-4 w-4" />
+                              Marcar como lida
+                            </Button>
+                          )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            setExpandedId(expanded ? null : publication.id)}
+                        >
+                          {expanded
+                            ? <ChevronUp className="h-4 w-4" />
+                            : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className={expanded
+                      ? "whitespace-pre-wrap text-sm leading-relaxed"
+                      : "line-clamp-2 text-sm text-muted-foreground"}
+                    >
+                      {publication.conteudo}
+                    </p>
+                  </CardContent>
+                </DepthCard>
+              );
+            })}
+            {filteredPublications.length === 0 && (
+              <EmptyState
+                icon={Bell}
+                title="Nenhuma publicação real encontrada"
+                description="Quando o token do Escavador estiver configurado, as publicações do escritório aparecerão aqui. Dados do DataJud não são apresentados como publicação."
+              />
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((pub) => {
-              const isExpanded = expandedId === pub.id;
-              const tipoBadge = tipoLabels[pub.tipo] || tipoLabels.publicacao;
-              const isUrgente = pub.status === "urgente";
-
+            {filteredMovements.map((movement) => {
+              const process = processos.get(movement.process_id);
+              const expanded = expandedId === movement.id;
               return (
-                <Card
-                  key={pub.id}
-                  className={`transition-all ${isUrgente ? "border-red-500/30 bg-red-500/3" : ""}`}
-                >
-                  <CardContent className="p-0">
-                    {/* Card Header */}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          {/* Icon */}
-                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isUrgente ? "bg-red-500/10" : "bg-primary/10"}`}>
-                            <FileText className={`w-4 h-4 ${isUrgente ? "text-red-600" : "text-primary"}`} />
-                          </div>
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 mb-1">
-                              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${tipoBadge.color}`}>{tipoBadge.label}</span>
-                              <span className="text-xs bg-muted px-2 py-0.5 rounded-full font-medium">{pub.tribunal}</span>
-                              {getStatusBadge(pub.status)}
-                              {pub.tarefa_gerada && (
-                                <span className="text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                                  <ListTodo className="w-3 h-3" /> Tarefa criada
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm">
-                              {pub.numero_processo && (
-                                <span className="flex items-center gap-1 font-medium text-foreground">
-                                  <Scale className="w-3.5 h-3.5 text-muted-foreground" />
-                                  {pub.numero_processo}
-                                </span>
-                              )}
-                              {pub.cliente_nome && (
-                                <span className="text-muted-foreground text-xs">{pub.cliente_nome}</span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {format(new Date(pub.data_publicacao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                              </span>
-                              {pub.prazo_dias !== null && pub.data_prazo && (
-                                <span className={`text-xs flex items-center gap-1 ${isUrgente ? "text-red-600 font-semibold" : "text-orange-600"}`}>
-                                  <Clock className="w-3 h-3" />
-                                  Prazo: {pub.prazo_dias} dias ({format(new Date(pub.data_prazo), "dd/MM/yyyy")})
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                <DepthCard key={movement.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {movement.movement_type === "DOCUMENTO"
+                              ? "Documento"
+                              : "Andamento"}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {movement.provider === "datajud"
+                              ? "DataJud/CNJ"
+                              : movement.provider}
+                          </Badge>
                         </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          {pub.status !== "lida" && pub.status !== "processada" && (
-                            <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => marcarComoLida(pub.id)}>
-                              <CheckCheck className="w-3.5 h-3.5" /> Lida
-                            </Button>
-                          )}
-                          {!pub.tarefa_gerada && (
-                            <Button
-                              size="sm"
-                              variant={isUrgente ? "default" : "outline"}
-                              className="h-8 gap-1 text-xs"
-                              onClick={() => triarComIA(pub)}
-                              disabled={loadingTriage === pub.id}
-                            >
-                              {loadingTriage === pub.id
-                                ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                : <Bot className="w-3.5 h-3.5" />}
-                              {loadingTriage === pub.id ? "Analisando..." : "Triagem IA"}
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setExpandedId(isExpanded ? null : pub.id)}
-                          >
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Content preview */}
-                      {!isExpanded && (
-                        <p className="text-xs text-muted-foreground mt-2 ml-12 line-clamp-2">
-                          {pub.conteudo}
+                        <CardTitle className="text-base">
+                          {movement.title ?? "Movimentação processual"}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {process?.numero ?? "Processo não identificado"}
+                          {" · "}
+                          {process?.cliente_nome ?? "Cliente não identificado"}
+                          {" · "}
+                          {formattedDate(movement.occurred_at)}
                         </p>
-                      )}
-                    </div>
-
-                    {/* Expanded content */}
-                    {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-border/50 pt-3">
-                        {pub.conteudo_simplificado && (
-                          <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-primary" />
-                              <span className="text-xs font-semibold text-primary">Resumo em linguagem simples (Horus IA)</span>
-                            </div>
-                            <p className="text-sm text-foreground">{pub.conteudo_simplificado}</p>
-                          </div>
-                        )}
-                        <div className="bg-muted/40 rounded-lg p-3">
-                          <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Texto original da publicação</p>
-                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{pub.conteudo}</p>
-                        </div>
                       </div>
-                    )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          setExpandedId(expanded ? null : movement.id)}
+                      >
+                        {expanded
+                          ? <ChevronUp className="h-4 w-4" />
+                          : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className={expanded
+                      ? "whitespace-pre-wrap text-sm leading-relaxed"
+                      : "line-clamp-2 text-sm text-muted-foreground"}
+                    >
+                      {movement.content}
+                    </p>
                   </CardContent>
-                </Card>
+                </DepthCard>
               );
             })}
+            {filteredMovements.length === 0 && (
+              <EmptyState
+                icon={FileClock}
+                title="Nenhum andamento encontrado"
+                description="Os andamentos oficiais consultados no DataJud/CNJ e os eventos recebidos do Escavador aparecerão aqui."
+              />
+            )}
           </div>
         )}
       </div>
 
-      {/* Triagem Dialog */}
-      <Dialog open={triagemDialog} onOpenChange={setTriagemDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog
+        open={Boolean(reviewing)}
+        onOpenChange={(open) => !open && setReviewing(null)}
+      >
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bot className="w-5 h-5 text-primary" />
-              Triagem Inteligente — Horus IA
-            </DialogTitle>
+            <DialogTitle>Revisar possível prazo</DialogTitle>
           </DialogHeader>
-
-          {triagemResult && (
-            <div className="space-y-4">
-              {/* AI Analysis */}
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wide">Análise da IA</p>
-                <p className="text-sm whitespace-pre-wrap text-foreground">{triagemResult.sugestao}</p>
-              </div>
-
-              {/* Publication info */}
-              <div className="text-xs text-muted-foreground border rounded-lg p-3 bg-muted/30">
-                <p><strong>Tribunal:</strong> {triagemResult.pub.tribunal} | <strong>Tipo:</strong> {tipoLabels[triagemResult.pub.tipo]?.label} | <strong>Processo:</strong> {triagemResult.pub.numero_processo || "N/A"}</p>
-              </div>
-
-              {/* Task form */}
-              <div className="space-y-3 border-t pt-4">
-                <p className="text-sm font-semibold">Criar tarefa a partir desta publicação</p>
-                <div className="space-y-2">
-                  <Label>Título da tarefa</Label>
-                  <Input
-                    value={tarefaForm.titulo}
-                    onChange={(e) => setTarefaForm({ ...tarefaForm, titulo: e.target.value })}
-                    placeholder="Ex: Apresentar rol de testemunhas"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Data limite</Label>
-                    <Input
-                      type="date"
-                      value={tarefaForm.prazo}
-                      onChange={(e) => setTarefaForm({ ...tarefaForm, prazo: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Prioridade</Label>
-                    <select
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                      value={tarefaForm.prioridade}
-                      onChange={(e) => setTarefaForm({ ...tarefaForm, prioridade: e.target.value })}
-                    >
-                      <option value="alta">Alta</option>
-                      <option value="media">Média</option>
-                      <option value="baixa">Baixa</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setTriagemDialog(false)}>Fechar</Button>
-                <Button onClick={criarTarefa} disabled={criandoTarefa || !tarefaForm.titulo.trim()} className="gap-2">
-                  {criandoTarefa ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ListTodo className="w-4 h-4" />}
-                  {criandoTarefa ? "Criando..." : "Criar Tarefa"}
-                </Button>
-              </div>
+          <p className="text-sm text-muted-foreground">
+            O sistema apenas sinalizou um possível prazo. Confirme a data
+            somente após conferir a publicação original.
+          </p>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="deadline">Data limite confirmada</Label>
+              <Input
+                id="deadline"
+                type="date"
+                value={reviewForm.deadline}
+                onChange={(event) =>
+                  setReviewForm((current) => ({
+                    ...current,
+                    deadline: event.target.value,
+                  }))}
+              />
             </div>
-          )}
+            <div className="grid gap-2">
+              <Label htmlFor="days">Quantidade de dias (opcional)</Label>
+              <Input
+                id="days"
+                type="number"
+                min="1"
+                value={reviewForm.days}
+                onChange={(event) =>
+                  setReviewForm((current) => ({
+                    ...current,
+                    days: event.target.value,
+                  }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="task-title">Título da tarefa</Label>
+              <Input
+                id="task-title"
+                value={reviewForm.title}
+                onChange={(event) =>
+                  setReviewForm((current) => ({
+                    ...current,
+                    title: event.target.value,
+                  }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="reason">Fundamento da revisão</Label>
+              <Input
+                id="reason"
+                value={reviewForm.reason}
+                placeholder="Ex.: prazo expresso de 15 dias úteis no texto"
+                onChange={(event) =>
+                  setReviewForm((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={savingReview || !reviewForm.reason.trim()}
+              onClick={() => void submitReview("reject")}
+            >
+              Não há prazo
+            </Button>
+            <Button
+              disabled={savingReview ||
+                !reviewForm.reason.trim() ||
+                !reviewForm.deadline}
+              onClick={() => void submitReview("confirm")}
+            >
+              {savingReview && (
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Confirmar e criar tarefa
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>
   );
 };
+
+const EmptyState = ({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Bell;
+  title: string;
+  description: string;
+}) => (
+  <DepthCard>
+    <CardContent className="py-16 text-center">
+      <Icon className="mx-auto mb-4 h-10 w-10 text-muted-foreground/40" />
+      <h3 className="font-semibold">{title}</h3>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+        {description}
+      </p>
+    </CardContent>
+  </DepthCard>
+);
 
 export default Publicacoes;

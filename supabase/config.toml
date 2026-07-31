@@ -112,3 +112,6 @@ verify_jwt = true
 
 [functions.escavador-webhook]
 verify_jwt = false
+
+[functions.review-publication-deadline]
+verify_jwt = true
