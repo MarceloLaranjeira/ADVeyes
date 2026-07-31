@@ -124,6 +124,9 @@ const mapMembership = (row: CurrentUserTenantRow): TenantMembership => ({
 
 export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+  // A identidade do usuário é o que importa aqui. Depender do objeto inteiro
+  // faria a renovação de token recarregar os vínculos e limpar a tela ativa.
+  const userId = user?.id ?? null;
   const host = useMemo(
     () => resolveTenantHost(window.location.hostname),
     [],
@@ -177,7 +180,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const loadMemberships = useCallback(async () => {
     const requestId = ++membershipRequest.current;
 
-    if (!user) {
+    if (!userId) {
       setMemberships([]);
       setCurrentTenant(null);
       setMembershipUserId(null);
@@ -200,12 +203,12 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
       const nextMemberships = (data ?? []).map(mapMembership);
       setMemberships(nextMemberships);
-      setMembershipUserId(user.id);
+      setMembershipUserId(userId);
       setMembershipError(false);
 
       const storedSlug = sessionStorage.getItem(
-        `adveyes:selected-tenant:${user.id}`,
-      ) ?? localStorage.getItem(`adveyes:selected-tenant:${user.id}`);
+        `adveyes:selected-tenant:${userId}`,
+      ) ?? localStorage.getItem(`adveyes:selected-tenant:${userId}`);
       const selected =
         (host.mode === "tenant"
           ? nextMemberships.find(
@@ -221,14 +224,14 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       if (requestId !== membershipRequest.current) return;
       setMemberships([]);
       setCurrentTenant(null);
-      setMembershipUserId(user.id);
+      setMembershipUserId(userId);
       setMembershipError(true);
     } finally {
       if (requestId === membershipRequest.current) {
         setMembershipLoading(false);
       }
     }
-  }, [host, user]);
+  }, [host, userId]);
 
   useEffect(() => {
     loadPublicConfig();
@@ -240,14 +243,14 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
   const selectTenant = useCallback(
     (tenant: TenantMembership) => {
-      if (!user) return;
+      if (!userId) return;
 
       sessionStorage.setItem(
-        `adveyes:selected-tenant:${user.id}`,
+        `adveyes:selected-tenant:${userId}`,
         tenant.slug,
       );
       localStorage.setItem(
-        `adveyes:selected-tenant:${user.id}`,
+        `adveyes:selected-tenant:${userId}`,
         tenant.slug,
       );
 
@@ -266,17 +269,17 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         }),
       );
     },
-    [host, user],
+    [host, userId],
   );
 
   const error = useMemo<TenantAccessError>(() => {
     if (host.mode === "invalid") return "invalid_host";
     if (publicError) return "public_config_failed";
-    const membershipsReady = !user || membershipUserId === user.id;
+    const membershipsReady = !userId || membershipUserId === userId;
     if (!membershipsReady) return null;
     if (membershipError) return "tenant_load_failed";
     if (publicConfig && !publicConfig.available) return "tenant_unavailable";
-    if (!user) return null;
+    if (!userId) return null;
     if (
       host.mode === "tenant" &&
       !membershipLoading &&
@@ -294,7 +297,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     memberships,
     publicConfig,
     publicError,
-    user,
+    userId,
   ]);
 
   const refresh = useCallback(async () => {
@@ -311,7 +314,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         loading:
           publicLoading ||
           membershipLoading ||
-          Boolean(user && membershipUserId !== user.id),
+          Boolean(userId && membershipUserId !== userId),
         error,
         selectTenant,
         refresh,
