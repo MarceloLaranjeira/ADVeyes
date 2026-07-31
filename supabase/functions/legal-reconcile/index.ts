@@ -280,14 +280,15 @@ async function reconcileSource(
 
     if (run?.id) {
       await context.admin.from("legal_sync_runs").update({
-        status: "failed",
+        // Integração ainda não configurada é estado parcial, não falha.
+        status: pending ? "partial" : "failed",
         error_code: code,
         error_message: errorMessage(error),
         finished_at: finishedAt,
       }).eq("id", run.id).eq("tenant_id", source.tenant_id);
     }
 
-    return { status: "failed", code };
+    return { status: pending ? "pending" : "failed", code };
   }
 }
 
@@ -338,7 +339,7 @@ Deno.serve(async (request) => {
   const { data: sources, error } = await query;
   if (error) return json({ error: "operation_failed" }, 500);
 
-  const results = { processed: 0, succeeded: 0, failed: 0 };
+  const results = { processed: 0, succeeded: 0, failed: 0, pending: 0 };
   const failures: Array<{ reference: string; code: string }> = [];
 
   for (const source of (sources ?? []) as SyncSource[]) {
@@ -346,11 +347,15 @@ Deno.serve(async (request) => {
     results.processed += 1;
     if (outcome.status === "succeeded") {
       results.succeeded += 1;
-    } else {
-      results.failed += 1;
-      if (outcome.code) {
-        failures.push({ reference: source.reference, code: outcome.code });
-      }
+      continue;
+    }
+    if (outcome.status === "pending") {
+      results.pending += 1;
+      continue;
+    }
+    results.failed += 1;
+    if (outcome.code) {
+      failures.push({ reference: source.reference, code: outcome.code });
     }
   }
 

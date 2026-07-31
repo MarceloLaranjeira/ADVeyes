@@ -113,8 +113,8 @@ export function resolveOriginSystem(evidence: OriginEvidence): OriginSystem {
 }
 
 /** Formata um número CNJ; devolve vazio quando não há 20 dígitos. */
-export function formatCnj(value: string | null | undefined): string {
-  const digits = value?.replace(/\D/g, "") ?? "";
+export function formatCnj(value: unknown): string {
+  const digits = collapse(value).replace(/\D/g, "");
   if (digits.length !== 20) return "";
   return `${digits.slice(0, 7)}-${digits.slice(7, 9)}.${digits.slice(9, 13)}` +
     `.${digits.slice(13, 14)}.${digits.slice(14, 16)}.${digits.slice(16)}`;
@@ -134,8 +134,15 @@ export function detectPossibleDeadline(
   return DEADLINE_PATTERN.test(content);
 }
 
-function collapse(value: string | null | undefined): string {
-  return (value ?? "").replace(/\s+/g, " ").trim();
+/**
+ * Normaliza espaçamento. Provedores entregam números, booleanos e objetos em
+ * campos declarados como texto, então o valor é convertido antes de qualquer
+ * operação de string.
+ */
+function collapse(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return "";
+  return String(value).replace(/\s+/g, " ").trim();
 }
 
 /** Impressão digital determinística usada quando não há ID externo estável. */
@@ -254,8 +261,13 @@ export interface DataJudMovementPayload {
   codigo?: number | string | null;
   nome?: string | null;
   dataHora?: string | null;
+  // O DataJud entrega `valor` e `codigo` como números nos complementos.
   complementosTabelados?:
-    | Array<{ nome?: string | null; valor?: string | null }>
+    | Array<{
+      nome?: string | number | null;
+      valor?: string | number | null;
+      descricao?: string | number | null;
+    }>
     | null;
   [key: string]: unknown;
 }
@@ -292,10 +304,15 @@ export function normalizeDataJudMovements(
 
       const occurredAt = isoOrNull(movement.dataHora);
       const complements = (movement.complementosTabelados ?? [])
-        .map((complement) =>
-          `${collapse(complement.nome)}: ${collapse(complement.valor)}`
-        )
-        .filter((entry) => entry !== ": ");
+        .map((complement) => {
+          const label = collapse(complement.nome);
+          // `descricao` traz o rótulo legível; `valor` costuma ser um código.
+          const value = collapse(complement.descricao) ||
+            collapse(complement.valor);
+          if (!label && !value) return "";
+          return label && value ? `${label}: ${value}` : label || value;
+        })
+        .filter((entry) => entry !== "");
       const identity = movement.codigo == null
         ? slug(title) || `movimento-${index}`
         : String(movement.codigo);

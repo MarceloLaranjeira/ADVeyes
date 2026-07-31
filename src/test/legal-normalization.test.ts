@@ -27,6 +27,11 @@ describe("formatCnj", () => {
     expect(formatCnj("123")).toBe("");
     expect(formatCnj(null)).toBe("");
   });
+
+  it("aceita número entregue como valor não textual", () => {
+    expect(formatCnj(8001234520238040001)).toBe("");
+    expect(formatCnj({ numero: "x" })).toBe("");
+  });
 });
 
 describe("resolveOriginSystem", () => {
@@ -203,6 +208,41 @@ describe("normalizeDataJudMovements", () => {
     });
 
     expect(movements.map((item) => item.title)).toEqual(["Recente", "Antigo"]);
+  });
+
+  it("aceita complementos com valores numéricos do DataJud", () => {
+    const movements = normalizeDataJudMovements({
+      numeroProcesso: "08001234520238040001",
+      tribunal: "TJAM",
+      movimentos: [
+        {
+          codigo: 123,
+          nome: "Juntada",
+          dataHora: "2026-07-02T09:30:00.000Z",
+          complementosTabelados: [
+            { codigo: 7, nome: "tipo_documento", valor: 5, descricao: "Petição" },
+            { codigo: 9, nome: "quantidade", valor: 2 },
+          ],
+        } as never,
+      ],
+    });
+
+    expect(movements).toHaveLength(1);
+    expect(movements[0].content).toContain("tipo_documento: Petição");
+    expect(movements[0].content).toContain("quantidade: 2");
+  });
+
+  it("não quebra quando o provedor envia número no lugar de texto", () => {
+    const movements = normalizeDataJudMovements({
+      numeroProcesso: 8001234520238040001 as never,
+      tribunal: 4 as never,
+      movimentos: [
+        { nome: 987 as never, dataHora: "2026-07-02T09:30:00.000Z" },
+      ],
+    });
+
+    expect(movements).toHaveLength(1);
+    expect(movements[0].title).toBe("987");
   });
 
   it("não deduz sistema de origem a partir do tribunal", () => {
