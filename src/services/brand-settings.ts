@@ -34,36 +34,38 @@ interface BrandSettingsRow {
   color_tokens: Record<string, string> | null;
 }
 
+interface BrandFunctionResponse {
+  settings?: BrandSettingsRow | null;
+  saved?: boolean;
+  error?: string;
+}
+
+async function invokeBrandSettings(
+  body: Record<string, unknown>,
+): Promise<BrandFunctionResponse> {
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke("tenant-brand-settings", { body }),
+  );
+  if (error || !data || typeof data !== "object") {
+    throw new BrandSettingsError(
+      "operation_failed",
+      "Não foi possível acessar a identidade visual.",
+    );
+  }
+  const response = data as BrandFunctionResponse;
+  if (response.error) {
+    throw new BrandSettingsError(response.error, response.error === "permission_denied"
+      ? "Você não tem permissão para alterar a identidade visual."
+      : "Não foi possível acessar a identidade visual.");
+  }
+  return response;
+}
+
 export async function loadBrandSettings(
   tenantId: string,
 ): Promise<BrandSettings> {
-  const { data, error } = await withTimeout(
-    (supabase as never as {
-      from: (table: string) => {
-        select: (columns: string) => {
-          eq: (column: string, value: string) => {
-            maybeSingle: () => Promise<{
-              data: BrandSettingsRow | null;
-              error: { message: string } | null;
-            }>;
-          };
-        };
-      };
-    })
-      .from("tenant_brand_settings")
-      .select(
-        "public_name, short_name, logo_light_path, logo_dark_path, icon_path, color_tokens",
-      )
-      .eq("tenant_id", tenantId)
-      .maybeSingle(),
-  );
-
-  if (error) {
-    throw new BrandSettingsError(
-      "load_failed",
-      "Não foi possível carregar a identidade visual.",
-    );
-  }
+  const response = await invokeBrandSettings({ action: "load", tenantId });
+  const data = response.settings;
 
   return {
     publicName: data?.public_name ?? null,
@@ -124,31 +126,5 @@ export async function saveBrandSettings(
   tenantId: string,
   settings: BrandSettings,
 ): Promise<void> {
-  const { error } = await withTimeout(
-    (supabase as never as {
-      from: (table: string) => {
-        upsert: (
-          values: Record<string, unknown>,
-          options: { onConflict: string },
-        ) => Promise<{ error: { message: string } | null }>;
-      };
-    })
-      .from("tenant_brand_settings")
-      .upsert({
-        tenant_id: tenantId,
-        public_name: settings.publicName,
-        short_name: settings.shortName,
-        logo_light_path: settings.logoLightPath,
-        logo_dark_path: settings.logoDarkPath,
-        icon_path: settings.iconPath,
-        color_tokens: settings.colorTokens,
-      }, { onConflict: "tenant_id" }),
-  );
-
-  if (error) {
-    throw new BrandSettingsError(
-      "save_failed",
-      "Não foi possível salvar. Somente proprietário ou administrador pode alterar a identidade visual.",
-    );
-  }
+  await invokeBrandSettings({ action: "save", tenantId, settings });
 }
