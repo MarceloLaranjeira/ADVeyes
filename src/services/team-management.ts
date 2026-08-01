@@ -22,6 +22,8 @@ const messages: Record<string, string> = {
   email_mismatch: "Entre com exatamente o e-mail que recebeu o convite.",
   already_accepted: "Este convite já foi aceito.",
   invalid_payload: "Confira os dados informados.",
+  owner_required_for_subscription:
+    "Somente o proprietário pode liberar a alteração do plano.",
   operation_failed: "Não foi possível concluir a operação.",
 };
 
@@ -61,6 +63,25 @@ export const teamManagementService = {
     invoke<TeamOverview>("tenant-manage-invitation", {
       tenantId,
       action: "overview",
+    }),
+
+  /** Exceções vigentes por membro, indexadas pelo id do vínculo. */
+  readPermissions: (tenantId: string) =>
+    invoke<{ permissions: Record<string, Record<string, Record<string, boolean>>> }>(
+      "tenant-manage-member",
+      { tenantId, action: "read_permissions" },
+    ),
+
+  updateMemberPermissions: (
+    tenantId: string,
+    membershipId: string,
+    permissions: Record<string, Record<string, boolean>>,
+  ) =>
+    invoke("tenant-manage-member", {
+      tenantId,
+      membershipId,
+      action: "update_permissions",
+      permissions,
     }),
 
   inviteMember: (input: InviteMemberInput) =>
