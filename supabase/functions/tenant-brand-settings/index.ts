@@ -6,13 +6,18 @@ import {
 import { isUuid } from "../_shared/tenant-invitations.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+const BRAND_BUCKET = "marca-escritorio";
 const COLOR_KEY = /^[a-z][a-z0-9_-]{0,63}$/i;
 const COLOR_VALUE = /^(#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([^)]{1,80}\)|[a-z]{1,32})$/i;
+const UPLOAD_VARIANTS = new Set(["light", "dark", "icon"]);
+const UPLOAD_EXTENSIONS = new Set(["png", "jpg", "webp", "svg"]);
 
 interface BrandRequest {
-  action?: "load" | "save";
+  action?: "load" | "save" | "create_upload";
   tenantId?: string;
   settings?: Record<string, unknown>;
+  variant?: string;
+  extension?: string;
 }
 
 function optionalText(value: unknown, maxLength: number): string | null | undefined {
@@ -91,7 +96,10 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_payload" }, 400);
   }
   const action = body.action ?? "load";
-  if (!isUuid(body.tenantId) || (action !== "load" && action !== "save")) {
+  if (
+    !isUuid(body.tenantId) ||
+    (action !== "load" && action !== "save" && action !== "create_upload")
+  ) {
     return json({ error: "invalid_payload" }, 400);
   }
 
@@ -112,6 +120,32 @@ Deno.serve(async (request) => {
   }
 
   if (!access.canManage) return json({ error: "permission_denied" }, 403);
+
+  if (action === "create_upload") {
+    if (
+      !UPLOAD_VARIANTS.has(body.variant ?? "") ||
+      !UPLOAD_EXTENSIONS.has(body.extension ?? "")
+    ) {
+      return json({ error: "invalid_payload" }, 400);
+    }
+    const path =
+      `${body.tenantId}/${body.variant}-${Date.now()}-${crypto.randomUUID()}.${body.extension}`;
+    const { data, error } = await auth.admin.storage.from(BRAND_BUCKET)
+      .createSignedUploadUrl(path, { upsert: false });
+    if (error || !data?.token) {
+      console.error("tenant-brand-settings: signed upload failed", error?.message);
+      return json({ error: "operation_failed" }, 500);
+    }
+    const { data: publicData } = auth.admin.storage.from(BRAND_BUCKET).getPublicUrl(path);
+    return json({
+      upload: {
+        path,
+        token: data.token,
+        publicUrl: publicData.publicUrl,
+      },
+    });
+  }
+
   if (!body.settings || typeof body.settings !== "object" || Array.isArray(body.settings)) {
     return json({ error: "invalid_payload" }, 400);
   }

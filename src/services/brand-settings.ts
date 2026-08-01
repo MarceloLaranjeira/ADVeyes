@@ -37,6 +37,11 @@ interface BrandSettingsRow {
 interface BrandFunctionResponse {
   settings?: BrandSettingsRow | null;
   saved?: boolean;
+  upload?: {
+    path: string;
+    token: string;
+    publicUrl: string;
+  };
   error?: string;
 }
 
@@ -77,10 +82,6 @@ export async function loadBrandSettings(
   };
 }
 
-/**
- * Envia a logo para a pasta do escritório. O primeiro segmento do caminho é o
- * `tenant_id`, que é o que a política do storage usa para isolar os arquivos.
- */
 export async function uploadBrandLogo(input: {
   tenantId: string;
   file: File;
@@ -99,27 +100,47 @@ export async function uploadBrandLogo(input: {
     );
   }
 
-  const extension = input.file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `${input.tenantId}/${input.variant}-${Date.now()}.${extension}`;
+  const extensionByType: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+  };
+  const extension = extensionByType[input.file.type];
+  const response = await invokeBrandSettings({
+    action: "create_upload",
+    tenantId: input.tenantId,
+    variant: input.variant,
+    extension,
+  });
+  if (!response.upload?.path || !response.upload.token || !response.upload.publicUrl) {
+    throw new BrandSettingsError(
+      "upload_failed",
+      "Não foi possível preparar o envio da imagem.",
+    );
+  }
 
   const { error } = await withTimeout(
-    supabase.storage.from(BUCKET).upload(path, input.file, {
-      cacheControl: "3600",
-      upsert: true,
-      contentType: input.file.type,
-    }),
+    supabase.storage.from(BUCKET).uploadToSignedUrl(
+      response.upload.path,
+      response.upload.token,
+      input.file,
+      {
+        cacheControl: "3600",
+        contentType: input.file.type,
+      },
+    ),
     30_000,
   );
 
   if (error) {
     throw new BrandSettingsError(
       "upload_failed",
-      "Não foi possível enviar a imagem. Confira se você tem permissão de administrador.",
+      "Não foi possível enviar a imagem. Tente novamente.",
     );
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  return response.upload.publicUrl;
 }
 
 export async function saveBrandSettings(
