@@ -5,6 +5,7 @@ import {
   formatCnj,
   nextAttemptDelayMs,
   normalizeDataJudMovements,
+  normalizeDjenPublication,
   normalizeEscavadorPublication,
   resolveOriginSystem,
   RETRY_DELAYS_MS,
@@ -161,6 +162,49 @@ describe("normalizeEscavadorPublication", () => {
     expect(normalized.externalId).toBeNull();
     expect(normalized.originSystem).toBe("unknown");
     expect(normalized.numeroProcesso).toBeNull();
+  });
+});
+
+describe("normalizeDjenPublication", () => {
+  const receivedAt = "2026-08-01T12:00:00.000Z";
+
+  it("converte a comunicação oficial do CNJ e remove marcação HTML", () => {
+    const normalized = normalizeDjenPublication({
+      id: 651169325,
+      hash: "hash-oficial",
+      data_disponibilizacao: "2026-07-31",
+      siglaTribunal: "TJMG",
+      tipoComunicacao: "Intimação",
+      nomeOrgao: "TJMG - 5ª Câmara Criminal",
+      texto: "Fica a parte <b>intimada</b><br />no prazo de cinco dias.",
+      numero_processo: "00128291820248130686",
+      link: "https://www4.tjmg.jus.br/consulta",
+      tipoDocumento: "Apelação",
+      nomeClasse: "Apelação Criminal",
+    }, { receivedAt });
+
+    expect(normalized.externalId).toBe("651169325");
+    expect(normalized.numeroProcesso).toBe("0012829-18.2024.8.13.0686");
+    expect(normalized.content).toBe(
+      "Fica a parte intimada no prazo de cinco dias.",
+    );
+    expect(normalized.publishedAt).toBe("2026-07-31T00:00:00.000Z");
+    expect(normalized.tribunal).toBe("TJMG");
+    expect(normalized.possibleDeadline).toBe(true);
+    expect(normalized.sourceName).toBe("TJMG - 5ª Câmara Criminal");
+  });
+
+  it("usa o hash como identidade e mantém origem desconhecida sem evidência", () => {
+    const normalized = normalizeDjenPublication({
+      hash: "hash-sem-id",
+      texto: "Autos conclusos ao magistrado.",
+      siglaTribunal: "TJAM",
+    }, { receivedAt });
+
+    expect(normalized.externalId).toBe("hash-sem-id");
+    expect(normalized.publishedAt).toBe(receivedAt);
+    expect(normalized.originSystem).toBe("unknown");
+    expect(normalized.possibleDeadline).toBe(false);
   });
 });
 

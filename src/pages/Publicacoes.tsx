@@ -58,7 +58,7 @@ interface Publicacao {
   prazo_dias: number | null;
   data_prazo: string | null;
   tarefa_gerada: boolean | null;
-  provider: "escavador" | "manual" | "legacy";
+  provider: "djen" | "escavador" | "manual" | "legacy";
   origin_system: "pje" | "projudi" | "seeu" | "dje" | "other" | "unknown";
   review_status: "pending_review" | "reviewed" | "dismissed" | "no_deadline";
   possible_deadline: boolean;
@@ -86,7 +86,7 @@ interface Processo {
 
 interface SyncRun {
   id: string;
-  provider: "escavador" | "datajud";
+  provider: "djen" | "escavador" | "datajud";
   sync_kind: string;
   status: "running" | "succeeded" | "partial" | "failed";
   records_created: number;
@@ -98,7 +98,7 @@ interface SyncRun {
 interface SyncSource {
   id: string;
   source_kind: "oab" | "process";
-  provider: "escavador" | "datajud";
+  provider: "djen" | "escavador" | "datajud";
   reference: string;
   active: boolean;
   next_sync_at: string;
@@ -109,6 +109,7 @@ interface SyncSource {
 }
 
 const providerLabels: Record<string, string> = {
+  djen: "DJEN/CNJ oficial",
   escavador: "Escavador",
   datajud: "DataJud/CNJ",
   manual: "Manual",
@@ -124,6 +125,11 @@ const failureLabels: Record<string, string> = {
   datajud_unauthorized: "Chave do DataJud recusada",
   datajud_rate_limited: "Limite do DataJud atingido",
   datajud_request_failed: "DataJud indisponível",
+  djen_rate_limited: "Limite temporário do DJEN atingido",
+  djen_request_failed: "DJEN/CNJ temporariamente indisponível",
+  djen_timeout: "DJEN/CNJ demorou para responder",
+  djen_invalid_response: "Resposta inesperada do DJEN/CNJ",
+  djen_invalid_reference: "OAB ou número CNJ inválido",
   datajud_court_not_supported: "Tribunal sem cobertura no DataJud",
   max_retries: "Interrompida após cinco tentativas",
   provider_error: "Falha do provedor",
@@ -409,10 +415,14 @@ const Publicacoes = () => {
       .at(-1) ?? null;
 
     return {
-      monitoredOabs: active.filter((source) => source.source_kind === "oab")
-        .length,
-      monitoredProcesses:
-        active.filter((source) => source.source_kind === "process").length,
+      monitoredOabs: new Set(
+        active.filter((source) => source.source_kind === "oab")
+          .map((source) => source.reference),
+      ).size,
+      monitoredProcesses: new Set(
+        active.filter((source) => source.source_kind === "process")
+          .map((source) => source.reference),
+      ).size,
       nextRun,
       lastSuccess,
       pending: syncSources.filter((source) =>
@@ -518,8 +528,9 @@ const Publicacoes = () => {
                 <div>
                   <p className="font-medium">Situação da sincronização</p>
                   <p className="text-xs text-muted-foreground">
-                    O DataJud/CNJ traz andamentos; as publicações chegam pelo
-                    Escavador. Nenhum prazo é criado sem revisão humana.
+                    O DJEN/CNJ traz publicações oficiais; o DataJud/CNJ traz
+                    processos e andamentos. O Escavador é complementar. Nenhum
+                    prazo é criado sem revisão humana.
                   </p>
                 </div>
               </div>
@@ -757,7 +768,7 @@ const Publicacoes = () => {
               <EmptyState
                 icon={Bell}
                 title="Nenhuma publicação real encontrada"
-                description="Quando o token do Escavador estiver configurado, as publicações do escritório aparecerão aqui. Dados do DataJud não são apresentados como publicação."
+                description="As publicações oficiais encontradas no DJEN/CNJ por OAB ou processo aparecerão aqui automaticamente. Dados do DataJud não são apresentados como publicação."
               />
             )}
           </div>

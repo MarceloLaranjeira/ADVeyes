@@ -10,7 +10,7 @@ export type OriginSystem =
   | "other"
   | "unknown";
 
-export type PublicationProvider = "escavador" | "manual" | "legacy";
+export type PublicationProvider = "djen" | "escavador" | "manual" | "legacy";
 export type MovementProvider = "escavador" | "datajud" | "manual";
 export type MovementType = "ANDAMENTO" | "DOCUMENTO";
 
@@ -25,6 +25,9 @@ export const RETRY_DELAYS_MS = [
 
 /** Intervalo padrão de reconciliação de uma fonte saudável. */
 export const RECONCILIATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** O DJEN é verificado a cada dez minutos. */
+export const DJEN_RECONCILIATION_INTERVAL_MS = 10 * 60 * 1000;
 
 export interface NormalizedPublication {
   externalId: string | null;
@@ -183,6 +186,79 @@ export interface EscavadorPublicationPayload {
     }
     | null;
   [key: string]: unknown;
+}
+
+export interface DjenPublicationPayload {
+  id?: number | string | null;
+  hash?: string | null;
+  data_disponibilizacao?: string | null;
+  datadisponibilizacao?: string | null;
+  siglaTribunal?: string | null;
+  tipoComunicacao?: string | null;
+  nomeOrgao?: string | null;
+  texto?: string | null;
+  numero_processo?: string | null;
+  numeroprocessocommascara?: string | null;
+  meiocompleto?: string | null;
+  link?: string | null;
+  tipoDocumento?: string | null;
+  nomeClasse?: string | null;
+  [key: string]: unknown;
+}
+
+function plainText(value: unknown): string {
+  return collapse(value)
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Converte uma comunicação oficial do DJEN no contrato interno. */
+export function normalizeDjenPublication(
+  raw: DjenPublicationPayload,
+  context: { receivedAt: string },
+): NormalizedPublication {
+  const content = plainText(raw.texto) || "Publicação sem conteúdo textual.";
+  const sourceName = collapse(raw.nomeOrgao) || collapse(raw.meiocompleto) ||
+    "DJEN/CNJ";
+  const sourceUrl = collapse(raw.link) || null;
+  const availableAt = isoOrNull(raw.data_disponibilizacao) ??
+    isoOrNull(raw.datadisponibilizacao);
+  const externalId = raw.id == null
+    ? collapse(raw.hash) || null
+    : String(raw.id);
+  const tipo = collapse(raw.tipoComunicacao) ||
+    collapse(raw.tipoDocumento) || "publicacao";
+  const summaryParts = [
+    collapse(raw.tipoDocumento),
+    collapse(raw.nomeClasse),
+    content.slice(0, 240),
+  ].filter(Boolean);
+
+  return {
+    externalId,
+    tipo: tipo.toLocaleLowerCase("pt-BR"),
+    tribunal: collapse(raw.siglaTribunal) || "Não identificado",
+    numeroProcesso: formatCnj(
+      raw.numero_processo ?? raw.numeroprocessocommascara,
+    ) || null,
+    publishedAt: availableAt ?? context.receivedAt,
+    availableAt,
+    content,
+    summary: summaryParts.join(" — ") || null,
+    originSystem: resolveOriginSystem({ sourceName, sourceUrl, content }),
+    sourceName,
+    sourceUrl,
+    possibleDeadline: detectPossibleDeadline(content),
+    payload: raw as Record<string, unknown>,
+  };
 }
 
 /** Converte uma publicação do Escavador no contrato interno. */

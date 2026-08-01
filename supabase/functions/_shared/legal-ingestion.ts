@@ -14,6 +14,7 @@ export interface IngestionResult {
   received: number;
   created: number;
   ignored: number;
+  createdIds: string[];
 }
 
 export interface ProcessReference {
@@ -23,7 +24,12 @@ export interface ProcessReference {
   user_id: string | null;
 }
 
-const EMPTY: IngestionResult = { received: 0, created: 0, ignored: 0 };
+const EMPTY: IngestionResult = {
+  received: 0,
+  created: 0,
+  ignored: 0,
+  createdIds: [],
+};
 
 /**
  * Persiste publicações já normalizadas. Um evento repetido atualiza o mesmo
@@ -45,6 +51,7 @@ export async function ingestPublications(
 
   let created = 0;
   let ignored = 0;
+  const createdIds: string[] = [];
 
   for (const publication of input.publications) {
     const matched = publication.numeroProcesso
@@ -96,11 +103,19 @@ export async function ingestPublications(
     // 23505: o mesmo conteúdo já existe sob outro identificador externo.
     // Um evento repetido nunca deve interromper a ingestão da fonte.
     if (error && (error as { code?: string }).code !== "23505") throw error;
-    if (!error && data) created += 1;
+    if (!error && data) {
+      created += 1;
+      createdIds.push(data.id as string);
+    }
     else ignored += 1;
   }
 
-  return { received: input.publications.length, created, ignored };
+  return {
+    received: input.publications.length,
+    created,
+    ignored,
+    createdIds,
+  };
 }
 
 /**
@@ -134,7 +149,14 @@ export async function ingestMovements(
       provider_payload: movement.payload,
     }));
 
-  if (!rows.length) return { received: input.movements.length, created: 0, ignored: input.movements.length };
+  if (!rows.length) {
+    return {
+      received: input.movements.length,
+      created: 0,
+      ignored: input.movements.length,
+      createdIds: [],
+    };
+  }
 
   const { data, error } = await admin
     .from("process_movements")
@@ -151,7 +173,60 @@ export async function ingestMovements(
     received: input.movements.length,
     created,
     ignored: input.movements.length - created,
+    createdIds: [],
   };
+}
+
+/**
+ * Notifica os membros jurídicos ativos sobre publicações recém-criadas.
+ * A função recebe apenas IDs retornados pelo `insert`, então uma reconciliação
+ * idempotente nunca repete o alerta.
+ */
+export async function notifyNewPublications(
+  admin: SupabaseClient,
+  input: { tenantId: string; publicationIds: string[] },
+): Promise<number> {
+  if (!input.publicationIds.length) return 0;
+
+  const [{ data: publications, error: publicationError }, { data: members, error: memberError }] =
+    await Promise.all([
+      admin
+        .from("publicacoes")
+        .select("id, tribunal, numero_processo, tipo")
+        .eq("tenant_id", input.tenantId)
+        .in("id", input.publicationIds),
+      admin
+        .from("tenant_memberships")
+        .select("user_id")
+        .eq("tenant_id", input.tenantId)
+        .eq("status", "active")
+        .in("role", ["owner", "admin", "lawyer", "assistant"]),
+    ]);
+
+  if (publicationError) throw publicationError;
+  if (memberError) throw memberError;
+  if (!publications?.length || !members?.length) return 0;
+
+  const notifications = members.flatMap((member) =>
+    publications.map((publication) => ({
+      tenant_id: input.tenantId,
+      user_id: member.user_id,
+      titulo: "Nova publicação oficial no DJEN",
+      mensagem: [
+        publication.tipo,
+        publication.tribunal,
+        publication.numero_processo,
+      ].filter(Boolean).join(" · "),
+      tipo: "juridico",
+      processo_numero: publication.numero_processo,
+      tribunal: publication.tribunal,
+      lida: false,
+    }))
+  );
+
+  const { error } = await admin.from("notificacoes").insert(notifications);
+  if (error) throw error;
+  return notifications.length;
 }
 
 /** Índice de processos do escritório por número CNJ formatado. */
