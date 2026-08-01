@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Search, Sparkles, Plus, Upload, Timer, MessageSquare, Settings,
@@ -19,6 +19,7 @@ import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
  */
 export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, signOut } = useAuth();
   const initial = (user?.email || "A").charAt(0).toUpperCase();
 
@@ -42,7 +43,7 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
       </Link>
 
       <EnvironmentSwitcher
-        mode="tenant"
+        mode={location.pathname === "/admin" ? "platform" : "tenant"}
         className="hidden xl:inline-flex"
       />
 

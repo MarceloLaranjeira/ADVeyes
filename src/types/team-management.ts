@@ -5,6 +5,7 @@ export type MemberStatus = "active" | "suspended" | "invited";
 export interface TeamMember {
   id: string;
   membership_id: string | null;
+  user_id: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -12,6 +13,7 @@ export interface TeamMember {
   oab: string | null;
   hourly_rate: number | null;
   monthly_hours_target: number | null;
+  avatar_url: string | null;
   active: boolean;
   role: TeamRole | null;
   data_scope: TeamDataScope | null;

@@ -3,9 +3,10 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Search, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, UserCog, Link2,
+  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
 const sections: Array<{
   label?: string;
@@ -66,10 +67,30 @@ const sections: Array<{
 
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
+  const { isPlatformAdmin } = usePlatformAdmin();
 
   return (
     <aside className="h-full w-60 bg-white border-r border-border flex flex-col">
       <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
+        {isPlatformAdmin && (
+          <div className="mb-5">
+            <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
+              Conta Geral
+            </p>
+            <Link
+              to="/admin"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                location.pathname === "/admin"
+                  ? "bg-primary text-primary-foreground font-bold"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground font-medium"
+              }`}
+            >
+              <ShieldCheck className="h-[18px] w-[18px]" />
+              <span>Painel executivo</span>
+            </Link>
+          </div>
+        )}
         {sections.map((section, idx) => (
           <div key={idx} className={idx === 0 ? "" : "mt-5"}>
             {section.label && (

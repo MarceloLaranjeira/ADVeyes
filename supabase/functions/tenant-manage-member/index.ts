@@ -13,14 +13,20 @@ const actions = new Set([
   "reactivate",
   "update_permissions",
   "read_permissions",
+  "update_profile",
 ]);
 const roles = new Set(["admin", "lawyer", "assistant", "finance"]);
 const scopes = new Set(["tenant", "team", "assigned"]);
 
-/** Exceções aceitas; o banco descarta qualquer outra combinação. */
+/** Permissões editáveis; o banco normaliza novamente antes de persistir. */
 const OVERRIDE_KEYS = new Set([
+  "brand.manage",
+  "members.manage",
   "subscription.read",
   "subscription.manage",
+  "legal.read",
+  "legal.create",
+  "legal.update",
   "legal.delete",
   "finance.read",
   "finance.create",
@@ -30,16 +36,17 @@ const OVERRIDE_KEYS = new Set([
   "contracts.create",
   "contracts.update",
   "contracts.delete",
+  "reports.read",
   "critical_delete.execute",
 ]);
 
 function normalizeOverrides(value: unknown): Record<
   string,
-  Record<string, boolean>
+  Record<string, "allow" | "deny">
 > | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 
-  const result: Record<string, Record<string, boolean>> = {};
+  const result: Record<string, Record<string, "allow" | "deny">> = {};
   for (const [module, actionsValue] of Object.entries(value)) {
     if (
       !actionsValue || typeof actionsValue !== "object" ||
@@ -47,11 +54,10 @@ function normalizeOverrides(value: unknown): Record<
     ) {
       return null;
     }
-    for (const [action, granted] of Object.entries(actionsValue)) {
-      if (typeof granted !== "boolean") return null;
+    for (const [action, decision] of Object.entries(actionsValue)) {
       if (!OVERRIDE_KEYS.has(`${module}.${action}`)) return null;
-      if (!granted) continue;
-      result[module] = { ...result[module], [action]: true };
+      if (decision !== "allow" && decision !== "deny") return null;
+      result[module] = { ...result[module], [action]: decision };
     }
   }
   return result;
@@ -131,6 +137,32 @@ Deno.serve(async (request) => {
       return json({ error: code }, statusForError(code));
     }
 
+    return json(data);
+  }
+
+  if (body.action === "update_profile") {
+    if (!body.profile || typeof body.profile !== "object" || Array.isArray(body.profile)) {
+      return json({ error: "invalid_payload" }, 400);
+    }
+    const profile = body.profile as Record<string, unknown>;
+    if (
+      typeof profile.name !== "string" || profile.name.trim().length < 2 ||
+      typeof profile.email !== "string" || !profile.email.includes("@")
+    ) return json({ error: "invalid_payload" }, 400);
+
+    const { data, error } = await auth.admin.rpc(
+      "tenant_update_member_profile_server",
+      {
+        p_actor_user_id: auth.user.id,
+        p_tenant_id: body.tenantId,
+        p_membership_id: body.membershipId,
+        p_profile: profile,
+      },
+    );
+    if (error) {
+      const code = postgresErrorCode(error);
+      return json({ error: code }, statusForError(code));
+    }
     return json(data);
   }
 

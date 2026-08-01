@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
+import { PlatformSupportBanner } from "./PlatformSupportBanner";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -37,6 +38,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
 
       {/* Main */}
       <main className="pt-16 lg:pl-60 min-w-0">
+        <PlatformSupportBanner />
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px]">
           {children}
         </div>

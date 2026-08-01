@@ -5,7 +5,14 @@ import {
 } from "../_shared/tenant-auth.ts";
 
 interface PlatformAdminRequest {
-  action?: "session" | "overview";
+  action?:
+    | "session"
+    | "overview"
+    | "support_status"
+    | "start_support"
+    | "end_support";
+  tenantId?: string;
+  reason?: string;
 }
 
 interface TenantRow {
@@ -66,6 +73,81 @@ Deno.serve(async (request) => {
   if (action === "session") {
     return json({ isPlatformAdmin: true });
   }
+
+  if (["support_status", "start_support", "end_support"].includes(action)) {
+    const tenantId = typeof body.tenantId === "string" ? body.tenantId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantId)) {
+      return json({ error: "invalid_payload" }, 400);
+    }
+
+    if (action === "start_support") {
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < 10 || reason.length > 500) {
+        return json({ error: "invalid_support_reason" }, 400);
+      }
+
+      await auth.admin.from("platform_support_sessions").update({
+        ended_at: new Date().toISOString(),
+      }).eq("platform_admin_user_id", auth.user.id).eq("tenant_id", tenantId)
+        .is("ended_at", null);
+
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const { data: support, error: supportError } = await auth.admin
+        .from("platform_support_sessions")
+        .insert({
+          platform_admin_user_id: auth.user.id,
+          tenant_id: tenantId,
+          reason,
+          expires_at: expiresAt,
+        })
+        .select("id, reason, started_at, expires_at")
+        .single();
+
+      if (supportError) return json({ error: "operation_failed" }, 500);
+      await auth.admin.from("tenant_audit_events").insert({
+        tenant_id: tenantId,
+        actor_user_id: auth.user.id,
+        action: "platform_support.started",
+        target_type: "platform_support_session",
+        target_id: support.id,
+        metadata: { reason, expires_at: expiresAt },
+      });
+      return json({ active: true, session: support });
+    }
+
+    const { data: active } = await auth.admin
+      .from("platform_support_sessions")
+      .select("id, reason, started_at, expires_at")
+      .eq("platform_admin_user_id", auth.user.id)
+      .eq("tenant_id", tenantId)
+      .is("ended_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (action === "support_status") {
+      return json({ active: Boolean(active), session: active ?? null });
+    }
+    if (active) {
+      const endedAt = new Date().toISOString();
+      const { error: endError } = await auth.admin
+        .from("platform_support_sessions")
+        .update({ ended_at: endedAt })
+        .eq("id", active.id);
+      if (endError) return json({ error: "operation_failed" }, 500);
+      await auth.admin.from("tenant_audit_events").insert({
+        tenant_id: tenantId,
+        actor_user_id: auth.user.id,
+        action: "platform_support.ended",
+        target_type: "platform_support_session",
+        target_id: active.id,
+        metadata: { ended_at: endedAt },
+      });
+    }
+    return json({ active: false, session: null });
+  }
+
   if (action !== "overview") {
     return json({ error: "invalid_action" }, 400);
   }

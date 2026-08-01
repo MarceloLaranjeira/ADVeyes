@@ -10,16 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
-  exceptionsForRole,
-  hasOverride,
+  editablePermissions,
+  overrideState,
   PERMISSION_GROUPS,
   permissionLevel,
   ROLE_LABELS,
   ROLE_ORDER,
-  toggleOverride,
+  setOverrideState,
+  type PermissionOverrideState,
   type PermissionOverrides,
 } from "@/lib/permissions";
 import {
@@ -61,7 +61,7 @@ export function PermissoesPanel({
     (member) => member.membership_id === selectedId,
   ) ?? null;
   const selectedRole = (selected?.role ?? "lawyer") as TeamRole;
-  const availableExceptions = selected ? exceptionsForRole(selectedRole) : [];
+  const editableRows = selected ? editablePermissions() : [];
 
   const load = useCallback(async () => {
     if (!canManage) {
@@ -126,9 +126,9 @@ export function PermissoesPanel({
             O que cada perfil pode fazer
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Estas regras são aplicadas no banco de dados, não na tela. Onde
-            aparece <strong>exceção</strong>, o acesso pode ser liberado pessoa a
-            pessoa no bloco abaixo.
+            Estas regras são aplicadas no banco de dados, não apenas na tela.
+            O proprietário e os administradores podem manter a regra do perfil,
+            permitir ou negar cada acesso por pessoa.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -194,10 +194,10 @@ export function PermissoesPanel({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Exceções por pessoa</CardTitle>
+          <CardTitle className="text-base">Permissões por pessoa</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Libere acessos pontuais sem mudar o perfil do membro. Para trocar o
-            perfil ou o alcance dos dados, use “Editar acesso” na lista da equipe.
+            “Herdar” usa a regra do perfil. “Permitir” libera individualmente e
+            “Negar” bloqueia mesmo quando o perfil permitiria o acesso.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -236,15 +236,14 @@ export function PermissoesPanel({
           </div>
 
           {selected && (
-            availableExceptions.length === 0 ? (
+            editableRows.length === 0 ? (
               <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                O perfil {ROLE_LABELS[selectedRole]} não tem exceções
-                disponíveis: o que ele pode fazer já vem da regra base.
+                Não há permissões individuais disponíveis para este membro.
               </p>
             ) : (
               <div className="space-y-2">
-                {availableExceptions.map((row) => (
-                  <label
+                {editableRows.map((row) => (
+                  <div
                     key={`${row.module}.${row.action}`}
                     className="flex items-start justify-between gap-4 rounded-lg border p-3"
                   >
@@ -256,15 +255,24 @@ export function PermissoesPanel({
                         {row.description}
                       </span>
                     </span>
-                    <Switch
-                      checked={hasOverride(draft, row)}
+                    <Select
+                      value={overrideState(draft, row)}
                       disabled={!canManage || saving}
-                      onCheckedChange={(checked) =>
+                      onValueChange={(value: PermissionOverrideState) =>
                         setDraft((current) =>
-                          toggleOverride(current, row, checked)
+                          setOverrideState(current, row, value)
                         )}
-                    />
-                  </label>
+                    >
+                      <SelectTrigger className="w-[130px] shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inherit">Herdar</SelectItem>
+                        <SelectItem value="allow">Permitir</SelectItem>
+                        <SelectItem value="deny">Negar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 ))}
 
                 <div className="flex items-center gap-3 pt-2">

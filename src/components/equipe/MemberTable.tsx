@@ -30,6 +30,8 @@ interface Props {
   onSuspend: (member: TeamMember) => void;
   onReactivate: (member: TeamMember) => void;
   onEdit: (member: TeamMember) => void;
+  onEditProfile: (member: TeamMember) => void;
+  currentUserId: string | null;
 }
 
 export function MemberTable({
@@ -39,6 +41,8 @@ export function MemberTable({
   onSuspend,
   onReactivate,
   onEdit,
+  onEditProfile,
+  currentUserId,
 }: Props) {
   if (!members.length) {
     return (
@@ -56,7 +60,7 @@ export function MemberTable({
           <TableHead>Perfil</TableHead>
           <TableHead>Alcance</TableHead>
           <TableHead>Status</TableHead>
-          {canManage && <TableHead className="text-right">Ações</TableHead>}
+          <TableHead className="text-right">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -89,10 +93,19 @@ export function MemberTable({
                   : "Convidado"}
               </Badge>
             </TableCell>
-            {canManage && (
-              <TableCell className="text-right">
-                {member.membership_id && member.role !== "owner" && (
-                  <div className="flex justify-end gap-2">
+            <TableCell className="text-right">
+              {(canManage || member.user_id === currentUserId) && (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => onEditProfile(member)}
+                  >
+                    Editar perfil
+                  </Button>
+                {canManage && member.membership_id && member.role !== "owner" && (
+                  <>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -112,10 +125,11 @@ export function MemberTable({
                     >
                       {member.status === "suspended" ? "Reativar" : "Suspender"}
                     </Button>
-                  </div>
+                  </>
                 )}
-              </TableCell>
-            )}
+                </div>
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
