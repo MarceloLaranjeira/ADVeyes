@@ -28,6 +28,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
+import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
 
 type TribunalCredencial = Tables<"tribunal_credenciais">;
 
@@ -528,6 +529,7 @@ const Configuracoes = () => {
 
           {/* === GERAL === */}
           <TabsContent value="geral" className="space-y-4">
+            <IdentidadeVisual />
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-5">

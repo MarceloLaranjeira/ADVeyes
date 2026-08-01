@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { BrandProvider } from "@/contexts/BrandContext";
@@ -91,7 +91,10 @@ const App = () => (
                     <Route path="/tarefas" element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />
                     <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
                     <Route path="/busca" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
-                    <Route path="/jurisprudencia" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
+                    {/* Jurisprudência abria a mesma busca processual.
+                        O endereço antigo continua válido para não quebrar
+                        links salvos pelos usuários. */}
+                    <Route path="/jurisprudencia" element={<Navigate to="/busca" replace />} />
                     <Route path="/integracoes-juridicas" element={<ProtectedRoute><IntegracoesJuridicas /></ProtectedRoute>} />
                     <Route path="/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
                     <Route path="/financeiro" element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />

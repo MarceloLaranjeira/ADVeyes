@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
-  CheckSquare, Gavel, Newspaper, Search, BookOpen, Wallet,
+  CheckSquare, Gavel, Newspaper, Search, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, Headphones, UserCog, Link2,
+  ExternalLink, Settings, Sparkles, UserCog, Link2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,7 +24,6 @@ const sections: Array<{
       { label: "Processos e casos", icon: Briefcase, path: "/processos" },
       { label: "Contatos", icon: Users, path: "/clientes" },
       { label: "CRM — Leads", icon: KanbanSquare, path: "/crm" },
-      { label: "Atendimentos", icon: Headphones, path: "/audiencias" },
     ],
   },
   {
@@ -40,7 +39,6 @@ const sections: Array<{
     label: "Pesquisa",
     items: [
       { label: "Busca processual", icon: Search, path: "/busca" },
-      { label: "Jurisprudência", icon: BookOpen, path: "/jurisprudencia" },
       { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
     ],
   },
