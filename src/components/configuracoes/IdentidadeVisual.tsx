@@ -33,7 +33,7 @@ const emptySettings: BrandSettings = {
 };
 
 export const IdentidadeVisual = () => {
-  const { currentTenant, refresh } = useTenant();
+  const { currentTenant, memberships, refresh } = useTenant();
   const platformSupport = usePlatformSupport();
   const { toast } = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -42,9 +42,15 @@ export const IdentidadeVisual = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const canManage = currentTenant?.accessMode === "platform"
-    ? platformSupport.active
-    : currentTenant?.role === "owner" || currentTenant?.role === "admin";
+  const directMembership = memberships.find(
+    (membership) => membership.tenantId === currentTenant?.tenantId,
+  );
+  const directManager = directMembership?.role === "owner" ||
+    directMembership?.role === "admin";
+  const canManage = Boolean(
+    directManager ||
+      (currentTenant?.accessMode === "platform" && platformSupport.active),
+  );
 
   const load = useCallback(async () => {
     if (!currentTenant) return;
