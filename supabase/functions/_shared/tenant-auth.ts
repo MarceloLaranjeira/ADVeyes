@@ -79,6 +79,7 @@ export function postgresErrorCode(error: unknown): string {
     "already_accepted",
     "invalid_role",
     "invalid_data_scope",
+    "owner_required_for_subscription",
     "team_required",
     "invalid_team",
     "invalid_action",
@@ -90,7 +91,10 @@ export function postgresErrorCode(error: unknown): string {
 }
 
 export function statusForError(code: string): number {
-  if (code === "permission_denied" || code === "email_mismatch") return 403;
+  if (
+    code === "permission_denied" || code === "email_mismatch" ||
+    code === "owner_required_for_subscription"
+  ) return 403;
   if (code === "member_not_found" || code === "invitation_not_found") {
     return 404;
   }

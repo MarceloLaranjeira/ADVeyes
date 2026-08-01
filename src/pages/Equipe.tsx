@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { MemberFormDialog } from "@/components/equipe/MemberFormDialog";
 import { MemberAccessDialog } from "@/components/equipe/MemberAccessDialog";
 import { MemberTable } from "@/components/equipe/MemberTable";
+import { PermissoesPanel } from "@/components/equipe/PermissoesPanel";
 import { PendingInvitations } from "@/components/equipe/PendingInvitations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -217,6 +218,7 @@ export default function Equipe() {
                         Convites ({management.invitations.length})
                       </TabsTrigger>
                     )}
+                    <TabsTrigger value="permissions">Permissões</TabsTrigger>
                   </TabsList>
                   <TabsContent value="members">
                     <MemberTable
@@ -238,6 +240,14 @@ export default function Equipe() {
                       />
                     </TabsContent>
                   )}
+                  <TabsContent value="permissions">
+                    <PermissoesPanel
+                      tenantId={currentTenant.tenantId}
+                      members={management.members}
+                      canManage={canManage}
+                      onChanged={() => void management.refresh()}
+                    />
+                  </TabsContent>
                 </Tabs>
               )}
           </CardContent>
