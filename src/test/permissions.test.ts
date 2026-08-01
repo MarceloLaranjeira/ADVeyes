@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  editablePermissions,
   exceptionsForRole,
   hasOverride,
   PERMISSION_GROUPS,
   permissionLevel,
+  overrideState,
+  setOverrideState,
   toggleOverride,
   type PermissionRow,
 } from "@/lib/permissions";
@@ -88,5 +91,25 @@ describe("edição de exceções", () => {
   it("trata ausência de exceções como acesso negado", () => {
     expect(hasOverride(null, row)).toBe(false);
     expect(hasOverride({}, row)).toBe(false);
+  });
+});
+
+describe("permissões tri-state", () => {
+  const row = findRow("brand", "manage");
+
+  it("distingue herança, permissão e negação", () => {
+    expect(overrideState({}, row)).toBe("inherit");
+    const allowed = setOverrideState({}, row, "allow");
+    expect(overrideState(allowed, row)).toBe("allow");
+    const denied = setOverrideState(allowed, row, "deny");
+    expect(overrideState(denied, row)).toBe("deny");
+    expect(overrideState(setOverrideState(denied, row, "inherit"), row))
+      .toBe("inherit");
+  });
+
+  it("não permite sobrescrever a transferência de propriedade", () => {
+    expect(editablePermissions()).not.toContainEqual(
+      findRow("ownership", "transfer"),
+    );
   });
 });
