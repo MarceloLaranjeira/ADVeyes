@@ -37,7 +37,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { exportProcessosPDF } from "@/lib/pdf-export";
 import { buildProcessTimeline } from "@/lib/process-timeline";
 
-type RecordRow = Record<string, any>;
+// As tabelas jurídicas ainda não estão nos tipos gerados do Supabase.
+// `id` é declarado porque a timeline depende dele como chave estável.
+type RecordRow = Record<string, any> & { id: string };
 
 const emptyCollections = {
   movements: [] as RecordRow[],

@@ -119,10 +119,10 @@ describe("fetchDjenPublications", () => {
       startDate: "2026-08-01",
       endDate: "2026-08-01",
       fetcher: fetcher as typeof fetch,
-    })).rejects.toMatchObject<DjenApiError>({
+    })).rejects.toMatchObject({
       code: "djen_rate_limited",
       retryAfterMs: 75_000,
-    });
+    } satisfies Partial<DjenApiError>);
   });
 
   it("rejeita referência e payload inválidos", async () => {

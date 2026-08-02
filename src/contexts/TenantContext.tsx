@@ -85,12 +85,14 @@ interface CurrentUserTenantRow {
   color_tokens: Record<string, string> | null;
 }
 
-type CurrentUserTenantsRpc = (
-  functionName: "current_user_tenants",
-) => Promise<{
+interface CurrentUserTenantsResult {
   data: CurrentUserTenantRow[] | null;
   error: { message: string } | null;
-}>;
+}
+
+type CurrentUserTenantsRpc = (
+  functionName: "current_user_tenants",
+) => Promise<CurrentUserTenantsResult>;
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 
@@ -194,7 +196,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
     setMembershipLoading(true);
     try {
-      const { data, error } = await withTimeout(
+      // `.call` preserva o `this` do cliente; o genérico é explícito porque a
+      // inferência se perde ao passar por ele.
+      const { data, error } = await withTimeout<CurrentUserTenantsResult>(
         (supabase.rpc as unknown as CurrentUserTenantsRpc).call(
           supabase,
           "current_user_tenants",
