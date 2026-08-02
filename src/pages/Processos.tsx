@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AreaBadge } from "@/components/common/AreaBadge";
 import {
@@ -20,8 +20,9 @@ import { ProcessoForm } from "@/components/processos/ProcessoForm";
 import { HonorarioParcelas } from "@/components/processos/HonorarioParcelas";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface Processo {
   id: string;
@@ -440,14 +441,14 @@ function ProcessoDetalhe({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Processos = () => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { currentTenant } = useTenant();
   const [processos, setProcessos]       = useState<Processo[]>([]);
   const [search, setSearch]             = useState("");
   const [showForm, setShowForm]         = useState(false);
   const [editData, setEditData]         = useState<Processo | null>(null);
   const [deleteId, setDeleteId]         = useState<string | null>(null);
   const [honorarioProcesso, setHonorarioProcesso] = useState<Processo | null>(null);
-  const [detalheProcesso, setDetalheProcesso]     = useState<Processo | null>(null);
   const [filterArea, setFilterArea]     = useState("Todas");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -477,12 +478,17 @@ const Processos = () => {
     setSyncing(false);
   };
 
-  const fetchProcessos = async () => {
-    const { data } = await supabase.from("processos").select("*").order("created_at", { ascending: false });
+  const fetchProcessos = useCallback(async () => {
+    if (!currentTenant) return;
+    const { data } = await (supabase as any)
+      .from("processos")
+      .select("*")
+      .eq("tenant_id", currentTenant.tenantId)
+      .order("created_at", { ascending: false });
     if (data) setProcessos(data);
-  };
+  }, [currentTenant]);
 
-  useEffect(() => { fetchProcessos(); }, []);
+  useEffect(() => { void fetchProcessos(); }, [fetchProcessos]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -589,7 +595,7 @@ const Processos = () => {
                 <tr
                   key={p.id}
                   className="hover:bg-muted/20 transition-colors cursor-pointer"
-                  onClick={() => setDetalheProcesso(p)}
+                  onClick={() => navigate(`/processos/${p.id}`)}
                 >
                   <td className="p-4 text-sm font-mono text-primary">{p.numero}</td>
                   <td className="p-4 text-sm font-medium">{p.cliente_nome}</td>
@@ -599,7 +605,7 @@ const Processos = () => {
                   <td className="p-4 text-sm text-muted-foreground">{p.advogado || "—"}</td>
                   <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalhes" onClick={() => setDetalheProcesso(p)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalhes" onClick={() => navigate(`/processos/${p.id}`)}>
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setHonorarioProcesso(p)} title="Honorários">
@@ -618,16 +624,6 @@ const Processos = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Detail Drawer */}
-        {detalheProcesso && (
-          <ProcessoDetalhe
-            processo={detalheProcesso}
-            onClose={() => setDetalheProcesso(null)}
-            onEdit={() => { setEditData(detalheProcesso); setDetalheProcesso(null); setShowForm(true); }}
-            userId={user!.id}
-          />
-        )}
 
         <ProcessoForm open={showForm} onOpenChange={setShowForm} onSuccess={fetchProcessos} editData={editData} />
 

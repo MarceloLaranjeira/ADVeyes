@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import Landing from "./pages/Landing";
 import Processos from "./pages/Processos";
+import ProcessoDetalhe from "./pages/ProcessoDetalhe";
 import Clientes from "./pages/Clientes";
 import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
@@ -88,6 +89,7 @@ const App = () => (
                       }
                     />
                     <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
+                    <Route path="/processos/:id" element={<ProtectedRoute><ProcessoDetalhe /></ProtectedRoute>} />
                     <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
                     <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
                     <Route path="/tarefas" element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />

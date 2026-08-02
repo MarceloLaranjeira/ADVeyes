@@ -40,8 +40,11 @@ import {
 } from "lucide-react";
 import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
+import { buildProcessTimeline } from "@/lib/process-timeline";
 
 type FeedTab = "publicacoes" | "andamentos";
 
@@ -171,6 +174,7 @@ function failureLabel(code: string | null) {
 const Publicacoes = () => {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
@@ -303,6 +307,20 @@ const Publicacoes = () => {
       );
     });
   }, [movimentos, processos, search, source]);
+
+  const movementGroups = useMemo(() => {
+    const grouped = new Map<string, Movimento[]>();
+    for (const movement of filteredMovements) {
+      const key = movement.process_id || movement.process_number || "unlinked";
+      grouped.set(key, [...(grouped.get(key) ?? []), movement]);
+    }
+    return Array.from(grouped.entries()).map(([key, items]) => ({
+      key,
+      process: processos.get(items[0]?.process_id),
+      items,
+      timeline: buildProcessTimeline({ movements: items }),
+    }));
+  }, [filteredMovements, processos]);
 
   const stats = useMemo(() => ({
     total: publicacoes.length,
@@ -801,58 +819,34 @@ const Publicacoes = () => {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredMovements.map((movement) => {
-              const process = processos.get(movement.process_id);
-              const expanded = expandedId === movement.id;
+          <div className="space-y-5">
+            {movementGroups.map((group) => {
+              const reference = group.items[0];
               return (
-                <DepthCard key={movement.id}>
+                <DepthCard key={group.key}>
                   <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {movement.movement_type === "DOCUMENTO"
-                              ? "Documento"
-                              : "Andamento"}
-                          </Badge>
-                          <Badge variant="secondary">
-                            {providerLabels[movement.provider] ??
-                              movement.provider}
-                          </Badge>
+                          <Badge variant="outline">Processo</Badge>
+                          <Badge variant="secondary">{group.items.length} evento(s)</Badge>
                         </div>
-                        <CardTitle className="text-base">
-                          {movement.title ?? "Movimentação processual"}
+                        <CardTitle className="mt-3 font-mono text-base">
+                          {group.process?.numero ?? reference.process_number ?? "Processo não identificado"}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                          {process?.numero ?? movement.process_number ??
-                            "Processo não identificado"}
-                          {" · "}
-                          {process?.cliente_nome ?? movement.client_name ??
-                            "Cliente não identificado"}
-                          {" · "}
-                          {formattedDate(movement.occurred_at)}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {group.process?.cliente_nome ?? reference.client_name ?? "Cliente não identificado"}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setExpandedId(expanded ? null : movement.id)}
-                      >
-                        {expanded
-                          ? <ChevronUp className="h-4 w-4" />
-                          : <ChevronDown className="h-4 w-4" />}
-                      </Button>
+                      {group.process && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/processos/${group.process!.id}`)}>
+                          Abrir processo
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className={expanded
-                      ? "whitespace-pre-wrap text-sm leading-relaxed"
-                      : "line-clamp-2 text-sm text-muted-foreground"}
-                    >
-                      {movement.content}
-                    </p>
+                  <CardContent className="pt-2">
+                    <ProcessoTimeline events={group.timeline} previewLimit={4} />
                   </CardContent>
                 </DepthCard>
               );
