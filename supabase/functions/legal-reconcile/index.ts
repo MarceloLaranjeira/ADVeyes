@@ -1,5 +1,5 @@
 // Reconciliação das fontes monitoradas.
-// Executa a cada seis horas por agendamento e também atende à sincronização
+// Executa a cada dez minutos por agendamento e também atende à sincronização
 // manual de um escritório. O trabalho é dividido por escritório e por fonte:
 // a falha de uma fonte nunca interrompe as demais.
 
@@ -8,6 +8,12 @@ import { corsHeaders, json } from "../_shared/tenant-auth.ts";
 import { normalizeDataJudAuthorization } from "../_shared/datajud-auth.ts";
 import { DataJudApiError, fetchDataJudProcess } from "../_shared/datajud-client.ts";
 import {
+  DjenApiError,
+  fetchDjenPublications,
+  groupDjenReferences,
+  type DjenFetchResult,
+} from "../_shared/djen-client.ts";
+import {
   EscavadorApiError,
   fetchLawyerPublications,
 } from "../_shared/escavador-client.ts";
@@ -15,19 +21,25 @@ import {
   indexProcessesByNumber,
   ingestMovements,
   ingestPublications,
+  notifyNewPublications,
   type IngestionResult,
   type ProcessReference,
 } from "../_shared/legal-ingestion.ts";
 import {
   formatCnj,
+  DJEN_RECONCILIATION_INTERVAL_MS,
   nextAttemptDelayMs,
   normalizeDataJudMovements,
+  normalizeDjenPublication,
   normalizeEscavadorPublication,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
 const DEFAULT_BATCH = 40;
 const MAX_BATCH = 200;
+const DJEN_INITIAL_LOOKBACK_DAYS = 7;
+const DJEN_OVERLAP_DAYS = 1;
 
 /** Falhas que não se resolvem com retentativa e exigem ação humana. */
 const PERMANENT_FAILURES = new Set([
@@ -35,13 +47,14 @@ const PERMANENT_FAILURES = new Set([
   "escavador_insufficient_balance",
   "datajud_unauthorized",
   "datajud_court_not_supported",
+  "djen_invalid_reference",
 ]);
 
 interface SyncSource {
   id: string;
   tenant_id: string;
   source_kind: "oab" | "process";
-  provider: "escavador" | "datajud";
+  provider: "djen" | "escavador" | "datajud";
   process_id: string | null;
   reference: string;
   failure_count: number;
@@ -60,6 +73,7 @@ interface ReconcileContext {
 function errorCode(error: unknown): string {
   if (error instanceof EscavadorApiError) return error.code;
   if (error instanceof DataJudApiError) return error.code;
+  if (error instanceof DjenApiError) return error.code;
   if (error instanceof Error && /^[a-z0-9_]+$/.test(error.message)) {
     return error.message;
   }
@@ -196,7 +210,9 @@ async function reconcileProcessSource(
     authorization: context.dataJudAuthorization,
     cnj: source.reference,
   });
-  if (!found) return { received: 0, created: 0, ignored: 0 };
+  if (!found) {
+    return { received: 0, created: 0, ignored: 0, createdIds: [] };
+  }
 
   return await ingestMovements(context.admin, {
     tenantId: source.tenant_id,
@@ -224,7 +240,7 @@ async function reconcileSource(
   }).select("id").maybeSingle();
 
   try {
-    const result = source.source_kind === "oab"
+    const result = source.provider === "escavador"
       ? await reconcileOabSource(context, source)
       : await reconcileProcessSource(context, source);
 
@@ -292,6 +308,248 @@ async function reconcileSource(
   }
 }
 
+function dateOnly(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function djenStartDate(source: SyncSource, now: Date): string {
+  if (!source.last_success_at) {
+    return dateOnly(new Date(
+      now.getTime() - DJEN_INITIAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+    ));
+  }
+  const lastSuccess = new Date(source.last_success_at);
+  if (Number.isNaN(lastSuccess.getTime())) {
+    return dateOnly(new Date(
+      now.getTime() - DJEN_INITIAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+    ));
+  }
+  return dateOnly(new Date(
+    lastSuccess.getTime() - DJEN_OVERLAP_DAYS * 24 * 60 * 60 * 1000,
+  ));
+}
+
+async function openDjenRuns(
+  context: ReconcileContext,
+  sources: SyncSource[],
+): Promise<Map<string, string>> {
+  const { data, error } = await context.admin.from("legal_sync_runs").insert(
+    sources.map((source) => ({
+      tenant_id: source.tenant_id,
+      source_id: source.id,
+      provider: "djen",
+      sync_kind: "publication",
+      trigger_type: context.mode === "manual" ? "manual" : "scheduled",
+      status: "running",
+      created_by: context.actorId,
+      metadata: {
+        source_kind: source.source_kind,
+        reference: source.reference,
+        grouped_sources: sources.length,
+      },
+    })),
+  ).select("id, source_id");
+  if (error) throw error;
+  return new Map((data ?? []).map((run) => [run.source_id, run.id]));
+}
+
+async function persistDjenForSource(
+  context: ReconcileContext,
+  source: SyncSource,
+  fetched: DjenFetchResult,
+  receivedAt: string,
+): Promise<{ result: IngestionResult; notificationError: string | null }> {
+  const { data: processes, error } = await context.admin
+    .from("processos")
+    .select("id, numero, cliente_nome, user_id")
+    .eq("tenant_id", source.tenant_id);
+  if (error) throw error;
+
+  const processRows = (processes ?? []) as Array<
+    ProcessReference & { numero: string }
+  >;
+  const normalized = fetched.items.map((publication) =>
+    normalizeDjenPublication(publication, { receivedAt })
+  );
+  const result = await ingestPublications(context.admin, {
+    tenantId: source.tenant_id,
+    provider: "djen",
+    fallbackUserId: context.actorId,
+    processByNumber: indexProcessesByNumber(processRows, formatCnj),
+    defaultProcess: source.process_id
+      ? processRows.find((process) => process.id === source.process_id) ?? null
+      : null,
+    publications: normalized,
+  });
+
+  let notificationError: string | null = null;
+  try {
+    await notifyNewPublications(context.admin, {
+      tenantId: source.tenant_id,
+      publicationIds: result.createdIds,
+    });
+  } catch (error) {
+    // A publicação oficial não pode ser descartada por uma falha secundária de
+    // alerta. O erro permanece observável nos metadados da execução.
+    notificationError = errorCode(error);
+    console.error("DJEN notification failure", {
+      tenantId: source.tenant_id,
+      sourceId: source.id,
+      code: notificationError,
+    });
+  }
+
+  return { result, notificationError };
+}
+
+async function reconcileDjenGroup(
+  context: ReconcileContext,
+  sources: SyncSource[],
+): Promise<Array<{ status: string; code: string | null }>> {
+  const now = new Date();
+  const receivedAt = now.toISOString();
+  const endDate = dateOnly(now);
+  const startDate = sources
+    .map((source) => djenStartDate(source, now))
+    .sort()[0];
+  const runs = await openDjenRuns(context, sources);
+
+  try {
+    const fetched = await fetchDjenPublications({
+      sourceKind: sources[0].source_kind,
+      reference: sources[0].reference,
+      startDate,
+      endDate,
+      baseUrl: Deno.env.get("DJEN_PROXY_URL") ?? undefined,
+      proxySecret: Deno.env.get("DJEN_PROXY_SECRET") ?? undefined,
+    });
+    const outcomes: Array<{ status: string; code: string | null }> = [];
+
+    for (const source of sources) {
+      try {
+        const { result, notificationError } = await persistDjenForSource(
+          context,
+          source,
+          fetched,
+          receivedAt,
+        );
+        const finishedAt = new Date().toISOString();
+        await context.admin.from("legal_sync_sources").update({
+          failure_count: 0,
+          last_attempt_at: finishedAt,
+          last_success_at: finishedAt,
+          sync_cursor: endDate,
+          last_error_code: null,
+          last_error_message: null,
+          paused_reason: null,
+          next_sync_at: new Date(
+            Date.now() + DJEN_RECONCILIATION_INTERVAL_MS,
+          ).toISOString(),
+        }).eq("id", source.id).eq("tenant_id", source.tenant_id);
+
+        const runId = runs.get(source.id);
+        if (runId) {
+          await context.admin.from("legal_sync_runs").update({
+            status: notificationError ? "partial" : "succeeded",
+            records_received: result.received,
+            records_created: result.created,
+            records_ignored: result.ignored,
+            cursor_before: source.sync_cursor,
+            cursor_after: endDate,
+            error_code: notificationError,
+            error_message: notificationError,
+            metadata: {
+              source_kind: source.source_kind,
+              reference: source.reference,
+              grouped_sources: sources.length,
+              pages: fetched.pages,
+              total_reported: fetched.totalReported,
+              rate_limit: fetched.rateLimit,
+              rate_limit_remaining: fetched.rateLimitRemaining,
+              notification_error: notificationError,
+            },
+            finished_at: finishedAt,
+          }).eq("id", runId).eq("tenant_id", source.tenant_id);
+        }
+        outcomes.push({
+          status: notificationError ? "partial" : "succeeded",
+          code: notificationError,
+        });
+      } catch (error) {
+        const code = errorCode(error);
+        const finishedAt = new Date().toISOString();
+        const delay = nextAttemptDelayMs(source.failure_count);
+        const exhausted = delay === null;
+        await context.admin.from("legal_sync_sources").update({
+          failure_count: source.failure_count + 1,
+          last_attempt_at: finishedAt,
+          last_error_code: code,
+          last_error_message: errorMessage(error),
+          active: !exhausted,
+          paused_reason: exhausted ? "max_retries" : null,
+          next_sync_at: new Date(
+            Date.now() + (delay ?? RECONCILIATION_INTERVAL_MS),
+          ).toISOString(),
+        }).eq("id", source.id).eq("tenant_id", source.tenant_id);
+        const runId = runs.get(source.id);
+        if (runId) {
+          await context.admin.from("legal_sync_runs").update({
+            status: "failed",
+            error_code: code,
+            error_message: errorMessage(error),
+            finished_at: finishedAt,
+          }).eq("id", runId).eq("tenant_id", source.tenant_id);
+        }
+        outcomes.push({ status: "failed", code });
+      }
+    }
+    return outcomes;
+  } catch (error) {
+    const code = errorCode(error);
+    const finishedAt = new Date().toISOString();
+    const rateLimited = error instanceof DjenApiError &&
+      error.code === "djen_rate_limited";
+    const outcomes: Array<{ status: string; code: string | null }> = [];
+
+    for (const source of sources) {
+      const permanent = PERMANENT_FAILURES.has(code);
+      const delay = rateLimited
+        ? (error as DjenApiError).retryAfterMs ?? 60_000
+        : permanent
+        ? null
+        : nextAttemptDelayMs(source.failure_count);
+      const stopped = permanent || (!rateLimited && delay === null);
+      await context.admin.from("legal_sync_sources").update({
+        failure_count: rateLimited
+          ? source.failure_count
+          : source.failure_count + 1,
+        last_attempt_at: finishedAt,
+        last_error_code: code,
+        last_error_message: errorMessage(error),
+        active: !stopped,
+        paused_reason: permanent ? code : stopped ? "max_retries" : null,
+        next_sync_at: new Date(
+          Date.now() + (delay ?? RECONCILIATION_INTERVAL_MS),
+        ).toISOString(),
+      }).eq("id", source.id).eq("tenant_id", source.tenant_id);
+      const runId = runs.get(source.id);
+      if (runId) {
+        await context.admin.from("legal_sync_runs").update({
+          status: rateLimited ? "partial" : "failed",
+          error_code: code,
+          error_message: errorMessage(error),
+          finished_at: finishedAt,
+        }).eq("id", runId).eq("tenant_id", source.tenant_id);
+      }
+      outcomes.push({
+        status: rateLimited ? "pending" : "failed",
+        code,
+      });
+    }
+    return outcomes;
+  }
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -316,7 +574,7 @@ Deno.serve(async (request) => {
     admin: auth.admin,
     mode: auth.mode,
     actorId: auth.mode === "manual" ? auth.userId : null,
-    escavadorToken: Deno.env.get("ESCAVADOR_API_TOKEN") ?? null,
+    escavadorToken: await getEscavadorToken(auth.admin),
     dataJudAuthorization,
   };
 
@@ -339,10 +597,24 @@ Deno.serve(async (request) => {
   const { data: sources, error } = await query;
   if (error) return json({ error: "operation_failed" }, 500);
 
-  const results = { processed: 0, succeeded: 0, failed: 0, pending: 0 };
+  const results = {
+    processed: 0,
+    succeeded: 0,
+    partial: 0,
+    failed: 0,
+    pending: 0,
+  };
   const failures: Array<{ reference: string; code: string }> = [];
 
-  for (const source of (sources ?? []) as SyncSource[]) {
+  const typedSources = (sources ?? []) as SyncSource[];
+  const legacySources = typedSources.filter((source) =>
+    source.provider !== "djen"
+  );
+  const djenSources = typedSources.filter((source) =>
+    source.provider === "djen"
+  );
+
+  for (const source of legacySources) {
     const outcome = await reconcileSource(context, source);
     results.processed += 1;
     if (outcome.status === "succeeded") {
@@ -359,12 +631,32 @@ Deno.serve(async (request) => {
     }
   }
 
+  for (const group of groupDjenReferences(djenSources)) {
+    const outcomes = await reconcileDjenGroup(context, group);
+    let rateLimited = false;
+    outcomes.forEach((outcome, index) => {
+      const source = group[index];
+      results.processed += 1;
+      if (outcome.status === "succeeded") results.succeeded += 1;
+      else if (outcome.status === "partial") results.partial += 1;
+      else if (outcome.status === "pending") results.pending += 1;
+      else results.failed += 1;
+      if (outcome.code) {
+        failures.push({ reference: source.reference, code: outcome.code });
+        if (outcome.code === "djen_rate_limited") rateLimited = true;
+      }
+    });
+    // O limite é por IP. As demais fontes ficam vencidas para a próxima janela,
+    // sem produzir chamadas que o CNJ já informou que recusará.
+    if (rateLimited) break;
+  }
+
   return json({
     mode: auth.mode,
     ...results,
     failures: failures.slice(0, 20),
     message: results.processed === 0
       ? "Nenhuma fonte monitorada estava pendente."
-      : `${results.succeeded} de ${results.processed} fonte(s) reconciliada(s).`,
+      : `${results.succeeded + results.partial} de ${results.processed} fonte(s) reconciliada(s).`,
   });
 });

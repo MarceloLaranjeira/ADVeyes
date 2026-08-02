@@ -5,6 +5,7 @@ import {
   formatCnj,
   nextAttemptDelayMs,
   normalizeDataJudMovements,
+  normalizeDjenPublication,
   normalizeEscavadorPublication,
   resolveOriginSystem,
   RETRY_DELAYS_MS,
@@ -164,6 +165,61 @@ describe("normalizeEscavadorPublication", () => {
   });
 });
 
+describe("normalizeDjenPublication", () => {
+  const receivedAt = "2026-08-01T12:00:00.000Z";
+
+  it("converte a comunicação oficial do CNJ e remove marcação HTML", () => {
+    const normalized = normalizeDjenPublication({
+      id: 651169325,
+      hash: "hash-oficial",
+      data_disponibilizacao: "2026-07-31",
+      siglaTribunal: "TJMG",
+      tipoComunicacao: "Intimação",
+      nomeOrgao: "TJMG - 5ª Câmara Criminal",
+      texto: "Fica a parte <b>intimada</b><br />no prazo de cinco dias.",
+      numero_processo: "00128291820248130686",
+      link: "https://www4.tjmg.jus.br/consulta",
+      tipoDocumento: "Apelação",
+      nomeClasse: "Apelação Criminal",
+    }, { receivedAt });
+
+    expect(normalized.externalId).toBe("651169325");
+    expect(normalized.numeroProcesso).toBe("0012829-18.2024.8.13.0686");
+    expect(normalized.content).toBe(
+      "Fica a parte intimada no prazo de cinco dias.",
+    );
+    expect(normalized.publishedAt).toBe("2026-07-31T00:00:00.000Z");
+    expect(normalized.tribunal).toBe("TJMG");
+    expect(normalized.possibleDeadline).toBe(true);
+    expect(normalized.sourceName).toBe("TJMG - 5ª Câmara Criminal");
+  });
+
+  it("usa o hash como identidade e mantém origem desconhecida sem evidência", () => {
+    const normalized = normalizeDjenPublication({
+      hash: "hash-sem-id",
+      texto: "Autos conclusos ao magistrado.",
+      siglaTribunal: "TJAM",
+    }, { receivedAt });
+
+    expect(normalized.externalId).toBe("hash-sem-id");
+    expect(normalized.publishedAt).toBe(receivedAt);
+    expect(normalized.originSystem).toBe("unknown");
+    expect(normalized.possibleDeadline).toBe(false);
+  });
+
+  it("decodifica entidades HTML nomeadas e numéricas do DJEN", () => {
+    const normalized = normalizeDjenPublication({
+      texto:
+          "PODER JUDICI&amp;Aacute;RIO — Intima&amp;ccedil;&amp;atilde;o da parte &#193; autora.",
+      siglaTribunal: "TJGO",
+    }, { receivedAt });
+
+    expect(normalized.content).toBe(
+      "PODER JUDICIÁRIO — Intimação da parte Á autora.",
+    );
+  });
+});
+
 describe("normalizeDataJudMovements", () => {
   it("converte movimentos oficiais em andamentos, nunca em publicações", () => {
     const movements = normalizeDataJudMovements({
@@ -190,8 +246,8 @@ describe("normalizeDataJudMovements", () => {
       true,
     );
     expect(movements[0].externalId).toBe("26:2026-07-02T10:00:00.000Z");
-    expect(movements[0].content).toContain("Distribuição");
-    expect(movements[0].content).toContain("tipo: sorteio");
+    expect(movements[0].title).toBe("Distribuição");
+    expect(movements[0].content).toContain("Tipo: sorteio");
     expect(movements[1].externalId).toBe(
       "juntada-de-peticao:2026-07-01T09:30:00.000Z",
     );
@@ -232,8 +288,45 @@ describe("normalizeDataJudMovements", () => {
     });
 
     expect(movements).toHaveLength(1);
-    expect(movements[0].content).toContain("tipo_de_documento: Certidão");
-    expect(movements[0].content).toContain("quantidade: 2");
+    expect(movements[0].title).toBe("Juntada");
+    expect(movements[0].movementType).toBe("DOCUMENTO");
+    expect(movements[0].content).toContain("Tipo de documento: Certidão");
+    expect(movements[0].content).toContain("Quantidade: 2");
+  });
+
+  it("substitui o título genérico Documento pelo tipo legível", () => {
+    const [movement] = normalizeDataJudMovements({
+      tribunal: "TJGO",
+      movimentos: [{
+        codigo: 60,
+        nome: "Documento",
+        dataHora: "2026-07-03T05:28:00.000Z",
+        complementosTabelados: [
+          { descricao: "tipo_de_documento", nome: "Certidão", valor: 24 },
+        ],
+      }],
+    });
+
+    expect(movement.title).toBe("Certidão");
+    expect(movement.movementType).toBe("DOCUMENTO");
+    expect(movement.content).toBe("Documento registrado: Certidão.");
+  });
+
+  it("corrige complementos entregues com chave e valor invertidos", () => {
+    const [movement] = normalizeDataJudMovements({
+      tribunal: "TJGO",
+      movimentos: [{
+        codigo: 85,
+        nome: "Mandado",
+        dataHora: "2026-05-12T09:52:00.000Z",
+        complementosTabelados: [
+          { descricao: "Entregue ao destinatário", nome: "resultado" },
+        ],
+      }],
+    });
+
+    expect(movement.title).toBe("Mandado");
+    expect(movement.content).toBe("Resultado: Entregue ao destinatário");
   });
 
   it("não quebra quando o provedor envia número no lugar de texto", () => {

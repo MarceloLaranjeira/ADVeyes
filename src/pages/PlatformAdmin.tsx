@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DepthCard } from "@/components/dashboard/DepthCard";
 import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
+import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Table,
   TableBody,
@@ -10,12 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import {
-  buildTenantAppUrl,
-  shouldNavigateTenantInPlace,
-} from "@/lib/tenant-host";
 import {
   platformAdmin,
   type PlatformOverview,
@@ -24,7 +20,6 @@ import {
   AlertTriangle,
   Building2,
   ChevronRight,
-  LogOut,
   RefreshCw,
   Scale,
   ShieldCheck,
@@ -45,8 +40,7 @@ const statusLabel: Record<string, string> = {
 type TenantListMode = "all" | "active" | "members" | "monitored" | "failures";
 
 const PlatformAdmin = () => {
-  const { user, signOut } = useAuth();
-  const { host, memberships, selectTenant } = useTenant();
+  const { selectPlatformTenant } = useTenant();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,22 +64,27 @@ const PlatformAdmin = () => {
   }, [load]);
 
   const openTenant = (tenantId: string) => {
-    const membership = memberships.find((item) => item.tenantId === tenantId);
-    if (!membership) return;
-
-    if (shouldNavigateTenantInPlace(host)) {
-      selectTenant(membership);
-      navigate("/");
-      return;
-    }
-
-    window.location.assign(
-      buildTenantAppUrl({
-        slug: membership.slug,
-        pathname: "/",
-        protocol: window.location.protocol,
-      }),
-    );
+    const tenant = overview?.tenants.find((item) => item.id === tenantId);
+    if (!tenant) return;
+    selectPlatformTenant({
+      tenantId: tenant.id,
+      slug: tenant.slug,
+      displayName: tenant.displayName,
+      status: tenant.status,
+      role: "admin",
+      dataScope: "tenant",
+      accessMode: "platform",
+      branding: {
+        publicName: tenant.displayName,
+        shortName: tenant.displayName,
+        logoLightPath: null,
+        logoDarkPath: null,
+        faviconPath: null,
+        iconPath: null,
+        colorTokens: {},
+      },
+    });
+    navigate("/");
   };
 
   const displayedTenants = useMemo(() => {
@@ -143,44 +142,26 @@ const PlatformAdmin = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="font-semibold">ADVeyes — Conta geral</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
-            </div>
-            <EnvironmentSwitcher
-              mode="platform"
-              onTenantSelect={(tenant) => openTenant(tenant.tenantId)}
-              className="ml-3 hidden sm:inline-flex"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void load()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Atualizar
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-[1500px] space-y-8 px-5 py-8">
-        <div>
+    <AppLayout>
+      <div className="space-y-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             Visão geral da plataforma
           </h1>
           <p className="mt-1 text-muted-foreground">
             Escritórios, usuários, assinaturas e integrações jurídicas.
           </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <EnvironmentSwitcher
+              mode="platform"
+              onTenantSelect={(tenant) => openTenant(tenant.tenantId)}
+            />
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+            </Button>
+          </div>
         </div>
 
         {error ? (
@@ -250,9 +231,6 @@ const PlatformAdmin = () => {
                   </TableHeader>
                   <TableBody>
                     {displayedTenants.map((tenant) => {
-                      const canOpen = memberships.some(
-                        (item) => item.tenantId === tenant.id,
-                      );
                       return (
                         <TableRow key={tenant.id}>
                           <TableCell>
@@ -283,7 +261,6 @@ const PlatformAdmin = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={!canOpen}
                               onClick={() => openTenant(tenant.id)}
                             >
                               Abrir
@@ -306,8 +283,8 @@ const PlatformAdmin = () => {
             </DepthCard>
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 };
 

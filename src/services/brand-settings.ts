@@ -34,36 +34,43 @@ interface BrandSettingsRow {
   color_tokens: Record<string, string> | null;
 }
 
+interface BrandFunctionResponse {
+  settings?: BrandSettingsRow | null;
+  saved?: boolean;
+  upload?: {
+    path: string;
+    token: string;
+    publicUrl: string;
+  };
+  error?: string;
+}
+
+async function invokeBrandSettings(
+  body: Record<string, unknown>,
+): Promise<BrandFunctionResponse> {
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke("tenant-brand-settings", { body }),
+  );
+  if (error || !data || typeof data !== "object") {
+    throw new BrandSettingsError(
+      "operation_failed",
+      "Não foi possível acessar a identidade visual.",
+    );
+  }
+  const response = data as BrandFunctionResponse;
+  if (response.error) {
+    throw new BrandSettingsError(response.error, response.error === "permission_denied"
+      ? "Você não tem permissão para alterar a identidade visual."
+      : "Não foi possível acessar a identidade visual.");
+  }
+  return response;
+}
+
 export async function loadBrandSettings(
   tenantId: string,
 ): Promise<BrandSettings> {
-  const { data, error } = await withTimeout(
-    (supabase as never as {
-      from: (table: string) => {
-        select: (columns: string) => {
-          eq: (column: string, value: string) => {
-            maybeSingle: () => Promise<{
-              data: BrandSettingsRow | null;
-              error: { message: string } | null;
-            }>;
-          };
-        };
-      };
-    })
-      .from("tenant_brand_settings")
-      .select(
-        "public_name, short_name, logo_light_path, logo_dark_path, icon_path, color_tokens",
-      )
-      .eq("tenant_id", tenantId)
-      .maybeSingle(),
-  );
-
-  if (error) {
-    throw new BrandSettingsError(
-      "load_failed",
-      "Não foi possível carregar a identidade visual.",
-    );
-  }
+  const response = await invokeBrandSettings({ action: "load", tenantId });
+  const data = response.settings;
 
   return {
     publicName: data?.public_name ?? null,
@@ -75,10 +82,6 @@ export async function loadBrandSettings(
   };
 }
 
-/**
- * Envia a logo para a pasta do escritório. O primeiro segmento do caminho é o
- * `tenant_id`, que é o que a política do storage usa para isolar os arquivos.
- */
 export async function uploadBrandLogo(input: {
   tenantId: string;
   file: File;
@@ -97,58 +100,52 @@ export async function uploadBrandLogo(input: {
     );
   }
 
-  const extension = input.file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `${input.tenantId}/${input.variant}-${Date.now()}.${extension}`;
+  const extensionByType: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+  };
+  const extension = extensionByType[input.file.type];
+  const response = await invokeBrandSettings({
+    action: "create_upload",
+    tenantId: input.tenantId,
+    variant: input.variant,
+    extension,
+  });
+  if (!response.upload?.path || !response.upload.token || !response.upload.publicUrl) {
+    throw new BrandSettingsError(
+      "upload_failed",
+      "Não foi possível preparar o envio da imagem.",
+    );
+  }
 
   const { error } = await withTimeout(
-    supabase.storage.from(BUCKET).upload(path, input.file, {
-      cacheControl: "3600",
-      upsert: true,
-      contentType: input.file.type,
-    }),
+    supabase.storage.from(BUCKET).uploadToSignedUrl(
+      response.upload.path,
+      response.upload.token,
+      input.file,
+      {
+        cacheControl: "3600",
+        contentType: input.file.type,
+      },
+    ),
     30_000,
   );
 
   if (error) {
     throw new BrandSettingsError(
       "upload_failed",
-      "Não foi possível enviar a imagem. Confira se você tem permissão de administrador.",
+      "Não foi possível enviar a imagem. Tente novamente.",
     );
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  return response.upload.publicUrl;
 }
 
 export async function saveBrandSettings(
   tenantId: string,
   settings: BrandSettings,
 ): Promise<void> {
-  const { error } = await withTimeout(
-    (supabase as never as {
-      from: (table: string) => {
-        upsert: (
-          values: Record<string, unknown>,
-          options: { onConflict: string },
-        ) => Promise<{ error: { message: string } | null }>;
-      };
-    })
-      .from("tenant_brand_settings")
-      .upsert({
-        tenant_id: tenantId,
-        public_name: settings.publicName,
-        short_name: settings.shortName,
-        logo_light_path: settings.logoLightPath,
-        logo_dark_path: settings.logoDarkPath,
-        icon_path: settings.iconPath,
-        color_tokens: settings.colorTokens,
-      }, { onConflict: "tenant_id" }),
-  );
-
-  if (error) {
-    throw new BrandSettingsError(
-      "save_failed",
-      "Não foi possível salvar. Somente proprietário ou administrador pode alterar a identidade visual.",
-    );
-  }
+  await invokeBrandSettings({ action: "save", tenantId, settings });
 }

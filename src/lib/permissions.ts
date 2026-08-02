@@ -178,7 +178,12 @@ export const PERMISSION_GROUPS: Array<{
   },
 ];
 
-export type PermissionOverrides = Record<string, Record<string, boolean>>;
+export type PermissionOverrideValue = "allow" | "deny";
+export type PermissionOverrideState = "inherit" | PermissionOverrideValue;
+export type PermissionOverrides = Record<
+  string,
+  Record<string, PermissionOverrideValue>
+>;
 
 export function permissionLevel(
   row: PermissionRow,
@@ -189,23 +194,24 @@ export function permissionLevel(
   return "nunca";
 }
 
-export function hasOverride(
+export function overrideState(
   overrides: PermissionOverrides | null | undefined,
   row: PermissionRow,
-): boolean {
-  return overrides?.[row.module]?.[row.action] === true;
+): PermissionOverrideState {
+  const value = overrides?.[row.module]?.[row.action];
+  return value === "allow" || value === "deny" ? value : "inherit";
 }
 
-export function toggleOverride(
+export function setOverrideState(
   overrides: PermissionOverrides,
   row: PermissionRow,
-  granted: boolean,
+  state: PermissionOverrideState,
 ): PermissionOverrides {
   const next: PermissionOverrides = { ...overrides };
   const moduleActions = { ...(next[row.module] ?? {}) };
 
-  if (granted) moduleActions[row.action] = true;
-  else delete moduleActions[row.action];
+  if (state === "inherit") delete moduleActions[row.action];
+  else moduleActions[row.action] = state;
 
   if (Object.keys(moduleActions).length === 0) delete next[row.module];
   else next[row.module] = moduleActions;
@@ -213,9 +219,33 @@ export function toggleOverride(
   return next;
 }
 
-/** Exceções que podem ser oferecidas para um perfil específico. */
+/** Permissões editáveis individualmente; propriedade nunca é sobrescrita. */
+export function editablePermissions(): PermissionRow[] {
+  return PERMISSION_GROUPS.flatMap((group) => group.rows).filter(
+    (row) => !(row.module === "ownership" && row.action === "transfer"),
+  );
+}
+
+/** Compatibilidade com a primeira versão da tela de exceções. */
 export function exceptionsForRole(role: TeamRole): PermissionRow[] {
   return PERMISSION_GROUPS.flatMap((group) => group.rows).filter((row) =>
     row.exception.includes(role)
   );
+}
+
+/** @deprecated Use overrideState para distinguir herança, permissão e negação. */
+export function hasOverride(
+  overrides: PermissionOverrides | null | undefined,
+  row: PermissionRow,
+): boolean {
+  return overrideState(overrides, row) === "allow";
+}
+
+/** @deprecated Use setOverrideState. Mantido para migração e testes legados. */
+export function toggleOverride(
+  overrides: PermissionOverrides,
+  row: PermissionRow,
+  granted: boolean,
+): PermissionOverrides {
+  return setOverrideState(overrides, row, granted ? "allow" : "inherit");
 }

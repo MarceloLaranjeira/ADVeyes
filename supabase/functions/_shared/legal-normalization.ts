@@ -10,7 +10,7 @@ export type OriginSystem =
   | "other"
   | "unknown";
 
-export type PublicationProvider = "escavador" | "manual" | "legacy";
+export type PublicationProvider = "djen" | "escavador" | "manual" | "legacy";
 export type MovementProvider = "escavador" | "datajud" | "manual";
 export type MovementType = "ANDAMENTO" | "DOCUMENTO";
 
@@ -25,6 +25,9 @@ export const RETRY_DELAYS_MS = [
 
 /** Intervalo padrão de reconciliação de uma fonte saudável. */
 export const RECONCILIATION_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** O DJEN é verificado a cada dez minutos. */
+export const DJEN_RECONCILIATION_INTERVAL_MS = 10 * 60 * 1000;
 
 export interface NormalizedPublication {
   externalId: string | null;
@@ -185,6 +188,113 @@ export interface EscavadorPublicationPayload {
   [key: string]: unknown;
 }
 
+export interface DjenPublicationPayload {
+  id?: number | string | null;
+  hash?: string | null;
+  data_disponibilizacao?: string | null;
+  datadisponibilizacao?: string | null;
+  siglaTribunal?: string | null;
+  tipoComunicacao?: string | null;
+  nomeOrgao?: string | null;
+  texto?: string | null;
+  numero_processo?: string | null;
+  numeroprocessocommascara?: string | null;
+  meiocompleto?: string | null;
+  link?: string | null;
+  tipoDocumento?: string | null;
+  nomeClasse?: string | null;
+  [key: string]: unknown;
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  Aacute: "Á", aacute: "á", Acirc: "Â", acirc: "â", Agrave: "À",
+  agrave: "à", Atilde: "Ã", atilde: "ã", Ccedil: "Ç", ccedil: "ç",
+  Eacute: "É", eacute: "é", Ecirc: "Ê", ecirc: "ê", Iacute: "Í",
+  iacute: "í", Oacute: "Ó", oacute: "ó", Ocirc: "Ô", ocirc: "ô",
+  Otilde: "Õ", otilde: "õ", Uacute: "Ú", uacute: "ú", Uuml: "Ü",
+  uuml: "ü", ordm: "º", ordf: "ª", ndash: "–", mdash: "—",
+  laquo: "«", raquo: "»",
+};
+
+function decodeOneHtmlLayer(value: string): string {
+  return value.replace(
+    /&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi,
+    (match, entity: string) => {
+      if (entity.startsWith("#x") || entity.startsWith("#X")) {
+        const code = Number.parseInt(entity.slice(2), 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      }
+      if (entity.startsWith("#")) {
+        const code = Number.parseInt(entity.slice(1), 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      }
+      return HTML_ENTITIES[entity] ?? match;
+    },
+  );
+}
+
+function decodeHtmlEntities(value: string): string {
+  let decoded = value;
+
+  for (let layer = 0; layer < 4; layer += 1) {
+    const next = decodeOneHtmlLayer(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
+}
+
+function plainText(value: unknown): string {
+  return decodeHtmlEntities(collapse(value))
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Converte uma comunicação oficial do DJEN no contrato interno. */
+export function normalizeDjenPublication(
+  raw: DjenPublicationPayload,
+  context: { receivedAt: string },
+): NormalizedPublication {
+  const content = plainText(raw.texto) || "Publicação sem conteúdo textual.";
+  const sourceName = collapse(raw.nomeOrgao) || collapse(raw.meiocompleto) ||
+    "DJEN/CNJ";
+  const sourceUrl = collapse(raw.link) || null;
+  const availableAt = isoOrNull(raw.data_disponibilizacao) ??
+    isoOrNull(raw.datadisponibilizacao);
+  const externalId = raw.id == null
+    ? collapse(raw.hash) || null
+    : String(raw.id);
+  const tipo = collapse(raw.tipoComunicacao) ||
+    collapse(raw.tipoDocumento) || "publicacao";
+  const summaryParts = [
+    collapse(raw.tipoDocumento),
+    collapse(raw.nomeClasse),
+    content.slice(0, 240),
+  ].filter(Boolean);
+
+  return {
+    externalId,
+    tipo: tipo.toLocaleLowerCase("pt-BR"),
+    tribunal: collapse(raw.siglaTribunal) || "Não identificado",
+    numeroProcesso: formatCnj(
+      raw.numero_processo ?? raw.numeroprocessocommascara,
+    ) || null,
+    publishedAt: availableAt ?? context.receivedAt,
+    availableAt,
+    content,
+    summary: summaryParts.join(" — ") || null,
+    originSystem: resolveOriginSystem({ sourceName, sourceUrl, content }),
+    sourceName,
+    sourceUrl,
+    possibleDeadline: detectPossibleDeadline(content),
+    payload: raw as Record<string, unknown>,
+  };
+}
+
 /** Converte uma publicação do Escavador no contrato interno. */
 export function normalizeEscavadorPublication(
   raw: EscavadorPublicationPayload,
@@ -287,6 +397,63 @@ function slug(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+const COMPLEMENT_LABELS: Record<string, string> = {
+  tipo_de_documento: "Tipo de documento",
+  tipo_documento: "Tipo de documento",
+  tipo: "Tipo",
+  resultado: "Resultado",
+  quantidade: "Quantidade",
+  nome_da_parte: "Parte",
+  nome_parte: "Parte",
+  parte: "Parte",
+  destinatario: "Destinatário",
+  modalidade: "Modalidade",
+  motivo: "Motivo",
+  situacao: "Situação",
+};
+
+const GENERIC_MOVEMENT_TITLES = new Set([
+  "documento",
+  "movimento",
+  "movimentacao",
+  "movimentação",
+]);
+
+function readableLabel(value: string): string {
+  const normalized = value.trim().toLocaleLowerCase("pt-BR");
+  if (COMPLEMENT_LABELS[normalized]) return COMPLEMENT_LABELS[normalized];
+  const words = value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return words
+    ? `${words.charAt(0).toLocaleUpperCase("pt-BR")}${words.slice(1)}`
+    : "Detalhe";
+}
+
+function looksLikeComplementKey(value: string): boolean {
+  const normalized = value.toLocaleLowerCase("pt-BR").trim();
+  return normalized in COMPLEMENT_LABELS || /[_-]/.test(normalized);
+}
+
+function normalizeComplement(complement: {
+  nome?: string | number | null;
+  valor?: string | number | null;
+  descricao?: string | number | null;
+}): { key: string; label: string; value: string } | null {
+  const description = collapse(complement.descricao);
+  const name = collapse(complement.nome);
+  const rawValue = collapse(complement.valor);
+
+  let key = description;
+  let value = name || rawValue;
+  if (looksLikeComplementKey(name) && !looksLikeComplementKey(description)) {
+    key = name;
+    value = description || rawValue;
+  }
+  if (!key && value) key = "detalhe";
+  if (!key || !value) return null;
+
+  return { key, label: readableLabel(key), value };
+}
+
 /**
  * Converte movimentos do DataJud em andamentos.
  * Movimento oficial nunca vira publicação: a separação é estrutural.
@@ -299,33 +466,44 @@ export function normalizeDataJudMovements(
 
   return (source.movimentos ?? [])
     .map((movement, index): NormalizedMovement | null => {
-      const title = collapse(movement.nome);
-      if (!title) return null;
+      const rawTitle = collapse(movement.nome);
+      if (!rawTitle) return null;
 
       const occurredAt = isoOrNull(movement.dataHora);
       const complements = (movement.complementosTabelados ?? [])
-        .map((complement) => {
-          // No DataJud, `descricao` nomeia o complemento (por exemplo
-          // "tipo_de_documento") e `nome` traz o valor legível ("Certidão").
-          // `valor` é o código numérico correspondente.
-          const label = collapse(complement.descricao);
-          const value = collapse(complement.nome) || collapse(complement.valor);
-          if (!label && !value) return "";
-          return label && value ? `${label}: ${value}` : label || value;
-        })
-        .filter((entry) => entry !== "");
+        .map(normalizeComplement)
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+      const normalizedRawTitle = rawTitle.toLocaleLowerCase("pt-BR");
+      const documentComplement = complements.find((entry) =>
+        ["tipo_de_documento", "tipo_documento"].includes(
+          entry.key.toLocaleLowerCase("pt-BR"),
+        )
+      );
+      const title = GENERIC_MOVEMENT_TITLES.has(normalizedRawTitle) &&
+          documentComplement?.value
+        ? documentComplement.value
+        : rawTitle;
+      const detailLines = complements
+        .filter((entry) =>
+          !(entry === documentComplement && entry.value === title)
+        )
+        .map((entry) => `${entry.label}: ${entry.value}`);
       const identity = movement.codigo == null
-        ? slug(title) || `movimento-${index}`
+        ? slug(rawTitle) || `movimento-${index}`
         : String(movement.codigo);
 
       return {
         externalId: `${identity}:${occurredAt ?? `posicao-${index}`}`,
-        movementType: "ANDAMENTO",
+        movementType: documentComplement || normalizedRawTitle === "documento"
+          ? "DOCUMENTO"
+          : "ANDAMENTO",
         occurredAt,
         title,
-        content: complements.length
-          ? `${title}\n${complements.join("; ")}`
-          : title,
+        content: detailLines.length
+          ? detailLines.join("\n")
+          : title === rawTitle
+          ? title
+          : `Documento registrado: ${title}.`,
         // O DataJud informa o tribunal, não o sistema processual de origem.
         originSystem: "unknown",
         sourceName,

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
+import { PlatformSupportProvider } from "@/contexts/PlatformSupportContext";
 import { BrandProvider } from "@/contexts/BrandContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { JarvisProvider } from "@/contexts/JarvisContext";
@@ -13,6 +14,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import Landing from "./pages/Landing";
 import Processos from "./pages/Processos";
+import ProcessoDetalhe from "./pages/ProcessoDetalhe";
 import Clientes from "./pages/Clientes";
 import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
@@ -57,7 +59,8 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <TenantProvider>
-              <BrandProvider>
+              <PlatformSupportProvider>
+                <BrandProvider>
                 <SubscriptionProvider>
                   <JarvisProvider>
                   <Routes>
@@ -86,6 +89,7 @@ const App = () => (
                       }
                     />
                     <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
+                    <Route path="/processos/:id" element={<ProtectedRoute><ProcessoDetalhe /></ProtectedRoute>} />
                     <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
                     <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
                     <Route path="/tarefas" element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />
@@ -114,7 +118,8 @@ const App = () => (
                   </Routes>
                   </JarvisProvider>
                 </SubscriptionProvider>
-              </BrandProvider>
+                </BrandProvider>
+              </PlatformSupportProvider>
             </TenantProvider>
           </AuthProvider>
         </BrowserRouter>

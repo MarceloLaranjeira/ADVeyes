@@ -45,6 +45,7 @@ export interface TenantMembership {
   role: "owner" | "admin" | "lawyer" | "assistant" | "finance";
   dataScope: "tenant" | "team" | "assigned";
   branding: TenantBranding;
+  accessMode?: "membership" | "platform";
 }
 
 export type TenantAccessError =
@@ -64,6 +65,7 @@ interface TenantContextValue {
   loading: boolean;
   error: TenantAccessError;
   selectTenant: (tenant: TenantMembership) => void;
+  selectPlatformTenant: (tenant: TenantMembership) => void;
   refresh: () => Promise<void>;
 }
 
@@ -83,12 +85,14 @@ interface CurrentUserTenantRow {
   color_tokens: Record<string, string> | null;
 }
 
-type CurrentUserTenantsRpc = (
-  functionName: "current_user_tenants",
-) => Promise<{
+interface CurrentUserTenantsResult {
   data: CurrentUserTenantRow[] | null;
   error: { message: string } | null;
-}>;
+}
+
+type CurrentUserTenantsRpc = (
+  functionName: "current_user_tenants",
+) => Promise<CurrentUserTenantsResult>;
 
 const TenantContext = createContext<TenantContextValue | null>(null);
 
@@ -111,6 +115,7 @@ const mapMembership = (row: CurrentUserTenantRow): TenantMembership => ({
   status: row.status,
   role: row.membership_role,
   dataScope: row.data_scope,
+  accessMode: "membership",
   branding: {
     publicName: row.public_name || row.display_name || "ADVeyes",
     shortName: row.short_name || row.public_name || row.display_name || "ADVeyes",
@@ -191,7 +196,9 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
 
     setMembershipLoading(true);
     try {
-      const { data, error } = await withTimeout(
+      // `.call` preserva o `this` do cliente; o genérico é explícito porque a
+      // inferência se perde ao passar por ele.
+      const { data, error } = await withTimeout<CurrentUserTenantsResult>(
         (supabase.rpc as unknown as CurrentUserTenantsRpc).call(
           supabase,
           "current_user_tenants",
@@ -209,14 +216,28 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
       const storedSlug = sessionStorage.getItem(
         `adveyes:selected-tenant:${userId}`,
       ) ?? localStorage.getItem(`adveyes:selected-tenant:${userId}`);
+      let storedPlatformTenant: TenantMembership | null = null;
+      try {
+        const raw = sessionStorage.getItem(
+          `adveyes:platform-tenant:${userId}`,
+        );
+        const parsed = raw ? JSON.parse(raw) as TenantMembership : null;
+        if (
+          parsed?.accessMode === "platform" && parsed.tenantId && parsed.slug
+        ) storedPlatformTenant = parsed;
+      } catch {
+        sessionStorage.removeItem(`adveyes:platform-tenant:${userId}`);
+      }
       const selected =
         (host.mode === "tenant"
           ? nextMemberships.find(
               (membership: TenantMembership) => membership.slug === host.slug,
-            )
+            ) ?? (storedPlatformTenant?.slug === host.slug
+              ? storedPlatformTenant
+              : null)
           : nextMemberships.find(
               (membership: TenantMembership) => membership.slug === storedSlug,
-            )) ??
+            ) ?? storedPlatformTenant) ??
         (host.mode === "central" ? nextMemberships[0] : null);
 
       setCurrentTenant(selected ?? null);
@@ -245,6 +266,8 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     (tenant: TenantMembership) => {
       if (!userId) return;
 
+      sessionStorage.removeItem(`adveyes:platform-tenant:${userId}`);
+
       sessionStorage.setItem(
         `adveyes:selected-tenant:${userId}`,
         tenant.slug,
@@ -272,6 +295,32 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     [host, userId],
   );
 
+  const selectPlatformTenant = useCallback(
+    (tenant: TenantMembership) => {
+      if (!userId) return;
+      const platformTenant = { ...tenant, accessMode: "platform" as const };
+      sessionStorage.setItem(
+        `adveyes:platform-tenant:${userId}`,
+        JSON.stringify(platformTenant),
+      );
+      sessionStorage.setItem(
+        `adveyes:selected-tenant:${userId}`,
+        platformTenant.slug,
+      );
+
+      if (shouldNavigateTenantInPlace(host)) {
+        setCurrentTenant(platformTenant);
+        return;
+      }
+      window.location.assign(buildTenantAppUrl({
+        slug: platformTenant.slug,
+        pathname: "/",
+        protocol: window.location.protocol,
+      }));
+    },
+    [host, userId],
+  );
+
   const error = useMemo<TenantAccessError>(() => {
     if (host.mode === "invalid") return "invalid_host";
     if (publicError) return "public_config_failed";
@@ -283,11 +332,15 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     if (
       host.mode === "tenant" &&
       !membershipLoading &&
-      !memberships.some((membership) => membership.slug === host.slug)
+      !memberships.some((membership) => membership.slug === host.slug) &&
+      !(currentTenant?.accessMode === "platform" && currentTenant.slug === host.slug)
     ) {
       return "tenant_forbidden";
     }
-    if (memberships.length === 0 && !membershipLoading) return "no_membership";
+    if (
+      memberships.length === 0 && !membershipLoading &&
+      currentTenant?.accessMode !== "platform"
+    ) return "no_membership";
     return null;
   }, [
     host,
@@ -295,6 +348,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
     membershipLoading,
     membershipUserId,
     memberships,
+    currentTenant,
     publicConfig,
     publicError,
     userId,
@@ -317,6 +371,7 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
           Boolean(userId && membershipUserId !== userId),
         error,
         selectTenant,
+        selectPlatformTenant,
         refresh,
       }}
     >

@@ -21,7 +21,19 @@ import {
   legalIntegrationService,
   type LegalOverview,
 } from "@/services/legal-integration";
-import { AlertTriangle, CheckCircle2, RefreshCw, Scale } from "lucide-react";
+import {
+  platformAdmin,
+  type PlatformIntegrationStatus,
+} from "@/services/platform-admin";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  KeyRound,
+  Newspaper,
+  RefreshCw,
+  Scale,
+} from "lucide-react";
 
 export default function IntegracoesJuridicas() {
   const { currentTenant } = useTenant();
@@ -34,6 +46,10 @@ export default function IntegracoesJuridicas() {
   const [oabState, setOabState] = useState("AM");
   const [frequency, setFrequency] = useState<"DIARIA" | "SEMANAL">("DIARIA");
   const [selected, setSelected] = useState<string[]>([]);
+  const [platformStatus, setPlatformStatus] =
+    useState<PlatformIntegrationStatus | null>(null);
+  const [escavadorToken, setEscavadorToken] = useState("");
+  const isPlatformAccess = currentTenant?.accessMode === "platform";
 
   const load = useCallback(async () => {
     if (!currentTenant) return;
@@ -42,6 +58,11 @@ export default function IntegracoesJuridicas() {
       setOverview(
         await legalIntegrationService.overview(currentTenant.tenantId),
       );
+      if (currentTenant.accessMode === "platform") {
+        setPlatformStatus(await platformAdmin.integrationStatus());
+      } else {
+        setPlatformStatus(null);
+      }
     } catch (error) {
       toast({
         title: "Não foi possível carregar as integrações",
@@ -52,6 +73,30 @@ export default function IntegracoesJuridicas() {
       setLoading(false);
     }
   }, [currentTenant, toast]);
+
+  const saveEscavadorToken = async () => {
+    if (!isPlatformAccess || escavadorToken.trim().length < 16) return;
+    setWorking(true);
+    try {
+      await platformAdmin.setEscavadorToken(escavadorToken.trim());
+      setEscavadorToken("");
+      toast({
+        title: "Escavador conectado",
+        description: "O token global foi validado e armazenado com segurança.",
+      });
+      await load();
+    } catch (error) {
+      toast({
+        title: "Token não configurado",
+        description: error instanceof Error
+          ? error.message
+          : "Não foi possível validar o token do Escavador.",
+        variant: "destructive",
+      });
+    } finally {
+      setWorking(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -136,13 +181,111 @@ export default function IntegracoesJuridicas() {
           </p>
         </div>
 
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Newspaper className="h-4 w-4" /> DJEN/CNJ
+                </CardTitle>
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  Ativo
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Publicações oficiais automáticas por OAB e processo. Não exige
+              token do escritório.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Database className="h-4 w-4" /> DataJud/CNJ
+                </CardTitle>
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  Ativo
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Processos e andamentos oficiais, normalizados e vinculados ao
+              cadastro do escritório.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <KeyRound className="h-4 w-4" /> Escavador
+                </CardTitle>
+                <Badge
+                  variant={overview?.providerConfigured ? "secondary" : "outline"}
+                  className={overview?.providerConfigured
+                    ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                    : "border-amber-300 text-amber-800"}
+                >
+                  {overview?.providerConfigured ? "Conectado" : "Aguardando token"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              Fonte complementar para descoberta e monitoramento ampliado. As
+              fontes oficiais continuam funcionando sem ela.
+            </CardContent>
+          </Card>
+        </div>
+
+        {isPlatformAccess && (
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg">
+                    Credencial global do Escavador
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Visível somente para a Conta geral. O token é criptografado
+                    e nunca é exibido novamente.
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {platformStatus?.providers.escavador.configured
+                    ? "Configurado"
+                    : "Não configurado"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={escavadorToken}
+                onChange={(event) => setEscavadorToken(event.target.value)}
+                placeholder="Cole o token recebido do Escavador"
+                aria-label="Token global do Escavador"
+              />
+              <Button
+                className="shrink-0"
+                disabled={working || escavadorToken.trim().length < 16}
+                onClick={() => void saveEscavadorToken()}
+              >
+                {working && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                Validar e salvar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {!overview?.providerConfigured && (
           <Alert className="border-amber-300 bg-amber-50">
             <AlertTriangle className="h-4 w-4 text-amber-700" />
-            <AlertTitle>Aguardando token do Escavador</AlertTitle>
+            <AlertTitle>Escavador complementar aguardando token</AlertTitle>
             <AlertDescription>
-              Você já pode cadastrar as OABs. Nenhuma consulta paga ou
-              monitoração será executada até o token ser configurado.
+              O DJEN/CNJ e o DataJud/CNJ continuam ativos. Você já pode
+              cadastrar as OABs; apenas as consultas pagas e o monitoramento
+              complementar aguardam a credencial.
             </AlertDescription>
           </Alert>
         )}

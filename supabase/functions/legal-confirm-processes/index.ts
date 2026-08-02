@@ -7,6 +7,7 @@ import {
   createProcessMonitor,
   EscavadorApiError,
 } from "../_shared/escavador-client.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
 interface ConfirmRequest {
   action?: "overview" | "confirm";
@@ -77,8 +78,9 @@ Deno.serve(async (request) => {
     ) {
       return json({ error: "operation_failed" }, 500);
     }
+    const token = await getEscavadorToken(auth.admin);
     return json({
-      providerConfigured: Boolean(Deno.env.get("ESCAVADOR_API_TOKEN")),
+      providerConfigured: Boolean(token),
       professionals: professionals.data ?? [],
       registrations: registrations.data ?? [],
       discoveries: discoveries.data ?? [],
@@ -109,7 +111,7 @@ Deno.serve(async (request) => {
     return json({ error: "candidate_not_found" }, 404);
   }
 
-  const token = Deno.env.get("ESCAVADOR_API_TOKEN");
+  const token = await getEscavadorToken(auth.admin);
   const results: Array<Record<string, unknown>> = [];
 
   for (const candidate of candidates ?? []) {

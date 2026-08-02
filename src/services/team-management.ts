@@ -6,6 +6,7 @@ import type {
   TeamOverview,
   TeamRole,
 } from "@/types/team-management";
+import type { PermissionOverrides } from "@/lib/permissions";
 
 const messages: Record<string, string> = {
   unauthorized: "Sua sessão expirou. Entre novamente.",
@@ -22,6 +23,7 @@ const messages: Record<string, string> = {
   email_mismatch: "Entre com exatamente o e-mail que recebeu o convite.",
   already_accepted: "Este convite já foi aceito.",
   invalid_payload: "Confira os dados informados.",
+  invalid_profile: "Confira os dados do perfil.",
   owner_required_for_subscription:
     "Somente o proprietário pode liberar a alteração do plano.",
   operation_failed: "Não foi possível concluir a operação.",
@@ -67,7 +69,7 @@ export const teamManagementService = {
 
   /** Exceções vigentes por membro, indexadas pelo id do vínculo. */
   readPermissions: (tenantId: string) =>
-    invoke<{ permissions: Record<string, Record<string, Record<string, boolean>>> }>(
+    invoke<{ permissions: Record<string, PermissionOverrides> }>(
       "tenant-manage-member",
       { tenantId, action: "read_permissions" },
     ),
@@ -75,13 +77,32 @@ export const teamManagementService = {
   updateMemberPermissions: (
     tenantId: string,
     membershipId: string,
-    permissions: Record<string, Record<string, boolean>>,
+    permissions: PermissionOverrides,
   ) =>
     invoke("tenant-manage-member", {
       tenantId,
       membershipId,
       action: "update_permissions",
       permissions,
+    }),
+
+  updateMemberProfile: (
+    tenantId: string,
+    membershipId: string,
+    profile: {
+      name: string;
+      email: string;
+      phone?: string | null;
+      jobTitle?: string | null;
+      oab?: string | null;
+      avatarUrl?: string | null;
+    },
+  ) =>
+    invoke("tenant-manage-member", {
+      tenantId,
+      membershipId,
+      action: "update_profile",
+      profile,
     }),
 
   inviteMember: (input: InviteMemberInput) =>

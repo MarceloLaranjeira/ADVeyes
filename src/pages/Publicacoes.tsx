@@ -32,14 +32,19 @@ import {
   ChevronUp,
   FileClock,
   FileText,
+  ExternalLink,
   RefreshCw,
   Search,
   Scale,
   ShieldCheck,
 } from "lucide-react";
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
+import { buildProcessTimeline } from "@/lib/process-timeline";
 
 type FeedTab = "publicacoes" | "andamentos";
 
@@ -58,17 +63,20 @@ interface Publicacao {
   prazo_dias: number | null;
   data_prazo: string | null;
   tarefa_gerada: boolean | null;
-  provider: "escavador" | "manual" | "legacy";
+  provider: "djen" | "escavador" | "manual" | "legacy";
   origin_system: "pje" | "projudi" | "seeu" | "dje" | "other" | "unknown";
   review_status: "pending_review" | "reviewed" | "dismissed" | "no_deadline";
   possible_deadline: boolean;
   source_name: string | null;
+  source_url: string | null;
 }
 
 interface Movimento {
   id: string;
   tenant_id: string;
   process_id: string;
+  process_number: string | null;
+  client_name: string | null;
   provider: "escavador" | "datajud" | "manual";
   movement_type: "ANDAMENTO" | "DOCUMENTO";
   occurred_at: string | null;
@@ -86,7 +94,7 @@ interface Processo {
 
 interface SyncRun {
   id: string;
-  provider: "escavador" | "datajud";
+  provider: "djen" | "escavador" | "datajud";
   sync_kind: string;
   status: "running" | "succeeded" | "partial" | "failed";
   records_created: number;
@@ -98,7 +106,7 @@ interface SyncRun {
 interface SyncSource {
   id: string;
   source_kind: "oab" | "process";
-  provider: "escavador" | "datajud";
+  provider: "djen" | "escavador" | "datajud";
   reference: string;
   active: boolean;
   next_sync_at: string;
@@ -109,6 +117,7 @@ interface SyncSource {
 }
 
 const providerLabels: Record<string, string> = {
+  djen: "DJEN/CNJ oficial",
   escavador: "Escavador",
   datajud: "DataJud/CNJ",
   manual: "Manual",
@@ -124,6 +133,11 @@ const failureLabels: Record<string, string> = {
   datajud_unauthorized: "Chave do DataJud recusada",
   datajud_rate_limited: "Limite do DataJud atingido",
   datajud_request_failed: "DataJud indisponível",
+  djen_rate_limited: "Limite temporário do DJEN atingido",
+  djen_request_failed: "DJEN/CNJ temporariamente indisponível",
+  djen_timeout: "DJEN/CNJ demorou para responder",
+  djen_invalid_response: "Resposta inesperada do DJEN/CNJ",
+  djen_invalid_reference: "OAB ou número CNJ inválido",
   datajud_court_not_supported: "Tribunal sem cobertura no DataJud",
   max_retries: "Interrompida após cinco tentativas",
   provider_error: "Falha do provedor",
@@ -160,6 +174,7 @@ function failureLabel(code: string | null) {
 const Publicacoes = () => {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
@@ -293,6 +308,20 @@ const Publicacoes = () => {
     });
   }, [movimentos, processos, search, source]);
 
+  const movementGroups = useMemo(() => {
+    const grouped = new Map<string, Movimento[]>();
+    for (const movement of filteredMovements) {
+      const key = movement.process_id || movement.process_number || "unlinked";
+      grouped.set(key, [...(grouped.get(key) ?? []), movement]);
+    }
+    return Array.from(grouped.entries()).map(([key, items]) => ({
+      key,
+      process: processos.get(items[0]?.process_id),
+      items,
+      timeline: buildProcessTimeline({ movements: items }),
+    }));
+  }, [filteredMovements, processos]);
+
   const stats = useMemo(() => ({
     total: publicacoes.length,
     pending: publicacoes.filter((item) => item.status === "nova").length,
@@ -409,10 +438,14 @@ const Publicacoes = () => {
       .at(-1) ?? null;
 
     return {
-      monitoredOabs: active.filter((source) => source.source_kind === "oab")
-        .length,
-      monitoredProcesses:
-        active.filter((source) => source.source_kind === "process").length,
+      monitoredOabs: new Set(
+        active.filter((source) => source.source_kind === "oab")
+          .map((source) => source.reference),
+      ).size,
+      monitoredProcesses: new Set(
+        active.filter((source) => source.source_kind === "process")
+          .map((source) => source.reference),
+      ).size,
       nextRun,
       lastSuccess,
       pending: syncSources.filter((source) =>
@@ -518,8 +551,9 @@ const Publicacoes = () => {
                 <div>
                   <p className="font-medium">Situação da sincronização</p>
                   <p className="text-xs text-muted-foreground">
-                    O DataJud/CNJ traz andamentos; as publicações chegam pelo
-                    Escavador. Nenhum prazo é criado sem revisão humana.
+                    O DJEN/CNJ traz publicações oficiais; o DataJud/CNJ traz
+                    processos e andamentos. O Escavador é complementar. Nenhum
+                    prazo é criado sem revisão humana.
                   </p>
                 </div>
               </div>
@@ -672,6 +706,10 @@ const Publicacoes = () => {
           <div className="space-y-3">
             {filteredPublications.map((publication) => {
               const expanded = expandedId === publication.id;
+              const readableContent = decodeHtmlEntities(publication.conteudo);
+              const missingOfficialContent = readableContent
+                .toLocaleLowerCase("pt-BR")
+                .includes("não foi possível extrair conteúdo");
               return (
                 <DepthCard key={publication.id}>
                   <CardHeader className="pb-3">
@@ -698,7 +736,7 @@ const Publicacoes = () => {
                             "Processo ainda não vinculado"}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">
-                          {publication.cliente_nome ?? "Cliente não identificado"}
+                          {publication.cliente_nome ?? "Cliente ainda não vinculado"}
                           {" · "}
                           {formattedDate(publication.data_publicacao)}
                           {" · "}
@@ -747,8 +785,27 @@ const Publicacoes = () => {
                       ? "whitespace-pre-wrap text-sm leading-relaxed"
                       : "line-clamp-2 text-sm text-muted-foreground"}
                     >
-                      {publication.conteudo}
+                      {readableContent}
                     </p>
+                    {publication.source_url &&
+                      (expanded || missingOfficialContent) && (
+                        <Button asChild variant="outline" size="sm" className="mt-3">
+                          <a
+                            href={publication.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Abrir publicação no tribunal
+                          </a>
+                        </Button>
+                      )}
+                    {missingOfficialContent && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        O próprio DJEN não forneceu o texto deste documento. Use
+                        o link oficial acima para consultar os autos.
+                      </p>
+                    )}
                   </CardContent>
                 </DepthCard>
               );
@@ -757,61 +814,39 @@ const Publicacoes = () => {
               <EmptyState
                 icon={Bell}
                 title="Nenhuma publicação real encontrada"
-                description="Quando o token do Escavador estiver configurado, as publicações do escritório aparecerão aqui. Dados do DataJud não são apresentados como publicação."
+                description="As publicações oficiais encontradas no DJEN/CNJ por OAB ou processo aparecerão aqui automaticamente. Dados do DataJud não são apresentados como publicação."
               />
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredMovements.map((movement) => {
-              const process = processos.get(movement.process_id);
-              const expanded = expandedId === movement.id;
+          <div className="space-y-5">
+            {movementGroups.map((group) => {
+              const reference = group.items[0];
               return (
-                <DepthCard key={movement.id}>
+                <DepthCard key={group.key}>
                   <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {movement.movement_type === "DOCUMENTO"
-                              ? "Documento"
-                              : "Andamento"}
-                          </Badge>
-                          <Badge variant="secondary">
-                            {providerLabels[movement.provider] ??
-                              movement.provider}
-                          </Badge>
+                          <Badge variant="outline">Processo</Badge>
+                          <Badge variant="secondary">{group.items.length} evento(s)</Badge>
                         </div>
-                        <CardTitle className="text-base">
-                          {movement.title ?? "Movimentação processual"}
+                        <CardTitle className="mt-3 font-mono text-base">
+                          {group.process?.numero ?? reference.process_number ?? "Processo não identificado"}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                          {process?.numero ?? "Processo não identificado"}
-                          {" · "}
-                          {process?.cliente_nome ?? "Cliente não identificado"}
-                          {" · "}
-                          {formattedDate(movement.occurred_at)}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {group.process?.cliente_nome ?? reference.client_name ?? "Cliente não identificado"}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          setExpandedId(expanded ? null : movement.id)}
-                      >
-                        {expanded
-                          ? <ChevronUp className="h-4 w-4" />
-                          : <ChevronDown className="h-4 w-4" />}
-                      </Button>
+                      {group.process && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/processos/${group.process!.id}`)}>
+                          Abrir processo
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className={expanded
-                      ? "whitespace-pre-wrap text-sm leading-relaxed"
-                      : "line-clamp-2 text-sm text-muted-foreground"}
-                    >
-                      {movement.content}
-                    </p>
+                  <CardContent className="pt-2">
+                    <ProcessoTimeline events={group.timeline} previewLimit={4} />
                   </CardContent>
                 </DepthCard>
               );

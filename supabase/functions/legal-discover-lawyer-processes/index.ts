@@ -14,6 +14,7 @@ import {
   type DiscoveredProcess,
   discoverProcessesByOab,
 } from "../_shared/datajud-client.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 import { formatCnj } from "../_shared/legal-normalization.ts";
 
 const OAB_TYPES = new Set([
@@ -160,7 +161,7 @@ Deno.serve(async (request) => {
     return json({ error: "operation_failed" }, 500);
   }
 
-  const token = Deno.env.get("ESCAVADOR_API_TOKEN");
+  const token = await getEscavadorToken(auth.admin);
   if (!token) {
     // Sem o Escavador ainda é possível descobrir processos na base pública do
     // DataJud. Publicações e intimações continuam dependendo do provedor.

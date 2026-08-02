@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MemberFormDialog } from "@/components/equipe/MemberFormDialog";
 import { MemberAccessDialog } from "@/components/equipe/MemberAccessDialog";
+import { MemberProfileDialog } from "@/components/equipe/MemberProfileDialog";
 import { MemberTable } from "@/components/equipe/MemberTable";
 import { PermissoesPanel } from "@/components/equipe/PermissoesPanel";
 import { PendingInvitations } from "@/components/equipe/PendingInvitations";
@@ -10,7 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
 import { useTeamManagement } from "@/hooks/useTeamManagement";
+import { teamManagementService } from "@/services/team-management";
 import { useToast } from "@/hooks/use-toast";
 import type {
   InviteMemberInput,
@@ -24,12 +27,15 @@ import { Clock, Plus, ShieldCheck, UserCheck, Users } from "lucide-react";
 export default function Equipe() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
+  const platformSupport = usePlatformSupport();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [accessMember, setAccessMember] = useState<TeamMember | null>(null);
+  const [profileMember, setProfileMember] = useState<TeamMember | null>(null);
   const management = useTeamManagement(currentTenant?.tenantId ?? null);
-  const canManage = currentTenant?.role === "owner" ||
-    currentTenant?.role === "admin";
+  const canManage = currentTenant?.accessMode === "platform"
+    ? platformSupport.active
+    : currentTenant?.role === "owner" || currentTenant?.role === "admin";
 
   const notifyError = (error: unknown) =>
     toast({
@@ -110,6 +116,28 @@ export default function Equipe() {
       );
       setAccessMember(null);
       toast({ title: "Acesso atualizado" });
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+
+  const updateProfile = async (profile: {
+    name: string;
+    email: string;
+    phone: string | null;
+    jobTitle: string | null;
+    oab: string | null;
+  }) => {
+    if (!currentTenant || !profileMember?.membership_id) return;
+    try {
+      await teamManagementService.updateMemberProfile(
+        currentTenant.tenantId,
+        profileMember.membership_id,
+        profile,
+      );
+      setProfileMember(null);
+      await management.refresh();
+      toast({ title: "Perfil atualizado" });
     } catch (error) {
       notifyError(error);
     }
@@ -228,6 +256,8 @@ export default function Equipe() {
                       onSuspend={(member) => void suspend(member)}
                       onReactivate={(member) => void reactivate(member)}
                       onEdit={setAccessMember}
+                      onEditProfile={setProfileMember}
+                      currentUserId={user?.id ?? null}
                     />
                   </TabsContent>
                   {canManage && (
@@ -269,6 +299,14 @@ export default function Equipe() {
           if (!open) setAccessMember(null);
         }}
         onSubmit={updateAccess}
+      />
+      <MemberProfileDialog
+        member={profileMember}
+        busy={management.mutating}
+        onOpenChange={(open) => {
+          if (!open) setProfileMember(null);
+        }}
+        onSubmit={updateProfile}
       />
     </AppLayout>
   );

@@ -104,6 +104,9 @@ verify_jwt = true
 [functions.platform-admin]
 verify_jwt = true
 
+[functions.tenant-brand-settings]
+verify_jwt = true
+
 [functions.legal-discover-lawyer-processes]
 verify_jwt = true
 
