@@ -34,6 +34,7 @@ import {
   normalizeEscavadorPublication,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
 const DEFAULT_BATCH = 40;
 const MAX_BATCH = 200;
@@ -573,7 +574,7 @@ Deno.serve(async (request) => {
     admin: auth.admin,
     mode: auth.mode,
     actorId: auth.mode === "manual" ? auth.userId : null,
-    escavadorToken: Deno.env.get("ESCAVADOR_API_TOKEN") ?? null,
+    escavadorToken: await getEscavadorToken(auth.admin),
     dataJudAuthorization,
   };
 

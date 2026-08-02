@@ -44,6 +44,18 @@ export interface PlatformSupportStatus {
   session: PlatformSupportSession | null;
 }
 
+export interface PlatformIntegrationStatus {
+  providers: {
+    djen: { configured: boolean; mode: "official" };
+    datajud: { configured: boolean; mode: "official" };
+    escavador: {
+      configured: boolean;
+      updatedAt: string | null;
+      mode: "complementary";
+    };
+  };
+}
+
 async function invokePlatformAdmin<T>(body: Record<string, unknown>) {
   const { data, error } = await withTimeout(
     supabase.functions.invoke("platform-admin", { body }),
@@ -67,6 +79,19 @@ export const platformAdmin = {
 
   async overview() {
     return invokePlatformAdmin<PlatformOverview>({ action: "overview" });
+  },
+
+  async integrationStatus() {
+    return invokePlatformAdmin<PlatformIntegrationStatus>({
+      action: "integration_status",
+    });
+  },
+
+  async setEscavadorToken(token: string) {
+    return invokePlatformAdmin<{ configured: boolean; updatedAt: string | null }>({
+      action: "set_escavador_token",
+      token,
+    });
   },
 
   async supportStatus(tenantId: string) {

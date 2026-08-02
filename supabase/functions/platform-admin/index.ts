@@ -3,16 +3,23 @@ import {
   corsHeaders,
   json,
 } from "../_shared/tenant-auth.ts";
+import {
+  getEscavadorStatus,
+  providerSecretNames,
+} from "../_shared/provider-secrets.ts";
 
 interface PlatformAdminRequest {
   action?:
     | "session"
     | "overview"
+    | "integration_status"
+    | "set_escavador_token"
     | "support_status"
     | "start_support"
     | "end_support";
   tenantId?: string;
   reason?: string;
+  token?: string;
 }
 
 interface TenantRow {
@@ -72,6 +79,79 @@ Deno.serve(async (request) => {
 
   if (action === "session") {
     return json({ isPlatformAdmin: true });
+  }
+
+  if (action === "integration_status") {
+    const escavador = await getEscavadorStatus(auth.admin);
+    return json({
+      providers: {
+        djen: { configured: true, mode: "official" },
+        datajud: {
+          configured: Boolean(Deno.env.get("DATAJUD_API_KEY")?.trim()),
+          mode: "official",
+        },
+        escavador: {
+          configured: escavador.configured,
+          updatedAt: escavador.updatedAt,
+          mode: "complementary",
+        },
+      },
+    });
+  }
+
+  if (action === "set_escavador_token") {
+    const token = typeof body.token === "string" ? body.token.trim() : "";
+    if (token.length < 16 || token.length > 4096) {
+      return json({ error: "invalid_secret_value" }, 400);
+    }
+
+    let validation: Response;
+    try {
+      validation = await fetch("https://api.escavador.com/api/v2/callbacks", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        signal: AbortSignal.timeout(12_000),
+      });
+    } catch {
+      return json({ error: "escavador_validation_unavailable" }, 503);
+    }
+
+    if (validation.status === 401 || validation.status === 403) {
+      return json({ error: "escavador_unauthorized" }, 400);
+    }
+    if (!validation.ok) {
+      return json({ error: "escavador_validation_unavailable" }, 503);
+    }
+
+    const { data: saved, error: saveError } = await auth.admin.rpc(
+      "platform_upsert_integration_secret",
+      {
+        p_name: providerSecretNames.escavador,
+        p_secret: token,
+        p_description: "Token global da API Escavador do ADVeyes",
+      },
+    );
+    if (saveError) {
+      console.error("platform-admin: failed to persist integration secret");
+      return json({ error: "operation_failed" }, 500);
+    }
+
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.integration_secret_rotated",
+      target_type: "integration_provider",
+      target_id: "escavador",
+      metadata: { validated: true },
+    });
+
+    const row = Array.isArray(saved) ? saved[0] : saved;
+    return json({
+      configured: true,
+      updatedAt: typeof row?.updated_at === "string" ? row.updated_at : null,
+    });
   }
 
   if (["support_status", "start_support", "end_support"].includes(action)) {

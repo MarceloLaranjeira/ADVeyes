@@ -7,6 +7,7 @@ import {
   corsHeaders,
   json,
 } from "../_shared/tenant-auth.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 import {
   EscavadorApiError,
   fetchLawyerPublications,
@@ -61,7 +62,7 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: "operation_failed" }, 500);
   if (!membership) return json({ error: "permission_denied" }, 403);
 
-  const token = Deno.env.get("ESCAVADOR_API_TOKEN");
+  const token = await getEscavadorToken(auth.admin);
   if (!token) {
     return json({
       error: "integration_not_configured",

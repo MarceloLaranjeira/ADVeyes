@@ -133,11 +133,21 @@ export async function ingestMovements(
 ): Promise<IngestionResult> {
   if (!input.movements.length) return { ...EMPTY };
 
+  const { data: process, error: processError } = await admin
+    .from("processos")
+    .select("numero, cliente_nome")
+    .eq("tenant_id", input.tenantId)
+    .eq("id", input.processId)
+    .maybeSingle();
+  if (processError) throw processError;
+
   const rows = input.movements
     .filter((movement) => movement.externalId)
     .map((movement) => ({
       tenant_id: input.tenantId,
       process_id: input.processId,
+      process_number: process?.numero ?? null,
+      client_name: process?.cliente_nome ?? null,
       provider: input.provider,
       external_id: movement.externalId,
       movement_type: movement.movementType,

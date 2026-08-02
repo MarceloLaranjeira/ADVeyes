@@ -9,6 +9,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,13 +17,15 @@ const cors = {
 };
 
 // Escavador
-const ESCAVADOR_TOKEN = Deno.env.get("ESCAVADOR_API_TOKEN") ?? "";
 const ESC_BASE = "https://api.escavador.com";
-const ESC_HEADERS = {
-  "Authorization": `Bearer ${ESCAVADOR_TOKEN}`,
-  "X-Requested-With": "XMLHttpRequest",
-  "Accept": "application/json",
-};
+
+function escavadorHeaders(token: string) {
+  return {
+    "Authorization": `Bearer ${token}`,
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "application/json",
+  };
+}
 
 // DataJud fallback
 const DATAJUD_KEY = getDataJudAuthorization();
@@ -159,8 +162,9 @@ function normalizarItemEscavador(item: EscavadorItem): Record<string, unknown> {
 async function buscarEscavadorOAB(
   oabNumero: string,
   seccional: string,
+  token: string,
 ): Promise<Record<string, unknown>[]> {
-  if (!ESCAVADOR_TOKEN) return [];
+  if (!token) return [];
 
   const items: EscavadorItem[] = [];
   let url: string | null =
@@ -168,7 +172,10 @@ async function buscarEscavadorOAB(
 
   while (url) {
     try {
-      const resp = await fetch(url, { headers: ESC_HEADERS, signal: AbortSignal.timeout(15000) });
+      const resp = await fetch(url, {
+        headers: escavadorHeaders(token),
+        signal: AbortSignal.timeout(15000),
+      });
       if (!resp.ok) {
         console.warn(`[busca-oab] escavador HTTP ${resp.status}`);
         break;
@@ -187,12 +194,18 @@ async function buscarEscavadorOAB(
   return items.map(normalizarItemEscavador).filter(r => r.numero_processo);
 }
 
-async function buscarEscavadorNome(nome: string): Promise<Record<string, unknown>[]> {
-  if (!ESCAVADOR_TOKEN) return [];
+async function buscarEscavadorNome(
+  nome: string,
+  token: string,
+): Promise<Record<string, unknown>[]> {
+  if (!token) return [];
 
   try {
     const url = `${ESC_BASE}/api/v2/envolvido/processos?nome=${encodeURIComponent(nome)}&limit=100`;
-    const resp = await fetch(url, { headers: ESC_HEADERS, signal: AbortSignal.timeout(15000) });
+    const resp = await fetch(url, {
+      headers: escavadorHeaders(token),
+      signal: AbortSignal.timeout(15000),
+    });
     if (!resp.ok) return [];
     const data = await resp.json() as { items?: EscavadorItem[] };
     const items = data.items || [];
@@ -364,6 +377,12 @@ serve(async (req) => {
       });
     }
 
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const escavadorToken = await getEscavadorToken(supabaseAdmin);
+
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
 
     const tipo = ((body.tipo as string) || "oab").toLowerCase() as "oab" | "cpf" | "nome";
@@ -382,17 +401,25 @@ serve(async (req) => {
     let resultados: Record<string, unknown>[] = [];
     let fonte = "Escavador";
 
-    if (ESCAVADOR_TOKEN) {
+    if (escavadorToken) {
       if (tipo === "oab") {
         // Extrair número e estado da OAB (ex: "10099/AM")
         const oabMatch = valor.match(/^(\d+)\s*\/\s*([A-Z]{2})$/i);
         if (oabMatch) {
-          resultados = await buscarEscavadorOAB(oabMatch[1], oabMatch[2].toUpperCase());
+          resultados = await buscarEscavadorOAB(
+            oabMatch[1],
+            oabMatch[2].toUpperCase(),
+            escavadorToken,
+          );
         } else {
-          resultados = await buscarEscavadorOAB(valor.replace(/\D/g, ""), "AM");
+          resultados = await buscarEscavadorOAB(
+            valor.replace(/\D/g, ""),
+            "AM",
+            escavadorToken,
+          );
         }
       } else if (tipo === "nome") {
-        resultados = await buscarEscavadorNome(valor);
+        resultados = await buscarEscavadorNome(valor, escavadorToken);
       }
       // CPF não tem endpoint direto no Escavador — vai para DataJud
     }

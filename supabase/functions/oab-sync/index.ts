@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getDataJudAuthorization } from "../_shared/datajud-auth.ts";
+import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,13 +18,15 @@ const corsHeaders = {
 };
 
 // Escavador
-const ESCAVADOR_TOKEN = Deno.env.get("ESCAVADOR_API_TOKEN") ?? "";
 const ESC_BASE = "https://api.escavador.com";
-const ESC_HEADERS = {
-  "Authorization": `Bearer ${ESCAVADOR_TOKEN}`,
-  "X-Requested-With": "XMLHttpRequest",
-  "Accept": "application/json",
-};
+
+function escavadorHeaders(token: string) {
+  return {
+    "Authorization": `Bearer ${token}`,
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "application/json",
+  };
+}
 
 // DataJud/CNJ — fallback gratuito
 const DATAJUD_KEY = getDataJudAuthorization();
@@ -146,8 +149,9 @@ interface EscavadorItem {
 async function buscarProcessosEscavador(
   oabNumero: string,
   seccional: string,
+  token: string,
 ): Promise<EscavadorItem[]> {
-  if (!ESCAVADOR_TOKEN) {
+  if (!token) {
     console.warn("ESCAVADOR_API_TOKEN não configurado");
     return [];
   }
@@ -158,7 +162,7 @@ async function buscarProcessosEscavador(
   while (url) {
     try {
       const resp = await fetch(url, {
-        headers: ESC_HEADERS,
+        headers: escavadorHeaders(token),
         signal: AbortSignal.timeout(15000),
       });
 
@@ -186,15 +190,16 @@ async function buscarProcessosEscavador(
 /** Busca processos por nome via Escavador */
 async function buscarProcessosNomeEscavador(
   nome: string,
+  token: string,
 ): Promise<EscavadorItem[]> {
-  if (!ESCAVADOR_TOKEN) return [];
+  if (!token) return [];
 
   const items: EscavadorItem[] = [];
   const url = `${ESC_BASE}/api/v2/envolvido/processos?nome=${encodeURIComponent(nome)}&limit=100`;
 
   try {
     const resp = await fetch(url, {
-      headers: ESC_HEADERS,
+      headers: escavadorHeaders(token),
       signal: AbortSignal.timeout(15000),
     });
 
@@ -376,6 +381,12 @@ serve(async (req) => {
       });
     }
 
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const escavadorToken = await getEscavadorToken(supabaseAdmin);
+
     const body = await req.json().catch(() => ({}));
     const oabNumero: string = (body.oab_numero || "").replace(/\D/g, "");
     const seccional: string = (body.seccional || "AM").toUpperCase();
@@ -393,16 +404,23 @@ serve(async (req) => {
     let processosNormalizados: ReturnType<typeof normalizarItemEscavador>[] = [];
     let fonte = "Escavador";
 
-    const escavadorItems = await buscarProcessosEscavador(oabNumero, seccional);
+    const escavadorItems = await buscarProcessosEscavador(
+      oabNumero,
+      seccional,
+      escavadorToken ?? "",
+    );
 
     if (escavadorItems.length > 0) {
       processosNormalizados = escavadorItems
         .map(normalizarItemEscavador)
         .filter(p => p.numero);
       console.log(`escavador: ${processosNormalizados.length} processos normalizados`);
-    } else if (nomeAdvogado && ESCAVADOR_TOKEN) {
+    } else if (nomeAdvogado && escavadorToken) {
       // Fallback por nome no Escavador
-      const nomeItems = await buscarProcessosNomeEscavador(nomeAdvogado);
+      const nomeItems = await buscarProcessosNomeEscavador(
+        nomeAdvogado,
+        escavadorToken,
+      );
       if (nomeItems.length > 0) {
         processosNormalizados = nomeItems
           .map(normalizarItemEscavador)
@@ -454,11 +472,6 @@ serve(async (req) => {
     }
 
     // Salva no banco
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
     let novos = 0, atualizados = 0;
     const vistos = new Set<string>();
 

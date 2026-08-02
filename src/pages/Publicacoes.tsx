@@ -69,6 +69,8 @@ interface Movimento {
   id: string;
   tenant_id: string;
   process_id: string;
+  process_number: string | null;
+  client_name: string | null;
   provider: "escavador" | "datajud" | "manual";
   movement_type: "ANDAMENTO" | "DOCUMENTO";
   occurred_at: string | null;
@@ -797,9 +799,11 @@ const Publicacoes = () => {
                           {movement.title ?? "Movimentação processual"}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">
-                          {process?.numero ?? "Processo não identificado"}
+                          {process?.numero ?? movement.process_number ??
+                            "Processo não identificado"}
                           {" · "}
-                          {process?.cliente_nome ?? "Cliente não identificado"}
+                          {process?.cliente_nome ?? movement.client_name ??
+                            "Cliente não identificado"}
                           {" · "}
                           {formattedDate(movement.occurred_at)}
                         </p>
