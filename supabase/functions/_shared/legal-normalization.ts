@@ -217,7 +217,7 @@ const HTML_ENTITIES: Record<string, string> = {
   laquo: "«", raquo: "»",
 };
 
-function decodeHtmlEntities(value: string): string {
+function decodeOneHtmlLayer(value: string): string {
   return value.replace(
     /&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi,
     (match, entity: string) => {
@@ -232,6 +232,18 @@ function decodeHtmlEntities(value: string): string {
       return HTML_ENTITIES[entity] ?? match;
     },
   );
+}
+
+function decodeHtmlEntities(value: string): string {
+  let decoded = value;
+
+  for (let layer = 0; layer < 4; layer += 1) {
+    const next = decodeOneHtmlLayer(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
 }
 
 function plainText(value: unknown): string {

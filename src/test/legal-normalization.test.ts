@@ -210,7 +210,7 @@ describe("normalizeDjenPublication", () => {
   it("decodifica entidades HTML nomeadas e numéricas do DJEN", () => {
     const normalized = normalizeDjenPublication({
       texto:
-        "PODER JUDICI&Aacute;RIO — Intima&ccedil;&atilde;o da parte &#193; autora.",
+          "PODER JUDICI&amp;Aacute;RIO — Intima&amp;ccedil;&amp;atilde;o da parte &#193; autora.",
       siglaTribunal: "TJGO",
     }, { receivedAt });
 

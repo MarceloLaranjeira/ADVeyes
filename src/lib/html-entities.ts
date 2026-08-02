@@ -39,7 +39,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   raquo: "»",
 };
 
-export function decodeHtmlEntities(value: string): string {
+function decodeOneLayer(value: string): string {
   return value.replace(
     /&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi,
     (match, entity: string) => {
@@ -54,4 +54,16 @@ export function decodeHtmlEntities(value: string): string {
       return NAMED_ENTITIES[entity] ?? match;
     },
   );
+}
+
+export function decodeHtmlEntities(value: string): string {
+  let decoded = value;
+
+  for (let layer = 0; layer < 4; layer += 1) {
+    const next = decodeOneLayer(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
 }

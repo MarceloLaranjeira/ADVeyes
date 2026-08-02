@@ -9,4 +9,12 @@ describe("decodeHtmlEntities", () => {
       ),
     ).toBe("PODER JUDICIÁRIO — Intimação n.º 1");
   });
+
+  it("remove múltiplas camadas de codificação do tribunal", () => {
+    expect(
+      decodeHtmlEntities(
+        "PODER JUDICI&amp;Aacute;RIO e a&amp;ccedil;&amp;atilde;o",
+      ),
+    ).toBe("PODER JUDICIÁRIO e ação");
+  });
 });
