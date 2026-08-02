@@ -32,11 +32,13 @@ import {
   ChevronUp,
   FileClock,
   FileText,
+  ExternalLink,
   RefreshCw,
   Search,
   Scale,
   ShieldCheck,
 } from "lucide-react";
+import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -63,6 +65,7 @@ interface Publicacao {
   review_status: "pending_review" | "reviewed" | "dismissed" | "no_deadline";
   possible_deadline: boolean;
   source_name: string | null;
+  source_url: string | null;
 }
 
 interface Movimento {
@@ -685,6 +688,10 @@ const Publicacoes = () => {
           <div className="space-y-3">
             {filteredPublications.map((publication) => {
               const expanded = expandedId === publication.id;
+              const readableContent = decodeHtmlEntities(publication.conteudo);
+              const missingOfficialContent = readableContent
+                .toLocaleLowerCase("pt-BR")
+                .includes("não foi possível extrair conteúdo");
               return (
                 <DepthCard key={publication.id}>
                   <CardHeader className="pb-3">
@@ -711,7 +718,7 @@ const Publicacoes = () => {
                             "Processo ainda não vinculado"}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">
-                          {publication.cliente_nome ?? "Cliente não identificado"}
+                          {publication.cliente_nome ?? "Cliente ainda não vinculado"}
                           {" · "}
                           {formattedDate(publication.data_publicacao)}
                           {" · "}
@@ -760,8 +767,27 @@ const Publicacoes = () => {
                       ? "whitespace-pre-wrap text-sm leading-relaxed"
                       : "line-clamp-2 text-sm text-muted-foreground"}
                     >
-                      {publication.conteudo}
+                      {readableContent}
                     </p>
+                    {publication.source_url &&
+                      (expanded || missingOfficialContent) && (
+                        <Button asChild variant="outline" size="sm" className="mt-3">
+                          <a
+                            href={publication.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Abrir publicação no tribunal
+                          </a>
+                        </Button>
+                      )}
+                    {missingOfficialContent && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        O próprio DJEN não forneceu o texto deste documento. Use
+                        o link oficial acima para consultar os autos.
+                      </p>
+                    )}
                   </CardContent>
                 </DepthCard>
               );
