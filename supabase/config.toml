@@ -29,9 +29,6 @@ verify_enabled = true
 [functions.process-email-queue]
 verify_jwt = true
 
-[functions.oab-sync]
-verify_jwt = true
-
 [functions.cron-monitoramento]
 verify_jwt = false
 
