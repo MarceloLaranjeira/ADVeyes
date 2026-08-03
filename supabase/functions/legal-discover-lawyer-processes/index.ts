@@ -234,15 +234,21 @@ Deno.serve(async (request) => {
         pendingProvider: "escavador",
       });
     } catch (error) {
-      if (error instanceof DataJudApiError) {
-        return json({
-          error: error.code,
-          registrationId: registration.id,
-          registrationSaved: true,
-        }, error.status === 400 ? 422 : 502);
-      }
-      console.error("legal-discovery: datajud discovery failed");
-      return json({ error: "datajud_request_failed" }, 502);
+      // A OAB já foi salva; falhar a busca não pode desfazer o cadastro nem
+      // ser apresentado como erro total. A causa volta para a tela.
+      const code = error instanceof DataJudApiError
+        ? error.code
+        : "datajud_request_failed";
+      console.error("legal-discovery: datajud discovery failed", code);
+
+      return json({
+        registrationId: registration.id,
+        registrationSaved: true,
+        totalCandidates: 0,
+        providerUsed: "datajud",
+        pendingProvider: "escavador",
+        discoveryError: code,
+      });
     }
   }
 

@@ -270,10 +270,11 @@ export async function discoverProcessesByOab(input: {
   const query = buildOabQuery(input.oabNumber, input.oabState);
   const found = new Map<string, DiscoveredProcess>();
 
-  for (const court of courts) {
-    const response = await fetch(
-      `${DATAJUD_BASE}/api_publica_${court}/_search`,
-      {
+  // Os índices são consultados em paralelo: em série, três consultas lentas
+  // estouram o tempo de espera do navegador antes de a função responder.
+  const responses = await Promise.allSettled(
+    courts.map((court) =>
+      fetch(`${DATAJUD_BASE}/api_publica_${court}/_search`, {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -281,14 +282,17 @@ export async function discoverProcessesByOab(input: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ query, size: input.pageSize ?? 50 }),
-        signal: AbortSignal.timeout(input.timeoutMs ?? 15_000),
-      },
-    );
+        signal: AbortSignal.timeout(input.timeoutMs ?? 8_000),
+      })
+    ),
+  );
 
-    // Um índice indisponível não invalida os demais.
-    if (!response.ok) continue;
+  for (const [index, court] of courts.entries()) {
+    const settled = responses[index];
+    // Um índice indisponível ou lento não invalida os demais.
+    if (settled.status === "rejected" || !settled.value.ok) continue;
 
-    const payload = await response.json() as DataJudSearchResponse;
+    const payload = await settled.value.json() as DataJudSearchResponse;
     for (const hit of payload.hits?.hits ?? []) {
       const source = hit._source;
       if (!source || typeof source.numeroProcesso !== "string") continue;

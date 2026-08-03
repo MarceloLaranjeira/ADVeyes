@@ -62,6 +62,11 @@ const messages: Record<string, string> = {
   escavador_insufficient_balance: "A conta do Escavador está sem saldo.",
   escavador_rate_limited: "O limite de consultas do Escavador foi atingido.",
   escavador_request_failed: "O Escavador não respondeu corretamente.",
+  datajud_unauthorized: "A chave do DataJud foi recusada.",
+  datajud_rate_limited: "O limite de consultas do DataJud foi atingido.",
+  datajud_request_failed: "O DataJud não respondeu a tempo.",
+  datajud_court_not_supported:
+    "O DataJud não cobre os tribunais dessa seccional.",
   operation_failed: "Não foi possível concluir a operação.",
 };
 
@@ -77,10 +82,11 @@ export class LegalIntegrationError extends Error {
 async function invoke<T>(
   functionName: string,
   body: Record<string, unknown>,
+  timeoutMs = 20_000,
 ): Promise<T> {
   const { data, error } = await withTimeout(
     supabase.functions.invoke(functionName, { body }),
-    20_000,
+    timeoutMs,
   );
   if (error) {
     const context = (error as { context?: Response }).context;
@@ -117,7 +123,8 @@ export const legalIntegrationService = {
       registrationId: string;
       registrationSaved?: boolean;
       totalCandidates?: number;
-    }>("legal-discover-lawyer-processes", input),
+      discoveryError?: string;
+    }>("legal-discover-lawyer-processes", input, 45_000),
 
   confirm: (
     tenantId: string,

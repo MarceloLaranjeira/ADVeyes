@@ -13,26 +13,24 @@ import {
   Download,
   FileText,
   Gavel,
-  Loader2,
   Pencil,
-  Plus,
   Scale,
   Users,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProcessoForm } from "@/components/processos/ProcessoForm";
+import {
+  AndamentosManuais,
+  type AndamentoManual,
+} from "@/components/processos/AndamentosManuais";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
 import { AreaBadge } from "@/components/common/AreaBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { exportProcessosPDF } from "@/lib/pdf-export";
 import { buildProcessTimeline } from "@/lib/process-timeline";
@@ -76,15 +74,12 @@ const ProcessoDetalhe = () => {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { toast } = useToast();
   const [processo, setProcesso] = useState<RecordRow | null>(null);
   const [collections, setCollections] = useState(emptyCollections);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [partialFailure, setPartialFailure] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [savingMovement, setSavingMovement] = useState(false);
-  const [manualForm, setManualForm] = useState({ tipo: "Andamento", descricao: "", tribunal: "" });
 
   const load = useCallback(async () => {
     if (!id || !currentTenant) return;
@@ -149,29 +144,6 @@ const ProcessoDetalhe = () => {
     if (item.status === "pago") summary.paid += value;
     return summary;
   }, { total: 0, paid: 0 }), [collections.finance]);
-
-  const saveManualMovement = async () => {
-    if (!manualForm.descricao.trim() || !processo || !currentTenant || !user) return;
-    setSavingMovement(true);
-    const { error } = await (supabase as any).from("andamentos").insert({
-      tenant_id: currentTenant.tenantId,
-      user_id: user.id,
-      processo_id: processo.id,
-      numero_processo: processo.numero,
-      tipo: manualForm.tipo.trim() || "Andamento",
-      descricao: manualForm.descricao.trim(),
-      tribunal: manualForm.tribunal.trim() || null,
-      origem: "manual",
-    });
-    setSavingMovement(false);
-    if (error) {
-      toast({ title: "Não foi possível registrar o andamento", description: error.message, variant: "destructive" });
-      return;
-    }
-    setManualForm({ tipo: "Andamento", descricao: "", tribunal: "" });
-    toast({ title: "Andamento registrado" });
-    await load();
-  };
 
   if (loading) {
     return (
@@ -253,11 +225,14 @@ const ProcessoDetalhe = () => {
           </TabsContent>
 
           <TabsContent value="andamentos" className="space-y-6">
-            <section className="rounded-2xl border bg-card p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2"><Plus className="h-4 w-4 text-primary" /><h2 className="font-semibold">Registrar andamento do escritório</h2></div>
-              <div className="grid gap-3 md:grid-cols-3"><div><Label>Tipo</Label><Input className="mt-1.5" value={manualForm.tipo} onChange={(event) => setManualForm((current) => ({ ...current, tipo: event.target.value }))} /></div><div><Label>Tribunal</Label><Input className="mt-1.5" placeholder="Opcional" value={manualForm.tribunal} onChange={(event) => setManualForm((current) => ({ ...current, tribunal: event.target.value }))} /></div><div className="md:col-span-3"><Label>Descrição</Label><Textarea className="mt-1.5" value={manualForm.descricao} onChange={(event) => setManualForm((current) => ({ ...current, descricao: event.target.value }))} /></div></div>
-              <div className="mt-3 text-right"><Button onClick={saveManualMovement} disabled={savingMovement || !manualForm.descricao.trim()}>{savingMovement && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Registrar</Button></div>
-            </section>
+            <AndamentosManuais
+              tenantId={currentTenant.tenantId}
+              processId={processo.id}
+              processNumber={processo.numero}
+              currentUserId={user?.id ?? null}
+              items={collections.manual as AndamentoManual[]}
+              onChanged={load}
+            />
             <ProcessoTimeline events={timeline} />
           </TabsContent>
 

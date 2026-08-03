@@ -35,6 +35,20 @@ import {
   Scale,
 } from "lucide-react";
 
+/** Traduz a falha da busca automática sem esconder a causa. */
+function discoveryErrorMessage(code: string): string {
+  const reasons: Record<string, string> = {
+    datajud_request_failed:
+      "O DataJud não respondeu a tempo. Tente novamente em alguns minutos.",
+    datajud_unauthorized: "A chave do DataJud foi recusada.",
+    datajud_rate_limited: "O limite de consultas do DataJud foi atingido.",
+    datajud_court_not_supported:
+      "O DataJud não cobre os tribunais dessa seccional.",
+  };
+  return reasons[code] ??
+    "A busca automática falhou, mas a OAB continua cadastrada.";
+}
+
 export default function IntegracoesJuridicas() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
@@ -117,10 +131,18 @@ export default function IntegracoesJuridicas() {
         oabNumber,
         oabState,
       });
-      toast({
-        title: "Consulta concluída",
-        description: `${result.totalCandidates ?? 0} processo(s) candidato(s) encontrado(s).`,
-      });
+      if (result.discoveryError) {
+        // O cadastro foi salvo; apenas a busca automática não completou.
+        toast({
+          title: "OAB salva, mas a busca não completou",
+          description: discoveryErrorMessage(result.discoveryError),
+        });
+      } else {
+        toast({
+          title: "Consulta concluída",
+          description: `${result.totalCandidates ?? 0} processo(s) candidato(s) encontrado(s).`,
+        });
+      }
     } catch (error) {
       if (
         error instanceof LegalIntegrationError &&
