@@ -1,116 +1,167 @@
-// Trava de consumo dos provedores pagos.
-// Toda chamada cobrada passa por aqui antes de sair, e o consumo é registrado
-// só depois do sucesso — falha de rede não deve gastar cota do escritório.
+// Trava de custo dos provedores pagos.
+// Limitar por contagem não protege — 100 monitoramentos custam R$ 8 ou R$ 176
+// conforme a frequência. Aqui a autorização é pelo custo estimado em centavos,
+// e o consumo só é registrado depois que o provedor respondeu.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-export type QuotaKind = "lookup" | "monitor";
+export type ProviderName = "escavador" | "datajud";
 
-export interface QuotaState {
+/** Serviços com preço cadastrado; o banco recusa qualquer outro. */
+export type ServiceCode =
+  | "oab_processes"
+  | "involved_processes"
+  | "lawyer_summary"
+  | "involved_summary"
+  | "process_cover"
+  | "process_parties"
+  | "process_movements"
+  | "process_ai_summary"
+  | "court_update"
+  | "court_update_public_docs"
+  | "monitor_daily"
+  | "monitor_weekly"
+  | "monitor_monthly"
+  | "monitor_daily_docs"
+  | "monitor_weekly_docs"
+  | "monitor_monthly_docs"
+  | "monitor_new_processes";
+
+export interface BudgetState {
   allowed: boolean;
-  reason: "tenant_quota_exceeded" | "platform_quota_exceeded" | null;
-  limit: number;
-  used: number;
-  platformLimit: number;
-  platformUsed: number;
+  reason: "tenant_budget_exceeded" | "platform_budget_exceeded" | null;
+  estimatedCents: number;
+  budgetCents: number;
+  spentCents: number;
+  platformBudgetCents: number;
+  platformSpentCents: number;
 }
 
-export class ProviderQuotaError extends Error {
+export class ProviderBudgetError extends Error {
   constructor(
-    public readonly code: "tenant_quota_exceeded" | "platform_quota_exceeded",
-    public readonly state: QuotaState,
+    public readonly code:
+      | "tenant_budget_exceeded"
+      | "platform_budget_exceeded",
+    public readonly state: BudgetState,
   ) {
     super(code);
   }
 }
 
-interface RawQuotaState {
+interface RawBudgetState {
   allowed: boolean;
-  reason: QuotaState["reason"];
-  limit: number;
-  used: number;
-  platform_limit: number;
-  platform_used: number;
+  reason: BudgetState["reason"];
+  estimated_cents: number;
+  budget_cents: number;
+  spent_cents: number;
+  platform_budget_cents: number;
+  platform_spent_cents: number;
 }
 
-export async function checkProviderQuota(
+export interface BudgetInput {
+  tenantId: string;
+  provider: ProviderName;
+  service: ServiceCode;
+  quantity?: number;
+  /** Itens esperados, para serviços que cobram adicional por faixa. */
+  itemCount?: number | null;
+}
+
+export async function checkProviderBudget(
   admin: SupabaseClient,
-  input: {
-    tenantId: string;
-    provider: "escavador" | "datajud";
-    kind: QuotaKind;
-    quantity?: number;
-  },
-): Promise<QuotaState> {
-  const { data, error } = await admin.rpc("provider_quota_check_server", {
+  input: BudgetInput,
+): Promise<BudgetState> {
+  const { data, error } = await admin.rpc("provider_budget_check_server", {
     p_tenant_id: input.tenantId,
     p_provider: input.provider,
-    p_kind: input.kind,
+    p_service_code: input.service,
     p_quantity: input.quantity ?? 1,
+    p_item_count: input.itemCount ?? null,
   });
 
   if (error) {
-    console.error("provider-quota: failed to evaluate quota");
+    console.error("provider-quota: failed to evaluate budget");
     throw new Error("operation_failed");
   }
 
-  const raw = data as RawQuotaState;
+  const raw = data as RawBudgetState;
   return {
     allowed: raw.allowed,
     reason: raw.reason,
-    limit: raw.limit,
-    used: raw.used,
-    platformLimit: raw.platform_limit,
-    platformUsed: raw.platform_used,
+    estimatedCents: raw.estimated_cents,
+    budgetCents: raw.budget_cents,
+    spentCents: raw.spent_cents,
+    platformBudgetCents: raw.platform_budget_cents,
+    platformSpentCents: raw.platform_spent_cents,
   };
 }
 
-/** Recusa a operação quando a cota acabou, sem chamar o provedor. */
-export async function assertProviderQuota(
+/** Recusa antes de chamar o provedor quando o orçamento não comporta. */
+export async function assertProviderBudget(
   admin: SupabaseClient,
-  input: {
-    tenantId: string;
-    provider: "escavador" | "datajud";
-    kind: QuotaKind;
-    quantity?: number;
-  },
-): Promise<QuotaState> {
-  const state = await checkProviderQuota(admin, input);
+  input: BudgetInput,
+): Promise<BudgetState> {
+  const state = await checkProviderBudget(admin, input);
   if (!state.allowed && state.reason) {
-    throw new ProviderQuotaError(state.reason, state);
+    throw new ProviderBudgetError(state.reason, state);
   }
   return state;
 }
 
-/** Registra o consumo depois que o provedor respondeu com sucesso. */
+export type UsageOperation =
+  | "oab_discovery"
+  | "process_lookup"
+  | "monitor_created"
+  | "monitor_check"
+  | "public_document";
+
+/**
+ * Registra o consumo com o custo real. O custo é recalculado com a contagem
+ * de itens efetivamente retornada, que só se conhece após a resposta.
+ */
 export async function recordProviderUsage(
   admin: SupabaseClient,
   input: {
     tenantId: string;
-    provider: "escavador" | "datajud";
-    operation:
-      | "oab_discovery"
-      | "process_lookup"
-      | "monitor_created"
-      | "monitor_check"
-      | "public_document";
+    provider: ProviderName;
+    operation: UsageOperation;
+    service: ServiceCode;
     quantity?: number;
+    itemCount?: number | null;
     externalReference?: string | null;
     metadata?: Record<string, unknown>;
   },
-): Promise<void> {
+): Promise<number> {
+  const state = await checkProviderBudget(admin, {
+    tenantId: input.tenantId,
+    provider: input.provider,
+    service: input.service,
+    quantity: input.quantity,
+    itemCount: input.itemCount,
+  });
+
   const { error } = await admin.from("legal_usage_events").insert({
     tenant_id: input.tenantId,
     provider: input.provider,
     operation: input.operation,
+    service_code: input.service,
     quantity: input.quantity ?? 1,
+    cost_cents: state.estimatedCents,
     external_reference: input.externalReference ?? null,
     metadata: input.metadata ?? {},
   });
 
   if (error) {
-    // O consumo já aconteceu no provedor; perder o registro subestimaria a
-    // cota, então isso precisa aparecer no log para conferência.
+    // O provedor já cobrou; perder o registro subestimaria o gasto do mês.
     console.error("provider-quota: failed to record usage", input.operation);
   }
+
+  return state.estimatedCents;
+}
+
+export function formatCents(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }

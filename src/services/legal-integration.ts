@@ -47,7 +47,9 @@ export interface LegalMonitor {
 export interface ProviderUsage {
   provider: string;
   period_start: string;
-  lookups: { used: number; limit: number };
+  /** Orçamento e gasto do mês em centavos. */
+  budget_cents: number;
+  spent_cents: number;
   monitors: { used: number; limit: number };
 }
 
@@ -70,10 +72,10 @@ const messages: Record<string, string> = {
   escavador_insufficient_balance: "A conta do Escavador está sem saldo.",
   escavador_rate_limited: "O limite de consultas do Escavador foi atingido.",
   escavador_request_failed: "O Escavador não respondeu corretamente.",
-  tenant_quota_exceeded:
-    "O limite de consultas do plano deste mês foi atingido.",
-  platform_quota_exceeded:
-    "O limite global de consultas da plataforma foi atingido.",
+  tenant_budget_exceeded:
+    "O orçamento de consultas do plano acabou neste mês.",
+  platform_budget_exceeded:
+    "O orçamento global da plataforma acabou neste mês.",
   datajud_unauthorized: "A chave do DataJud foi recusada.",
   datajud_rate_limited: "O limite de consultas do DataJud foi atingido.",
   datajud_request_failed: "O DataJud não respondeu a tempo.",

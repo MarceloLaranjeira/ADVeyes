@@ -35,8 +35,8 @@ import {
 } from "../_shared/legal-normalization.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 import {
-  assertProviderQuota,
-  ProviderQuotaError,
+  assertProviderBudget,
+  ProviderBudgetError,
   recordProviderUsage,
 } from "../_shared/provider-quota.ts";
 
@@ -76,7 +76,7 @@ interface ReconcileContext {
 }
 
 function errorCode(error: unknown): string {
-  if (error instanceof ProviderQuotaError) return error.code;
+  if (error instanceof ProviderBudgetError) return error.code;
   if (error instanceof EscavadorApiError) return error.code;
   if (error instanceof DataJudApiError) return error.code;
   if (error instanceof DjenApiError) return error.code;
@@ -178,10 +178,10 @@ async function reconcileOabSource(
 
   // A reconciliação roda sozinha: sem a trava, o custo cresceria sem
   // ninguém perceber. Estourada a cota, o provedor não é chamado.
-  await assertProviderQuota(context.admin, {
+  await assertProviderBudget(context.admin, {
     tenantId: source.tenant_id,
     provider: "escavador",
-    kind: "lookup",
+    service: "oab_processes",
   });
 
   const result = await discoverLawyerProcesses({
@@ -195,6 +195,8 @@ async function reconcileOabSource(
     tenantId: source.tenant_id,
     provider: "escavador",
     operation: "oab_discovery",
+    service: "oab_processes",
+    itemCount: result.processes.length,
     externalReference: registration.id,
     metadata: { pages: result.pages, found: result.processes.length },
   });
@@ -327,8 +329,8 @@ async function reconcileSource(
     // a fonte permanece ativa e volta a ser tentada na próxima janela. A cota
     // se renova no mês seguinte, então desativar exigiria religar na mão.
     const pending = code === "integration_not_configured" ||
-      code === "tenant_quota_exceeded" ||
-      code === "platform_quota_exceeded";
+      code === "tenant_budget_exceeded" ||
+      code === "platform_budget_exceeded";
     const permanent = !pending && PERMANENT_FAILURES.has(code);
     const delay = pending || permanent
       ? null

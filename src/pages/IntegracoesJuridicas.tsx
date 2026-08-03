@@ -261,9 +261,10 @@ export default function IntegracoesJuridicas() {
               {overview?.usage && (
                 <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                   <UsageMeter
-                    label="Consultas neste mês"
-                    used={overview.usage.lookups.used}
-                    total={overview.usage.lookups.limit}
+                    label="Orçamento do mês"
+                    used={overview.usage.spent_cents}
+                    total={overview.usage.budget_cents}
+                    asCurrency
                   />
                   <UsageMeter
                     label="Processos monitorados"
@@ -271,8 +272,8 @@ export default function IntegracoesJuridicas() {
                     total={overview.usage.monitors.limit}
                   />
                   <p className="text-xs">
-                    Atingido o limite, as consultas param automaticamente até a
-                    virada do mês ou a contratação de adicional.
+                    Atingido o orçamento, as consultas param automaticamente
+                    até a virada do mês ou a contratação de adicional.
                   </p>
                 </div>
               )}

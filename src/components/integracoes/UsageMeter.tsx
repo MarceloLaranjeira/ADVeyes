@@ -2,13 +2,23 @@ interface Props {
   label: string;
   used: number;
   total: number;
+  /** Exibe os valores como moeda; usado no orçamento em reais. */
+  asCurrency?: boolean;
+}
+
+function formatValue(value: number, asCurrency: boolean): string {
+  if (!asCurrency) return String(value);
+  return (value / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
 /**
  * Barra de consumo do provedor pago. Sem limite contratado, mostra esgotado:
  * é o que de fato acontece, já que a trava recusa a chamada.
  */
-export function UsageMeter({ label, used, total }: Props) {
+export function UsageMeter({ label, used, total, asCurrency = false }: Props) {
   const percent = total > 0 ? Math.min(100, (used / total) * 100) : 100;
   const exhausted = total <= 0 || used >= total;
   const nearLimit = !exhausted && percent >= 80;
@@ -24,7 +34,7 @@ export function UsageMeter({ label, used, total }: Props) {
             ? "text-amber-700"
             : ""}
         >
-          {used} de {total}
+          {formatValue(used, asCurrency)} de {formatValue(total, asCurrency)}
         </span>
       </div>
       <div

@@ -17,8 +17,9 @@ import {
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 import { formatCnj } from "../_shared/legal-normalization.ts";
 import {
-  assertProviderQuota,
-  ProviderQuotaError,
+  assertProviderBudget,
+  ProviderBudgetError,
+  recordProviderUsage,
 } from "../_shared/provider-quota.ts";
 
 const OAB_TYPES = new Set([
@@ -259,10 +260,10 @@ Deno.serve(async (request) => {
   try {
     // A cota é verificada antes de sair a requisição: estourado o limite,
     // o provedor não chega a ser chamado e nada é cobrado.
-    await assertProviderQuota(auth.admin, {
+    await assertProviderBudget(auth.admin, {
       tenantId: input.tenantId,
       provider: "escavador",
-      kind: "lookup",
+      service: "oab_processes",
     });
 
     const result = await discoverLawyerProcesses({
@@ -301,12 +302,13 @@ Deno.serve(async (request) => {
         verified_at: result.lawyer ? now : null,
         last_discovery_at: now,
       }).eq("id", registration.id).eq("tenant_id", input.tenantId),
-      auth.admin.from("legal_usage_events").insert({
-        tenant_id: input.tenantId,
+      recordProviderUsage(auth.admin, {
+        tenantId: input.tenantId,
         provider: "escavador",
         operation: "oab_discovery",
-        quantity: 1,
-        external_reference: registration.id,
+        service: "oab_processes",
+        itemCount: result.processes.length,
+        externalReference: registration.id,
         metadata: { pages: result.pages, candidates: rows.length },
       }),
       auth.admin.from("tenant_audit_events").insert({
@@ -326,7 +328,7 @@ Deno.serve(async (request) => {
       pages: result.pages,
     });
   } catch (error) {
-    if (error instanceof ProviderQuotaError) {
+    if (error instanceof ProviderBudgetError) {
       return json({
         error: error.code,
         registrationId: registration.id,
