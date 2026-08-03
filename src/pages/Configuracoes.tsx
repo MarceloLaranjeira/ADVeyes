@@ -33,142 +33,6 @@ import { PreferenciasNotificacao } from "@/components/configuracoes/Preferencias
 
 type TribunalCredencial = Tables<"tribunal_credenciais">;
 
-// ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
-const PERFIL_KEY = "lexia_perfil_advogado";
-
-const PerfilAdvogadoForm = () => {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const [form, setForm] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}"); } catch { return {}; }
-  });
-  const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(() => localStorage.getItem("adveyes_last_oab_sync"));
-
-  const sincronizarOAB = async (oab: string, seccional: string) => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("oab-sync", {
-        body: {
-          oab_numero: oab,
-          seccional,
-          nome_advogado: form.nome || "",
-        },
-      });
-
-      if (error) throw error;
-
-      const agora = new Date().toLocaleString("pt-BR");
-      localStorage.setItem("adveyes_last_oab_sync", agora);
-      setLastSync(agora);
-
-      if ((data?.novos ?? 0) > 0 || (data?.atualizados ?? 0) > 0) {
-        toast({
-          title: "🦅 Horus concluiu a descoberta!",
-          description: `${data.novos} novo(s) e ${data.atualizados} atualizado(s) de ${data.sincronizados} processos encontrados.`,
-        });
-      } else {
-        toast({
-          title: "🦅 Horus concluiu a varredura",
-          description: data?.message ?? "Nenhum processo encontrado vinculado a essa OAB.",
-        });
-      }
-    } catch (e) {
-      toast({ title: "Erro no sync OAB", description: (e as Error).message, variant: "destructive" });
-    }
-    setSyncing(false);
-  };
-
-  const salvar = async () => {
-    localStorage.setItem(PERFIL_KEY, JSON.stringify(form));
-    if (form.numero_oab && form.seccional) {
-      const valor = `${form.numero_oab}/${form.seccional}`.toUpperCase();
-      const perfis = JSON.parse(localStorage.getItem("lexia_perfis_monitorados") || "[]");
-      const jaExiste = perfis.some((p: { tipo: string; valor: string }) => p.tipo === "oab" && p.valor === valor);
-      if (!jaExiste) {
-        perfis.unshift({ id: "perfil-principal", tipo: "oab", valor, tribunais: [], criadoEm: new Date().toISOString() });
-        localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(perfis));
-      }
-      // Auto-trigger OAB sync
-      await sincronizarOAB(form.numero_oab, form.seccional);
-    } else {
-      toast({ title: "Perfil salvo!" });
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Número OAB</Label>
-          <Input
-            placeholder="Ex: 10099"
-            value={form.numero_oab || ""}
-            onChange={(e) => setForm({ ...form, numero_oab: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Seccional (Estado)</Label>
-          <Input
-            placeholder="Ex: AM"
-            maxLength={2}
-            value={form.seccional || ""}
-            onChange={(e) => setForm({ ...form, seccional: e.target.value.toUpperCase() })}
-          />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">CPF</Label>
-        <Input
-          placeholder="000.000.000-00"
-          value={form.cpf || ""}
-          onChange={(e) => setForm({ ...form, cpf: e.target.value })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Nome completo</Label>
-        <Input
-          placeholder="Dr. Nome do Advogado"
-          value={form.nome || ""}
-          onChange={(e) => setForm({ ...form, nome: e.target.value })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">E-mail</Label>
-        <Input
-          type="email"
-          placeholder="seu@email.com"
-          value={form.email || ""}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-      </div>
-      <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-        <strong>🦅 Horus</strong> consulta as fontes judiciais configuradas para localizar processos vinculados à sua OAB. A cobertura depende dos dados disponibilizados por cada tribunal.
-      </p>
-      <div className="flex flex-wrap gap-2 items-center">
-        <Button onClick={salvar} disabled={syncing} className="gap-2">
-          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          {syncing ? "🦅 Horus buscando processos..." : "🦅 Salvar & Descobrir Processos"}
-        </Button>
-        {form.numero_oab && form.seccional && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncing}
-            onClick={() => sincronizarOAB(form.numero_oab, form.seccional)}
-            className="gap-2"
-          >
-            <RefreshCcw className="w-3.5 h-3.5" /> 🦅 Redescobrir Processos
-          </Button>
-        )}
-        {lastSync && (
-          <span className="text-xs text-muted-foreground">Último sync: {lastSync}</span>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ─── Importar Processos Manualmente ─────────────────────────────────────────
 const ImportarProcessos = () => {
   const { toast } = useToast();
@@ -557,10 +421,22 @@ const Configuracoes = () => {
                   <User className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Perfil do Advogado</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-sm text-muted-foreground">
                   Usuário: <span className="font-medium text-foreground">{user?.email}</span>
                 </p>
-                <PerfilAdvogadoForm />
+                <p className="mt-4 text-sm text-muted-foreground">
+                  O cadastro de OAB e a descoberta de processos ficam em
+                  Integrações jurídicas, onde os dados pertencem ao escritório
+                  e valem para toda a equipe.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 gap-2"
+                  onClick={() => navigate("/integracoes-juridicas")}
+                >
+                  <Link2 className="w-3.5 h-3.5" /> Abrir Integrações jurídicas
+                </Button>
               </CardContent>
             </Card>
 
