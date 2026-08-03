@@ -14,8 +14,8 @@ import {
   type DjenFetchResult,
 } from "../_shared/djen-client.ts";
 import {
+  discoverLawyerProcesses,
   EscavadorApiError,
-  fetchLawyerPublications,
 } from "../_shared/escavador-client.ts";
 import {
   indexProcessesByNumber,
@@ -31,11 +31,11 @@ import {
   nextAttemptDelayMs,
   normalizeDataJudMovements,
   normalizeDjenPublication,
-  normalizeEscavadorPublication,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 
+const CNJ_PATTERN = /^[0-9]{7}-[0-9]{2}\.[0-9]{4}\.[0-9]\.[0-9]{2}\.[0-9]{4}$/;
 const DEFAULT_BATCH = 40;
 const MAX_BATCH = 200;
 const DJEN_INITIAL_LOOKBACK_DAYS = 7;
@@ -156,32 +156,63 @@ async function reconcileOabSource(
     throw new Error("integration_not_configured");
   }
 
+  // O Escavador não expõe consulta de diários por OAB sob demanda: publicações
+  // vêm do DJEN. O que a OAB rende aqui é a descoberta de processos novos,
+  // registrados como candidatos para confirmação humana.
   const [oabNumber, oabState] = source.reference.split("/");
-  const publications = await fetchLawyerPublications({
+  const { data: registration, error: registrationError } = await context.admin
+    .from("lawyer_registrations")
+    .select("id, oab_type")
+    .eq("tenant_id", source.tenant_id)
+    .eq("oab_number", oabNumber)
+    .eq("oab_state", oabState)
+    .maybeSingle();
+  if (registrationError) throw registrationError;
+  if (!registration) throw new Error("registration_not_found");
+
+  const result = await discoverLawyerProcesses({
     token: context.escavadorToken,
     oabNumber,
     oabState,
+    oabType: registration.oab_type ?? "ADVOGADO",
   });
 
-  const { data: processes, error } = await context.admin
-    .from("processos")
-    .select("id, numero, cliente_nome, user_id")
-    .eq("tenant_id", source.tenant_id);
-  if (error) throw error;
+  const rows = result.processes
+    .filter((item) => CNJ_PATTERN.test(item.numero_cnj))
+    .map((item) => ({
+      tenant_id: source.tenant_id,
+      lawyer_registration_id: registration.id,
+      numero_cnj: item.numero_cnj,
+      provider: "escavador",
+      state: "candidate",
+      title_active_party: item.titulo_polo_ativo ?? null,
+      title_passive_party: item.titulo_polo_passivo ?? null,
+      tribunal: item.unidade_origem?.tribunal_sigla ?? null,
+      court_unit: item.unidade_origem?.nome ?? null,
+      last_movement_at: item.data_ultima_movimentacao ?? null,
+      provider_fetched_at: new Date().toISOString(),
+      provider_payload: item,
+    }));
 
-  const receivedAt = new Date().toISOString();
-  return await ingestPublications(context.admin, {
-    tenantId: source.tenant_id,
-    provider: "escavador",
-    fallbackUserId: context.actorId,
-    processByNumber: indexProcessesByNumber(
-      (processes ?? []) as Array<ProcessReference & { numero: string }>,
-      formatCnj,
-    ),
-    publications: publications.map((publication) =>
-      normalizeEscavadorPublication(publication, { receivedAt })
-    ),
-  });
+  if (!rows.length) {
+    return { received: result.processes.length, created: 0, ignored: 0 };
+  }
+
+  const { data: saved, error: saveError } = await context.admin
+    .from("process_discoveries")
+    .upsert(rows, {
+      onConflict: "tenant_id,lawyer_registration_id,numero_cnj,provider",
+      ignoreDuplicates: true,
+    })
+    .select("id");
+  if (saveError) throw saveError;
+
+  const created = saved?.length ?? 0;
+  return {
+    received: result.processes.length,
+    created,
+    ignored: result.processes.length - created,
+  };
 }
 
 async function reconcileProcessSource(

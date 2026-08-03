@@ -53,9 +53,6 @@ verify_jwt = true
 [functions.chat]
 verify_jwt = true
 
-[functions.capturar-publicacoes]
-verify_jwt = true
-
 [functions.busca-processual]
 verify_jwt = true
 

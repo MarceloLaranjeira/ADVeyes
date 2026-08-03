@@ -359,7 +359,7 @@ const DjeTjam = () => {
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">Integração DJE TJAM</p>
               <p className="text-xs text-muted-foreground">
-                Esta tela busca publicações via Edge Function <code className="bg-muted px-1 rounded text-[10px]">capturar-publicacoes</code> que
+                Esta tela busca publicações via Edge Function <code className="bg-muted px-1 rounded text-[10px]">legal-reconcile</code> que
                 consulta o DJE do TJAM. Configure a variável <code className="bg-muted px-1 rounded text-[10px]">TJAM_DJE_TOKEN</code> no Supabase
                 para acesso completo. Também é possível acessar diretamente em{" "}
                 <button onClick={abrirDJE} className="text-primary underline underline-offset-2">dje.tjam.jus.br</button>.
