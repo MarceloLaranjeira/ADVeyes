@@ -3,6 +3,7 @@
 // Toda gravação carrega o tenant_id da fonte monitorada.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { deliverLegalAlert } from "./legal-notifications.ts";
 import {
   buildContentFingerprint,
   type NormalizedMovement,
@@ -192,51 +193,53 @@ export async function ingestMovements(
  * A função recebe apenas IDs retornados pelo `insert`, então uma reconciliação
  * idempotente nunca repete o alerta.
  */
+/**
+ * Avisa sobre publicações novas. O alerta vai para o profissional dono da OAB
+ * vinculada ao processo, não para a equipe inteira, e respeita as preferências
+ * de cada pessoa.
+ */
 export async function notifyNewPublications(
   admin: SupabaseClient,
   input: { tenantId: string; publicationIds: string[] },
 ): Promise<number> {
   if (!input.publicationIds.length) return 0;
 
-  const [{ data: publications, error: publicationError }, { data: members, error: memberError }] =
-    await Promise.all([
-      admin
-        .from("publicacoes")
-        .select("id, tribunal, numero_processo, tipo")
-        .eq("tenant_id", input.tenantId)
-        .in("id", input.publicationIds),
-      admin
-        .from("tenant_memberships")
-        .select("user_id")
-        .eq("tenant_id", input.tenantId)
-        .eq("status", "active")
-        .in("role", ["owner", "admin", "lawyer", "assistant"]),
-    ]);
+  const { data: publications, error } = await admin
+    .from("publicacoes")
+    .select("id, process_id, tribunal, numero_processo, tipo, conteudo")
+    .eq("tenant_id", input.tenantId)
+    .in("id", input.publicationIds);
 
-  if (publicationError) throw publicationError;
-  if (memberError) throw memberError;
-  if (!publications?.length || !members?.length) return 0;
-
-  const notifications = members.flatMap((member) =>
-    publications.map((publication) => ({
-      tenant_id: input.tenantId,
-      user_id: member.user_id,
-      titulo: "Nova publicação oficial no DJEN",
-      mensagem: [
-        publication.tipo,
-        publication.tribunal,
-        publication.numero_processo,
-      ].filter(Boolean).join(" · "),
-      tipo: "juridico",
-      processo_numero: publication.numero_processo,
-      tribunal: publication.tribunal,
-      lida: false,
-    }))
-  );
-
-  const { error } = await admin.from("notificacoes").insert(notifications);
   if (error) throw error;
-  return notifications.length;
+  if (!publications?.length) return 0;
+
+  let delivered = 0;
+  for (const publication of publications) {
+    const summary = [
+      publication.tipo,
+      publication.tribunal,
+      publication.numero_processo,
+    ].filter(Boolean).join(" · ");
+
+    const result = await deliverLegalAlert(admin, {
+      tenantId: input.tenantId,
+      processId: publication.process_id as string | null,
+      content: {
+        event: "publication_new",
+        title: "Nova publicação oficial",
+        summary: summary ||
+          String(publication.conteudo ?? "").slice(0, 240),
+        processNumber: publication.numero_processo as string | null,
+        detailUrl: publication.process_id
+          ? `https://adveyes.automatikus.com.br/processos/${publication.process_id}`
+          : "https://adveyes.automatikus.com.br/publicacoes",
+        idempotencyKey: `publication:${publication.id}`,
+      },
+    });
+    delivered += result.inApp;
+  }
+
+  return delivered;
 }
 
 /** Índice de processos do escritório por número CNJ formatado. */

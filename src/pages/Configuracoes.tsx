@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
+import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
 
 type TribunalCredencial = Tables<"tribunal_credenciais">;
 
@@ -1187,32 +1188,7 @@ const Configuracoes = () => {
 
           {/* === NOTIFICAÇÕES === */}
           <TabsContent value="notificacoes" className="space-y-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <Bell className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">Notificações</h3>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { label: "Notificações por e-mail", desc: "Receba alertas por e-mail", checked: false },
-                    { label: "Alertas de prazos", desc: "Avisos antes do vencimento", checked: true },
-                    { label: "Novas publicações", desc: "DJe e publicações oficiais", checked: true },
-                    { label: "Movimentações processuais", desc: "Mudanças nos processos monitorados", checked: true },
-                    { label: "Audiências próximas", desc: "Lembrete 24h antes", checked: true },
-                    { label: "Vencimentos financeiros", desc: "Honorários e despesas", checked: true },
-                  ].map((n) => (
-                    <div key={n.label} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div>
-                        <Label className="text-sm font-medium">{n.label}</Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">{n.desc}</p>
-                      </div>
-                      <Switch defaultChecked={n.checked} />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <PreferenciasNotificacao />
           </TabsContent>
         </Tabs>
 
