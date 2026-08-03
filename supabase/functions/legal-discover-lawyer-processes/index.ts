@@ -16,6 +16,10 @@ import {
 } from "../_shared/datajud-client.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
 import { formatCnj } from "../_shared/legal-normalization.ts";
+import {
+  assertProviderQuota,
+  ProviderQuotaError,
+} from "../_shared/provider-quota.ts";
 
 const OAB_TYPES = new Set([
   "ADVOGADO",
@@ -253,6 +257,14 @@ Deno.serve(async (request) => {
   }
 
   try {
+    // A cota é verificada antes de sair a requisição: estourado o limite,
+    // o provedor não chega a ser chamado e nada é cobrado.
+    await assertProviderQuota(auth.admin, {
+      tenantId: input.tenantId,
+      provider: "escavador",
+      kind: "lookup",
+    });
+
     const result = await discoverLawyerProcesses({
       token,
       oabState: input.oabState,
@@ -314,6 +326,14 @@ Deno.serve(async (request) => {
       pages: result.pages,
     });
   } catch (error) {
+    if (error instanceof ProviderQuotaError) {
+      return json({
+        error: error.code,
+        registrationId: registration.id,
+        registrationSaved: true,
+        usage: error.state,
+      }, 429);
+    }
     if (error instanceof EscavadorApiError) {
       return json({ error: error.code }, error.status);
     }

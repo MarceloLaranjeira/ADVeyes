@@ -79,12 +79,18 @@ Deno.serve(async (request) => {
       return json({ error: "operation_failed" }, 500);
     }
     const token = await getEscavadorToken(auth.admin);
+    const { data: usage } = await auth.admin.rpc(
+      "provider_usage_summary_server",
+      { p_tenant_id: tenantId },
+    );
+
     return json({
       providerConfigured: Boolean(token),
       professionals: professionals.data ?? [],
       registrations: registrations.data ?? [],
       discoveries: discoveries.data ?? [],
       monitors: monitors.data ?? [],
+      usage: usage ?? null,
     });
   }
 

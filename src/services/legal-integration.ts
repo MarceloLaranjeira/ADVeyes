@@ -44,8 +44,16 @@ export interface LegalMonitor {
   updated_at: string;
 }
 
+export interface ProviderUsage {
+  provider: string;
+  period_start: string;
+  lookups: { used: number; limit: number };
+  monitors: { used: number; limit: number };
+}
+
 export interface LegalOverview {
   providerConfigured: boolean;
+  usage: ProviderUsage | null;
   professionals: LegalProfessional[];
   registrations: LawyerRegistration[];
   discoveries: ProcessDiscovery[];
@@ -62,6 +70,10 @@ const messages: Record<string, string> = {
   escavador_insufficient_balance: "A conta do Escavador está sem saldo.",
   escavador_rate_limited: "O limite de consultas do Escavador foi atingido.",
   escavador_request_failed: "O Escavador não respondeu corretamente.",
+  tenant_quota_exceeded:
+    "O limite de consultas do plano deste mês foi atingido.",
+  platform_quota_exceeded:
+    "O limite global de consultas da plataforma foi atingido.",
   datajud_unauthorized: "A chave do DataJud foi recusada.",
   datajud_rate_limited: "O limite de consultas do DataJud foi atingido.",
   datajud_request_failed: "O DataJud não respondeu a tempo.",

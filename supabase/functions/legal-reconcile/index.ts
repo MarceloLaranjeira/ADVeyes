@@ -34,6 +34,11 @@ import {
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
+import {
+  assertProviderQuota,
+  ProviderQuotaError,
+  recordProviderUsage,
+} from "../_shared/provider-quota.ts";
 
 const CNJ_PATTERN = /^[0-9]{7}-[0-9]{2}\.[0-9]{4}\.[0-9]\.[0-9]{2}\.[0-9]{4}$/;
 const DEFAULT_BATCH = 40;
@@ -71,6 +76,7 @@ interface ReconcileContext {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof ProviderQuotaError) return error.code;
   if (error instanceof EscavadorApiError) return error.code;
   if (error instanceof DataJudApiError) return error.code;
   if (error instanceof DjenApiError) return error.code;
@@ -170,11 +176,27 @@ async function reconcileOabSource(
   if (registrationError) throw registrationError;
   if (!registration) throw new Error("registration_not_found");
 
+  // A reconciliação roda sozinha: sem a trava, o custo cresceria sem
+  // ninguém perceber. Estourada a cota, o provedor não é chamado.
+  await assertProviderQuota(context.admin, {
+    tenantId: source.tenant_id,
+    provider: "escavador",
+    kind: "lookup",
+  });
+
   const result = await discoverLawyerProcesses({
     token: context.escavadorToken,
     oabNumber,
     oabState,
     oabType: registration.oab_type ?? "ADVOGADO",
+  });
+
+  await recordProviderUsage(context.admin, {
+    tenantId: source.tenant_id,
+    provider: "escavador",
+    operation: "oab_discovery",
+    externalReference: registration.id,
+    metadata: { pages: result.pages, found: result.processes.length },
   });
 
   const rows = result.processes
@@ -301,9 +323,12 @@ async function reconcileSource(
   } catch (error) {
     const code = errorCode(error);
     const finishedAt = new Date().toISOString();
-    // Uma integração ainda não configurada não é falha do escritório:
-    // a fonte permanece ativa e volta a ser tentada na próxima janela.
-    const pending = code === "integration_not_configured";
+    // Integração não configurada e cota esgotada não são falhas do escritório:
+    // a fonte permanece ativa e volta a ser tentada na próxima janela. A cota
+    // se renova no mês seguinte, então desativar exigiria religar na mão.
+    const pending = code === "integration_not_configured" ||
+      code === "tenant_quota_exceeded" ||
+      code === "platform_quota_exceeded";
     const permanent = !pending && PERMANENT_FAILURES.has(code);
     const delay = pending || permanent
       ? null

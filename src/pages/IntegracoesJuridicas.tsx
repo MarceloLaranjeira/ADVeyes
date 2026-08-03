@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { UsageMeter } from "@/components/integracoes/UsageMeter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -252,9 +253,29 @@ export default function IntegracoesJuridicas() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Fonte complementar para descoberta e monitoramento ampliado. As
-              fontes oficiais continuam funcionando sem ela.
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Fonte complementar para descoberta e monitoramento ampliado. As
+                fontes oficiais continuam funcionando sem ela.
+              </p>
+              {overview?.usage && (
+                <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <UsageMeter
+                    label="Consultas neste mês"
+                    used={overview.usage.lookups.used}
+                    total={overview.usage.lookups.limit}
+                  />
+                  <UsageMeter
+                    label="Processos monitorados"
+                    used={overview.usage.monitors.used}
+                    total={overview.usage.monitors.limit}
+                  />
+                  <p className="text-xs">
+                    Atingido o limite, as consultas param automaticamente até a
+                    virada do mês ou a contratação de adicional.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
