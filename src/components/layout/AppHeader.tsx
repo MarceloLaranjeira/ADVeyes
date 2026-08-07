@@ -25,26 +25,39 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
   return (
     <header
-      className="fixed top-0 inset-x-0 z-40 h-16 bg-white border-b border-border flex items-center px-4 lg:px-6 gap-4"
+      className="fixed top-0 inset-x-0 z-40 h-16 bg-white border-b border-border flex items-center pr-4 lg:pr-6 gap-4"
       style={{ boxShadow: "rgba(0,0,0,0.06) 0px 0px 12px 0px" }}
     >
       {/* Mobile menu */}
       <button
         onClick={onMenuClick}
-        className="lg:hidden p-2 rounded-md hover:bg-secondary text-muted-foreground"
+        className="lg:hidden ml-4 p-2 rounded-md hover:bg-secondary text-muted-foreground"
         aria-label="Abrir menu"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
 
-      {/* Logo */}
-      <Link to="/" className="flex items-center gap-2 shrink-0">
-        <LogoFull size="sm" className="max-w-[160px]" />
+      {/*
+        A marca ocupa um bloco cheio da largura da régua (w-60), encostado na
+        borda: antes era uma logo de 28px solta sobre o branco, com o canto
+        superior esquerdo partido entre header claro e régua navy. Agora as
+        duas superfícies navy se encontram e a marca fica dentro dela.
+      */}
+      <Link
+        to="/"
+        className="hidden lg:flex h-16 w-60 shrink-0 items-center bg-sidebar px-5"
+      >
+        <LogoFull size="md" dark className="max-w-full" />
+      </Link>
+
+      {/* No mobile a régua some, então a marca volta a ser um item comum. */}
+      <Link to="/" className="flex lg:hidden items-center shrink-0">
+        <LogoFull size="sm" className="max-w-[140px]" />
       </Link>
 
       <EnvironmentSwitcher
         mode={location.pathname === "/admin" ? "platform" : "tenant"}
-        className="hidden xl:inline-flex"
+        className="hidden xl:inline-flex min-w-[220px] ml-1"
       />
 
       {/* Busca global */}

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
@@ -65,16 +66,43 @@ const sections: Array<{
   },
 ];
 
+/** Onde a rolagem da régua estava quando a página trocou. */
+const CHAVE_ROLAGEM = "adveyes:rolagem-menu";
+
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { isPlatformAdmin } = usePlatformAdmin();
+  const navRef = useRef<HTMLElement>(null);
+
+  /**
+   * Preserva a posição da rolagem entre as páginas.
+   *
+   * Cada uma das 23 páginas monta o próprio `AppLayout`, então navegar
+   * desmonta e remonta esta régua — e a rolagem volta ao topo. Quem clicava
+   * num item do fim do menu perdia de vista onde estava. A correção de raiz é
+   * a rota de layout, que mantém a régua montada; enquanto ela não vem, a
+   * posição é guardada e restaurada na montagem.
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const salvo = Number(sessionStorage.getItem(CHAVE_ROLAGEM));
+    if (salvo > 0) nav.scrollTop = salvo;
+
+    const guardar = () => {
+      sessionStorage.setItem(CHAVE_ROLAGEM, String(nav.scrollTop));
+    };
+    nav.addEventListener("scroll", guardar, { passive: true });
+    return () => nav.removeEventListener("scroll", guardar);
+  }, []);
 
   return (
     // A régua é navy nos tokens desde sempre (`--sidebar-background`), mas
     // estava com `bg-white` fixo aqui — o token nunca chegava a valer. Navy
     // separa navegação de conteúdo sem precisar de borda ou sombra.
     <aside className="h-full w-60 bg-sidebar border-r border-sidebar-border flex flex-col">
-      <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
+      <nav ref={navRef} className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
         {isPlatformAdmin && (
           <div className="mb-5">
             <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
@@ -85,7 +113,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 location.pathname === "/admin"
-                  ? "bg-sidebar-accent text-sidebar-primary font-bold shadow-[inset_3px_0_0_hsl(var(--sidebar-primary))]"
+                  ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
                   : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
               }`}
             >
@@ -112,7 +140,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                     onClick={onClose}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive
-                        ? "bg-sidebar-accent text-sidebar-primary font-bold shadow-[inset_3px_0_0_hsl(var(--sidebar-primary))]"
+                        ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
                     }`}
                   >
@@ -121,7 +149,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                     {item.badge ? (
                       // Vermelho de prazo é fechado demais para ler sobre
                       // navy; o latão cumpre o papel de chamar atenção.
-                      <span className="bg-sidebar-primary text-sidebar-primary-foreground text-[10px] font-bold px-1.5 py-px rounded">
+                      <span className="bg-gold text-[hsl(var(--navy))] text-[10px] font-bold px-1.5 py-px rounded">
                         {item.badge}
                       </span>
                     ) : null}

@@ -495,37 +495,56 @@ const Configuracoes = () => {
                 <div className="flex items-center gap-3 mb-4">
                   <Bot className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Horus — Assistente de IA Jurídica</h3>
-                  <span className="text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2 py-0.5 rounded-full ml-auto">Ativo</span>
+                  {/* Dizia "Ativo" fixo, mesmo com o chat fora do ar. */}
+                  <span className="text-xs bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 rounded-full ml-auto">
+                    Parcial
+                  </span>
                 </div>
 
                 <div className="space-y-3 mb-4">
+                  {/*
+                    Este painel descrevia três provedores e três modelos que o
+                    sistema não usa. Descrição errada de infraestrutura custa
+                    caro: leva a configurar a chave errada e a achar que uma
+                    funcionalidade existe. Aqui fica o que o código faz hoje.
+                  */}
                   <div className="rounded-lg border p-3 bg-muted/30">
-                    <p className="text-xs font-semibold text-foreground mb-1">Como funciona o Horus</p>
+                    <p className="text-xs font-semibold text-foreground mb-1">O que está no ar</p>
                     <p className="text-xs text-muted-foreground">
-                      O Horus é uma IA treinada para o direito brasileiro. Ele consulta legislação, analisa peças processuais,
-                      gera petições e responde perguntas sobre jurisprudência. O modelo é executado via API Gemini (Google)
-                      diretamente pelo servidor Supabase Edge Function <code className="bg-muted px-1 rounded">chat</code>.
+                      <strong>Criação de peças</strong> funciona: roda na Edge Function{" "}
+                      <code className="bg-muted px-1 rounded">legal-draft-piece</code>, com o modelo{" "}
+                      <code className="bg-muted px-1 rounded">gpt-5.6-sol</code> da OpenAI. O material vem
+                      do banco — processo, andamentos e publicações — e a peça volta como minuta para
+                      revisão. Nada é gravado sem o advogado aprovar.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-warning/40 p-3 bg-warning/5">
+                    <p className="text-xs font-semibold text-foreground mb-1">
+                      Chat do Horus — fora do ar
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      A Edge Function <code className="bg-muted px-1 rounded">chat</code> aponta para o
+                      gateway da Lovable e depende de{" "}
+                      <code className="bg-muted px-1 rounded">LOVABLE_API_KEY</code>, que não está
+                      configurada. Enquanto não for migrada para o mesmo caminho da criação de peças,
+                      o chat responde erro.
                     </p>
                   </div>
 
                   <div className="rounded-lg border p-3 bg-muted/30">
-                    <p className="text-xs font-semibold text-foreground mb-2">Configuração da API de IA (backend)</p>
+                    <p className="text-xs font-semibold text-foreground mb-2">Chave de IA (backend)</p>
                     <p className="text-xs text-muted-foreground mb-2">
-                      A chave de API do modelo de linguagem deve ser configurada como <strong>Secret</strong> no
-                      painel Supabase do projeto, na seção <strong>Edge Functions → Secrets</strong>.
-                      Nunca exponha essas chaves no frontend.
+                      Configurada como <strong>Secret</strong> no painel Supabase, em{" "}
+                      <strong>Edge Functions → Secrets</strong>. Nunca no frontend.
                     </p>
-                    <div className="space-y-1.5">
-                      {[
-                        { secret: "GEMINI_API_KEY", desc: "Google AI Studio — model: gemini-1.5-pro", link: "aistudio.google.com" },
-                        { secret: "OPENAI_API_KEY", desc: "OpenAI Platform — model: gpt-4o", link: "platform.openai.com" },
-                        { secret: "ANTHROPIC_API_KEY", desc: "Anthropic Console — model: claude-3-5-sonnet", link: "console.anthropic.com" },
-                      ].map((item) => (
-                        <div key={item.secret} className="flex items-start gap-2 text-xs">
-                          <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono shrink-0">{item.secret}</code>
-                          <span className="text-muted-foreground">{item.desc} — <span className="italic">{item.link}</span></span>
-                        </div>
-                      ))}
+                    <div className="flex items-start gap-2 text-xs">
+                      <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono shrink-0">
+                        OPENAI_API_KEY
+                      </code>
+                      <span className="text-muted-foreground">
+                        Único provedor implementado — <span className="italic">platform.openai.com</span>
+                      </span>
                     </div>
                   </div>
 
