@@ -93,6 +93,30 @@ export class LegalIntegrationError extends Error {
   }
 }
 
+/**
+ * Parte dos processos foi confirmada antes da falha. Dizer apenas "não foi
+ * possível confirmar" seria mentira: os primeiros já estão monitorados.
+ */
+export class PartialConfirmationError extends Error {
+  constructor(
+    public readonly confirmed: number,
+    public readonly total: number,
+    public readonly code: string,
+  ) {
+    super(
+      `${confirmed} de ${total} processos foram confirmados antes da falha. ` +
+        `Os demais continuam na lista.`,
+    );
+  }
+}
+
+/**
+ * A confirmação percorre os candidatos em série no servidor e cada um dispara
+ * uma chamada ao provedor. Dez por vez cabe folgado no tempo de espera abaixo.
+ */
+const CONFIRM_BATCH = 10;
+const CONFIRM_TIMEOUT_MS = 45_000;
+
 async function invoke<T>(
   functionName: string,
   body: Record<string, unknown>,
@@ -154,5 +178,46 @@ export const legalIntegrationService = {
       candidateIds,
       frequency,
       includePublicDocuments: true,
-    }),
+    }, CONFIRM_TIMEOUT_MS),
+
+  /**
+   * Confirma em lotes, porque a função percorre os candidatos em série e
+   * cada um dispara uma chamada ao provedor pela rede. Uma página inteira de
+   * uma vez estourava o tempo de espera e o advogado via "a operação demorou
+   * mais que o esperado" sem saber o que tinha sido gravado.
+   *
+   * O lote é pequeno de propósito: falha no meio deixa os anteriores
+   * confirmados de verdade, e `onProgress` permite mostrar onde parou.
+   */
+  async confirmInBatches(
+    tenantId: string,
+    candidateIds: string[],
+    frequency: "DIARIA" | "SEMANAL",
+    onProgress?: (confirmed: number, total: number) => void,
+  ): Promise<{ confirmed: number; providerConfigured: boolean }> {
+    let confirmed = 0;
+    let providerConfigured = false;
+
+    for (let start = 0; start < candidateIds.length; start += CONFIRM_BATCH) {
+      const batch = candidateIds.slice(start, start + CONFIRM_BATCH);
+      try {
+        const result = await legalIntegrationService.confirm(
+          tenantId,
+          batch,
+          frequency,
+        );
+        confirmed += result.confirmed;
+        providerConfigured = result.providerConfigured;
+        onProgress?.(confirmed, candidateIds.length);
+      } catch (error) {
+        // O que já entrou continua valendo; quem chamou decide o que dizer.
+        if (confirmed > 0 && error instanceof LegalIntegrationError) {
+          throw new PartialConfirmationError(confirmed, candidateIds.length, error.code);
+        }
+        throw error;
+      }
+    }
+
+    return { confirmed, providerConfigured };
+  },
 };

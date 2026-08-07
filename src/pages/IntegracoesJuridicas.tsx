@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LegalIntegrationError,
   legalIntegrationService,
+  PartialConfirmationError,
   type LegalOverview,
 } from "@/services/legal-integration";
 import {
@@ -56,6 +57,7 @@ export default function IntegracoesJuridicas() {
   const [overview, setOverview] = useState<LegalOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [progress, setProgress] = useState<{ confirmed: number; total: number } | null>(null);
   const [professionalId, setProfessionalId] = useState("");
   const [oabNumber, setOabNumber] = useState("");
   const [oabState, setOabState] = useState("AM");
@@ -117,10 +119,42 @@ export default function IntegracoesJuridicas() {
     void load();
   }, [load]);
 
+  // A descoberta por OAB traz centenas de candidatos. Sem paginação, revisar
+  // exige rolar a lista inteira até o rodapé para chegar ao botão de confirmar.
+  const PAGE_SIZE = 25;
+
   const candidates = useMemo(
     () => overview?.discoveries.filter((item) => item.state === "candidate") ?? [],
     [overview],
   );
+
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(candidates.length / PAGE_SIZE));
+
+  // Confirmar remove candidatos da lista. Sem isto, quem estava na última
+  // página ficaria olhando para o vazio.
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+
+  const pageItems = useMemo(
+    () => candidates.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [candidates, page],
+  );
+
+  // A seleção atravessa páginas de propósito: dá para marcar alguns aqui,
+  // avançar, marcar mais, e confirmar tudo de uma vez.
+  const pageIds = pageItems.map((item) => item.id);
+  const allOnPageSelected = pageIds.length > 0 &&
+    pageIds.every((id) => selected.includes(id));
+
+  const togglePage = () => {
+    setSelected((current) =>
+      allOnPageSelected
+        ? current.filter((id) => !pageIds.includes(id))
+        : [...new Set([...current, ...pageIds])]
+    );
+  };
 
   const discover = async () => {
     if (!currentTenant || !professionalId || !oabNumber.trim()) return;
@@ -169,11 +203,13 @@ export default function IntegracoesJuridicas() {
   const confirm = async () => {
     if (!currentTenant || selected.length === 0) return;
     setWorking(true);
+    setProgress(null);
     try {
-      const result = await legalIntegrationService.confirm(
+      const result = await legalIntegrationService.confirmInBatches(
         currentTenant.tenantId,
         selected,
         frequency,
+        (confirmed, total) => setProgress({ confirmed, total }),
       );
       toast({
         title: `${result.confirmed} processo(s) confirmado(s)`,
@@ -184,13 +220,26 @@ export default function IntegracoesJuridicas() {
       setSelected([]);
       await load();
     } catch (error) {
-      toast({
-        title: "Não foi possível confirmar",
-        description: error instanceof Error ? error.message : "Tente novamente.",
-        variant: "destructive",
-      });
+      // Falha no meio de um lote não apaga o que já entrou.
+      if (error instanceof PartialConfirmationError) {
+        toast({
+          title: `${error.confirmed} de ${error.total} confirmados`,
+          description:
+            `${error.message} Recarregue e confirme os restantes.`,
+          variant: "destructive",
+        });
+        setSelected([]);
+        await load();
+      } else {
+        toast({
+          title: "Não foi possível confirmar",
+          description: error instanceof Error ? error.message : "Tente novamente.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setWorking(false);
+      setProgress(null);
     }
   };
 
@@ -385,18 +434,47 @@ export default function IntegracoesJuridicas() {
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-lg">Processos candidatos</CardTitle>
-            <Badge variant="secondary">{candidates.length} pendente(s)</Badge>
+            <div className="flex items-center gap-2">
+              {selected.length > 0 && (
+                <Badge>{selected.length} selecionado(s)</Badge>
+              )}
+              <Badge variant="secondary">{candidates.length} pendente(s)</Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {candidates.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+                <Button variant="outline" size="sm" onClick={togglePage}>
+                  {allOnPageSelected
+                    ? "Desmarcar esta página"
+                    : `Marcar os ${pageIds.length} desta página`}
+                </Button>
+                {selected.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelected([])}
+                  >
+                    Limpar seleção
+                  </Button>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {page * PAGE_SIZE + 1}–
+                  {Math.min((page + 1) * PAGE_SIZE, candidates.length)} de{" "}
+                  {candidates.length}
+                </span>
+              </div>
+            )}
+
             {loading ? (
               <p className="text-sm text-muted-foreground">Carregando...</p>
             ) : candidates.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nenhum processo aguardando confirmação.
               </p>
-            ) : candidates.map((candidate) => (
+            ) : pageItems.map((candidate) => (
               <label
                 key={candidate.id}
                 className="flex cursor-pointer items-start gap-3 rounded-lg border p-4"
@@ -423,6 +501,30 @@ export default function IntegracoesJuridicas() {
               </label>
             ))}
 
+            {pageCount > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((current) => current - 1)}
+                >
+                  Anterior
+                </Button>
+                <span className="min-w-24 text-center text-sm text-muted-foreground">
+                  Página {page + 1} de {pageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pageCount - 1}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Próxima
+                </Button>
+              </div>
+            )}
+
             {candidates.length > 0 && (
               <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="w-48 space-y-2">
@@ -442,8 +544,19 @@ export default function IntegracoesJuridicas() {
                   onClick={() => void confirm()}
                   disabled={working || selected.length === 0}
                 >
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Confirmar selecionados ({selected.length})
+                  {working && progress
+                    ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Confirmando {progress.confirmed} de {progress.total}…
+                      </>
+                    )
+                    : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Confirmar selecionados ({selected.length})
+                      </>
+                    )}
                 </Button>
               </div>
             )}
