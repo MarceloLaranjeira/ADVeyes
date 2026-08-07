@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -192,6 +193,7 @@ function KanbanColumn({
 
 const Tarefas = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
   const [tarefas, setTarefas]     = useState<Tarefa[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
@@ -210,10 +212,15 @@ const Tarefas = () => {
   });
 
   // ── Fetch ──
+  // A leitura agora é por escritório, então quem participa de mais de um
+  // veria as duas listas misturadas sem este filtro. A RLS garante o acesso;
+  // o filtro garante que a tela mostre o escritório que está selecionado.
   const fetchTarefas = async () => {
+    if (!currentTenant) return;
     const { data } = await supabase
       .from("tarefas")
       .select("*")
+      .eq("tenant_id", currentTenant.tenantId)
       .order("created_at", { ascending: false });
     if (data) setTarefas(data);
   };
@@ -270,7 +277,16 @@ const Tarefas = () => {
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else { toast({ title: "Tarefa atualizada!" }); setShowForm(false); fetchTarefas(); }
     } else {
-      const { error } = await supabase.from("tarefas").insert({ ...payload, user_id: user!.id });
+      // `tenant_id` explícito em vez de confiar no gatilho de compatibilidade:
+      // a política de inserção o exige, e depender do gatilho tornaria a falha
+      // silenciosa e difícil de ler. `responsavel_id` começa em quem criou e
+      // pode ser reatribuído depois.
+      const { error } = await supabase.from("tarefas").insert({
+        ...payload,
+        user_id: user!.id,
+        tenant_id: currentTenant!.tenantId,
+        responsavel_id: user!.id,
+      });
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else { toast({ title: "Tarefa criada!" }); setShowForm(false); fetchTarefas(); }
     }

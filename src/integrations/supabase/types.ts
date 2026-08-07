@@ -977,6 +977,10 @@ export type Database = {
       }
       tarefas: {
         Row: {
+          concluida_em: string | null
+          processo_id: string | null
+          responsavel_id: string | null
+          tenant_id: string | null
           created_at: string
           data_limite: string | null
           descricao: string | null
@@ -988,6 +992,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          concluida_em?: string | null
+          processo_id?: string | null
+          responsavel_id?: string | null
+          tenant_id?: string | null
           created_at?: string
           data_limite?: string | null
           descricao?: string | null
@@ -999,6 +1007,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          concluida_em?: string | null
+          processo_id?: string | null
+          responsavel_id?: string | null
+          tenant_id?: string | null
           created_at?: string
           data_limite?: string | null
           descricao?: string | null
