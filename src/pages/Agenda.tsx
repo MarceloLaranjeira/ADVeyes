@@ -496,7 +496,7 @@ const Agenda = () => {
                     <div className="space-y-2">
                       {audiencias.slice(0, 5).map(a => (
                         <div key={a.id} className="text-xs border rounded-lg p-2.5 bg-purple-500/5 border-purple-500/20">
-                          <p className="font-semibold text-purple-700 dark:text-purple-400">{a.tipo}</p>
+                          <p className="font-semibold text-purple-700">{a.tipo}</p>
                           <p className="text-muted-foreground mt-0.5">{format(new Date(a.data_hora), "dd/MM HH:mm")}</p>
                           {a.processos?.cliente_nome && <p className="text-muted-foreground truncate">{a.processos.cliente_nome}</p>}
                         </div>

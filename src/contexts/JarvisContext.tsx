@@ -17,18 +17,8 @@ export const JarvisProvider = ({ children }: { children: ReactNode }) => {
     return false;
   });
 
-  useEffect(() => {
-    const root = document.documentElement;
-    if (jarvisMode) {
-      root.classList.add("jarvis");
-      root.classList.remove("light");
-    } else {
-      root.classList.remove("jarvis");
-      // Restore theme preference
-      const theme = localStorage.getItem("theme") || "light";
-      root.classList.add(theme);
-    }
-  }, [jarvisMode]);
+  // A paleta "jarvis" foi removida junto com a escura: o sistema tem uma só,
+  // definida em `:root`. Este contexto não mexe mais na classe do <html>.
 
   const toggleJarvis = () => {
     setJarvisMode((prev) => {

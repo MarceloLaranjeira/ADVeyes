@@ -95,13 +95,13 @@ export const NotificationPanel = () => {
   const getUrgencyColor = (urgencia: string) => {
     switch (urgencia) {
       case "CRITICA":
-        return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900";
+        return "bg-red-50 border-red-200";
       case "ALTA":
-        return "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900";
+        return "bg-orange-50 border-orange-200";
       case "MEDIA":
-        return "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900";
+        return "bg-blue-50 border-blue-200";
       default:
-        return "bg-gray-50 dark:bg-gray-950/20 border-gray-200 dark:border-gray-900";
+        return "bg-gray-50 border-gray-200";
     }
   };
 

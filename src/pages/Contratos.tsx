@@ -274,11 +274,11 @@ const Contratos = () => {
             <div><p className="text-xs text-muted-foreground">Templates Cadastrados</p><p className="text-2xl font-bold">{templates.length}</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center"><FileText className="w-5 h-5 text-green-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><FileText className="w-5 h-5 text-green-600" /></div>
             <div><p className="text-xs text-muted-foreground">Documentos Gerados</p><p className="text-2xl font-bold">{documentos.length}</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center"><Zap className="w-5 h-5 text-purple-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center"><Zap className="w-5 h-5 text-purple-600" /></div>
             <div><p className="text-xs text-muted-foreground">Mais Usado</p><p className="text-sm font-bold truncate">{templates[0]?.titulo || "—"}</p></div>
           </CardContent></Card>
         </div>
@@ -460,7 +460,7 @@ const Contratos = () => {
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Prévia do Documento</DialogTitle></DialogHeader>
-            <div className="bg-white dark:bg-zinc-900 border rounded-lg p-8">
+            <div className="bg-white border rounded-lg p-8">
               <pre className="whitespace-pre-wrap text-sm font-serif leading-relaxed">{previewContent}</pre>
             </div>
             <div className="flex justify-end gap-3">

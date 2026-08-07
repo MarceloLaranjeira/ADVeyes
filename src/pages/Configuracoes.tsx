@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
+  User, Bell, Shield, Palette, Plus, Pencil, Trash2,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
   CreditCard, Crown, Clock, Star, ArrowRight, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
@@ -22,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useTheme } from "@/components/theme/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -163,7 +162,6 @@ const emptyForm = { tribunal: "", token_acesso: "", numero_oab: "", seccional_oa
 
 const Configuracoes = () => {
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const {
     subscription,
@@ -401,16 +399,12 @@ const Configuracoes = () => {
                   <Palette className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Aparência</h3>
                 </div>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <Label className="text-sm font-medium">Tema do Sistema</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Alterne entre tema claro e escuro</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Sun className="w-4 h-4 text-muted-foreground" />
-                    <Switch checked={theme === "dark"} onCheckedChange={(c) => setTheme(c ? "dark" : "light")} />
-                    <Moon className="w-4 h-4 text-muted-foreground" />
-                  </div>
+                <div className="py-2">
+                  <Label className="text-sm font-medium">Paleta institucional</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Marfim e latão sobre navy. Paleta única — a mesma em todas as
+                    telas, para que documento impresso e tela combinem.
+                  </p>
                 </div>
               </CardContent>
             </Card>
