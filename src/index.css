@@ -11,53 +11,58 @@
 
 @layer base {
   :root {
-    /* === ASTREA DESIGN SYSTEM === */
-    --background: 0 0% 100%;             /* #FFFFFF */
-    --foreground: 220 9% 13%;            /* #202124 */
+    /* ═══════════════════════════════════════════════
+       TEMA CLARO — marfim e latão
+       Branco puro é o que faz todo sistema parecer igual.
+       A superfície de trabalho puxa para papel; os cartões
+       ficam em branco, e a camada aparece sem sombra pesada.
+    ════════════════════════════════════════════════ */
+    --background: 50 23% 95%;             /* #F5F4EF marfim */
+    --foreground: 218 22% 10%;            /* #14181F */
     --card: 0 0% 100%;
-    --card-foreground: 220 9% 13%;
+    --card-foreground: 218 22% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 13%;
-    /* Azul Astrea #228BE6 */
-    --primary: 209 79% 52%;
+    --popover-foreground: 218 22% 10%;
+    /* Navy institucional — âncora da marca */
+    --primary: 219 46% 14%;               /* #131E33 */
     --primary-foreground: 0 0% 100%;
-    --primary-100: 201 100% 93%;          /* #DAF3FF */
-    --primary-900: 209 73% 42%;           /* #1D6BB7 */
-    /* Cinzas */
-    --secondary: 210 14% 95%;             /* #F1F3F4 */
-    --secondary-foreground: 220 9% 13%;
-    --muted: 210 14% 95%;                 /* #F1F3F4 */
-    --muted-foreground: 210 7% 46%;       /* #6C757D */
-    --accent: 210 14% 95%;
-    --accent-foreground: 220 9% 13%;
-    /* Status */
-    --destructive: 0 98% 46%;             /* #E70202 */
+    --primary-100: 45 17% 86%;
+    --primary-900: 218 22% 10%;
+    /* Neutros com viés quente, para conversar com o marfim */
+    --secondary: 47 20% 91%;              /* #EDEBE4 */
+    --secondary-foreground: 218 16% 24%;
+    --muted: 47 20% 91%;
+    --muted-foreground: 224 9% 47%;       /* #6E7484 */
+    --accent: 45 17% 86%;
+    --accent-foreground: 218 22% 10%;
+    /* Status — vermelho reservado a prazo, nada mais */
+    --destructive: 6 67% 36%;             /* #9A2A1E */
     --destructive-foreground: 0 0% 100%;
-    --success: 141 98% 27%;               /* #02883C */
+    --success: 155 42% 26%;               /* #276048 */
     --success-foreground: 0 0% 100%;
-    --warning: 44 97% 59%;                /* #FCC530 */
-    --warning-foreground: 220 9% 13%;
-    --info: 209 79% 52%;
+    --warning: 40 77% 28%;                /* #7E5A10 */
+    --warning-foreground: 0 0% 100%;
+    --info: 219 46% 14%;
     --info-foreground: 0 0% 100%;
-    --border: 210 14% 89%;                /* #DEE2E6 */
-    --input: 210 14% 89%;
-    --ring: 209 79% 52%;
-    --radius: 0.5rem;                     /* 8px */
-    /* Sidebar — branca estilo Astrea */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 210 7% 46%;     /* #6C757D */
-    --sidebar-primary: 209 79% 52%;       /* azul para item ativo */
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 14% 95%;        /* #F1F3F4 hover */
-    --sidebar-accent-foreground: 220 9% 13%;
-    --sidebar-border: 210 14% 89%;
-    --sidebar-ring: 209 79% 52%;
-    /* Brand legacy (compat) */
-    --gold: 44 97% 59%;
-    --gold-light: 44 97% 75%;
-    --navy: 209 79% 52%;
-    --navy-light: 209 73% 42%;
-    --neural-blue: 209 79% 52%;
+    --border: 45 17% 86%;                 /* #E2DFD6 */
+    --input: 46 15% 78%;
+    --ring: 39 55% 37%;
+    --radius: 0.5rem;
+    /* Régua de navegação — escura nos dois temas, de propósito */
+    --sidebar-background: 219 46% 14%;    /* #131E33 */
+    --sidebar-foreground: 222 24% 83%;
+    --sidebar-primary: 39 48% 57%;        /* latão marca o item ativo */
+    --sidebar-primary-foreground: 220 40% 6%;
+    --sidebar-accent: 219 42% 20%;        /* #1D2B47 hover */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 219 37% 26%;
+    --sidebar-ring: 39 48% 57%;
+    /* Latão fecha no claro, senão desaparece no marfim */
+    --gold: 39 55% 37%;                   /* #94702B */
+    --gold-light: 39 48% 57%;             /* #C6A05B */
+    --navy: 219 46% 14%;
+    --navy-light: 219 42% 20%;
+    --neural-blue: 219 46% 14%;
     --neural-cyan: 186 100% 50%;
     --neural-purple: 260 80% 60%;
   }
@@ -128,41 +133,50 @@
     box-shadow: inset 3px 0 0 hsl(200, 100%, 55%);
   }
 
+  /* ═══════════════════════════════════════════════
+     TEMA ESCURO — azul de tinta
+     Não é o claro invertido: latão e vermelho abrem para
+     sobreviver ao fundo escuro, e a sombra fica longa e
+     opaca em vez de curta.
+  ════════════════════════════════════════════════ */
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 92%;
-    --card: 222 40% 10%;
-    --card-foreground: 210 40% 92%;
-    --popover: 222 40% 10%;
-    --popover-foreground: 210 40% 92%;
-    --primary: 221 83% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 222 32% 16%;
-    --secondary-foreground: 210 40% 88%;
-    --muted: 222 32% 14%;
-    --muted-foreground: 215 16% 52%;
-    --accent: 222 32% 16%;
-    --accent-foreground: 210 40% 88%;
-    --destructive: 0 62% 44%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 222 32% 17%;
-    --input: 222 32% 17%;
-    --ring: 221 83% 60%;
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 215 16% 60%;
-    --sidebar-primary: 221 83% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 40% 13%;
-    --sidebar-accent-foreground: 210 40% 88%;
-    --sidebar-border: 222 32% 14%;
-    --sidebar-ring: 221 83% 60%;
-    --success: 142 71% 48%;
-    --warning: 38 92% 52%;
-    --info: 199 89% 52%;
-    --gold: 42 82% 55%;
-    --gold-light: 42 65% 70%;
-    --navy: 222 55% 8%;
-    --navy-light: 222 40% 18%;
+    --background: 218 33% 8%;             /* #0E131C */
+    --foreground: 223 18% 92%;            /* #E8EAEF */
+    --card: 218 30% 12%;                  /* #161D29 */
+    --card-foreground: 223 18% 92%;
+    --popover: 218 30% 12%;
+    --popover-foreground: 223 18% 92%;
+    --primary: 39 48% 57%;                /* latão comanda a ação no escuro */
+    --primary-foreground: 220 40% 6%;
+    --secondary: 219 26% 15%;             /* #1D2431 */
+    --secondary-foreground: 220 17% 79%;
+    --muted: 219 26% 15%;
+    --muted-foreground: 221 10% 57%;      /* #868D9C */
+    --accent: 218 23% 19%;
+    --accent-foreground: 223 18% 92%;
+    --destructive: 10 65% 68%;            /* #E28A78 */
+    --destructive-foreground: 220 40% 6%;
+    --border: 218 23% 19%;                /* #252D3B */
+    --input: 218 20% 25%;
+    --ring: 39 48% 57%;
+    --sidebar-background: 218 44% 5%;     /* #070B12 */
+    --sidebar-foreground: 222 24% 83%;
+    --sidebar-primary: 39 48% 57%;
+    --sidebar-primary-foreground: 220 40% 6%;
+    --sidebar-accent: 219 41% 14%;        /* #141E31 */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 218 30% 17%;
+    --sidebar-ring: 39 48% 57%;
+    --success: 152 35% 60%;               /* #74BC9A */
+    --success-foreground: 220 40% 6%;
+    --warning: 40 60% 59%;                /* #D5AC57 */
+    --warning-foreground: 220 40% 6%;
+    --info: 39 48% 57%;
+    --info-foreground: 220 40% 6%;
+    --gold: 39 48% 57%;                   /* #C6A05B — abre no escuro */
+    --gold-light: 39 55% 70%;
+    --navy: 218 44% 5%;
+    --navy-light: 219 41% 14%;
     --neural-blue: 200 100% 55%;
     --neural-cyan: 186 100% 55%;
     --neural-purple: 260 80% 65%;
