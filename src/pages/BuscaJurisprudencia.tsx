@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { formatDateBR } from "@/lib/utils";
+import { readEdgeFunctionError } from "@/lib/edge-function-error";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Search, ExternalLink, Loader2, FileText, Calendar, Bell,
@@ -290,7 +292,8 @@ const BuscaJurisprudencia = () => {
       } catch (e) {
         clearInterval(interval);
         setSearchProgress({ active: false, current: 0, total: 0, label: "" });
-        toast({ title: "Erro na consulta", description: (e as Error).message, variant: "destructive" });
+        const falha = await readEdgeFunctionError(e);
+        toast({ title: "Erro na consulta", description: falha.message, variant: "destructive" });
       }
     } else {
       try {
@@ -307,7 +310,8 @@ const BuscaJurisprudencia = () => {
             toast({ title: "Nenhum processo encontrado", description: `Sem resultados em ${t.toUpperCase()}` });
         }
       } catch (e) {
-        toast({ title: "Erro na consulta", description: (e as Error).message, variant: "destructive" });
+        const falha = await readEdgeFunctionError(e);
+        toast({ title: "Erro na consulta", description: falha.message, variant: "destructive" });
       }
     }
     setLoading(false);
@@ -322,7 +326,8 @@ const BuscaJurisprudencia = () => {
       setMonitorando((prev) => [...prev, numProcesso]);
       toast({ title: "Processo monitorado!", description: "Você será notificado de novas movimentações." });
     } catch (e) {
-      toast({ title: "Erro ao monitorar", description: (e as Error).message, variant: "destructive" });
+      const falha = await readEdgeFunctionError(e);
+      toast({ title: "Erro ao monitorar", description: falha.message, variant: "destructive" });
     }
   };
 
@@ -332,9 +337,25 @@ const BuscaJurisprudencia = () => {
         body: { action: "peticionar", tribunal, numero_processo: numProcesso },
       });
       if (error) throw error;
-      toast({ title: data.message || "Petição preparada", description: data.nota });
+      // O retorno traz o endereço do sistema do tribunal. Abrir a aba é o
+      // que o botão promete; o protocolo acontece lá, com certificado.
+      if (data?.endpoint && data.endpoint !== "N/A") {
+        window.open(data.endpoint, "_blank", "noopener,noreferrer");
+      }
+      toast({
+        title: "Dados preparados",
+        description: data?.nota ??
+          "Conclua o protocolo no portal do tribunal, com seu certificado digital.",
+      });
     } catch (e) {
-      toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
+      const falha = await readEdgeFunctionError(e);
+      // A causa mais comum é não haver credencial do tribunal cadastrada, e
+      // a função diz isso — mas a mensagem só aparece se for lida do corpo.
+      toast({
+        title: "Não foi possível preparar a petição",
+        description: falha.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -376,8 +397,12 @@ const BuscaJurisprudencia = () => {
               <Bell className="w-3 h-3" />
               {monitorando.includes(p.numero) ? "Monitorando" : "Monitorar"}
             </Button>
+            {/* Não peticiona: o protocolo real exige certificado A1/A3 no
+                portal do tribunal. O botão prepara os dados e leva para lá —
+                chamá-lo de "Peticionar" fazia o advogado acreditar que a
+                peça tinha sido protocolada. */}
             <Button variant="outline" size="sm" className="gap-1 text-xs h-8" onClick={() => peticionar(p.numero)}>
-              <Send className="w-3 h-3" /> Peticionar
+              <ExternalLink className="w-3 h-3" /> Abrir no portal
             </Button>
           </div>
         </div>
@@ -386,10 +411,12 @@ const BuscaJurisprudencia = () => {
             <span className="font-medium">Órgão:</span> {p.orgaoJulgador}
           </p>
         )}
-        {p.dataAjuizamento && (
+        {/* Data ilegível some da tela. Mostrar "Invalid Date" é pior que
+            omitir: dá a impressão de que o sistema leu algo e errou. */}
+        {formatDateBR(p.dataAjuizamento) && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
             <Calendar className="w-3 h-3" />
-            Ajuizado: {new Date(p.dataAjuizamento).toLocaleDateString("pt-BR")}
+            Ajuizado: {formatDateBR(p.dataAjuizamento)}
           </div>
         )}
         {p.movimentos?.length > 0 && (
@@ -401,7 +428,7 @@ const BuscaJurisprudencia = () => {
                   <FileText className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
                   <div>
                     <span className="font-medium">{m.nome}</span>
-                    {m.data && <span className="text-muted-foreground ml-2">{new Date(m.data).toLocaleDateString("pt-BR")}</span>}
+                    {formatDateBR(m.data) && <span className="text-muted-foreground ml-2">{formatDateBR(m.data)}</span>}
                     {m.complementos && <p className="text-muted-foreground">{m.complementos}</p>}
                   </div>
                 </div>
@@ -488,7 +515,7 @@ const BuscaJurisprudencia = () => {
             {detectedTribunal && detectedTribunal !== tribunal && (
               <div className="mt-3 flex items-center gap-3 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm">
                 <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="flex-1 text-amber-800 dark:text-amber-400">
+                <span className="flex-1 text-amber-800">
                   Pelo número CNJ, este processo pertence ao{" "}
                   <strong>{detectedTribunal.toUpperCase()}</strong>.
                   Você está buscando em <strong>{tribunal.toUpperCase()}</strong>.
