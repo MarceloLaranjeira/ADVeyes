@@ -6,6 +6,21 @@ import type { DataJudProcessPayload } from "./legal-normalization.ts";
 
 const DATAJUD_BASE = "https://api-publica.datajud.cnj.jus.br";
 
+/**
+ * A API pública do DataJud responde devagar e de forma irregular. Os limites
+ * anteriores — 10s por processo e 8s por índice na descoberta — derrubavam a
+ * consulta antes de o CNJ responder, e o erro chegava como "Signal timed out."
+ * Cinco falhas assim seguidas pausavam a fonte de sincronização por
+ * `max_retries`, que é definitivo e exige reativação manual: uma lentidão
+ * passageira do tribunal virava uma fonte parada para sempre.
+ *
+ * Os valores abaixo continuam bem abaixo do limite de execução da Edge
+ * Function, e a descoberta consulta os índices em paralelo, então o teto por
+ * índice não se soma.
+ */
+const PROCESS_TIMEOUT_MS = 25_000;
+const DISCOVERY_TIMEOUT_MS = 20_000;
+
 /** Códigos TR da Justiça Estadual (segmento 8) do padrão CNJ. */
 const STATE_COURT_BY_CODE: Record<string, string> = {
   "01": "ac",
@@ -159,7 +174,7 @@ export async function fetchDataJudProcess(input: {
       query: { match: { numeroProcesso: input.cnj.replace(/\D/g, "") } },
       size: 1,
     }),
-    signal: AbortSignal.timeout(input.timeoutMs ?? 10_000),
+    signal: AbortSignal.timeout(input.timeoutMs ?? PROCESS_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -282,7 +297,7 @@ export async function discoverProcessesByOab(input: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ query, size: input.pageSize ?? 50 }),
-        signal: AbortSignal.timeout(input.timeoutMs ?? 8_000),
+        signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
       })
     ),
   );
