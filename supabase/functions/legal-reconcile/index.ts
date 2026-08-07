@@ -5,6 +5,7 @@
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/tenant-auth.ts";
+import { describeError, postgrestErrorCode } from "../_shared/error-mapping.ts";
 import { normalizeDataJudAuthorization } from "../_shared/datajud-auth.ts";
 import { DataJudApiError, fetchDataJudProcess } from "../_shared/datajud-client.ts";
 import {
@@ -83,12 +84,11 @@ function errorCode(error: unknown): string {
   if (error instanceof Error && /^[a-z0-9_]+$/.test(error.message)) {
     return error.message;
   }
-  return "provider_error";
+  return postgrestErrorCode(error) ?? "provider_error";
 }
 
 function errorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : "operation_failed";
-  return raw.slice(0, 500);
+  return describeError(error);
 }
 
 async function authenticate(
