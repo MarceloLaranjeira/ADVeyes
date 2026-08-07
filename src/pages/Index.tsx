@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
@@ -184,7 +185,6 @@ const Index = () => {
     return "bg-card border-border";
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const quickActions = [
     { label: "Busca Processual", icon: IconBusca, path: "/busca" },

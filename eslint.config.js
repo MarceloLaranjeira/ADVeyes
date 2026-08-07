@@ -5,7 +5,20 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  // Artefatos gerados e diretórios de ferramentas não são código-fonte.
+  // Sem isso o CLI do Supabase (supabase/.temp) injeta centenas de erros
+  // em bundles minificados e o lint deixa de ser utilizável.
+  {
+    ignores: [
+      "dist",
+      "supabase/.temp",
+      "supabase/.branches",
+      "graphify-out",
+      ".vercel",
+      "check_ts.js",
+      "check_ts.mjs",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

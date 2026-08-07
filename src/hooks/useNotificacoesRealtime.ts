@@ -5,24 +5,36 @@
 
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { NotificacaoHorus } from "@/services/horus/types";
+import type { Notificacao, UrgenciaNotificacao } from "@/types/notificacoes";
 
-function mapDbToHorus(row: any): NotificacaoHorus {
+/** Linha crua da tabela `notificacoes`. Os campos chegam soltos do realtime. */
+interface NotificacaoRow {
+  id: string;
+  tipo?: string | null;
+  urgencia?: string | null;
+  titulo?: string | null;
+  mensagem?: string | null;
+  processo_numero?: string | null;
+  created_at?: string | null;
+  lida?: boolean | null;
+}
+
+function mapRowToNotificacao(row: NotificacaoRow): Notificacao {
   return {
     id: row.id,
     tipo: row.tipo === "movimentacao" ? "NOVA_MOVIMENTACAO"
       : row.tipo === "alerta" ? "PRAZO_VENCENDO"
       : "GERAL",
-    urgencia: (row.urgencia ?? "MEDIA").toUpperCase() as NotificacaoHorus["urgencia"],
+    urgencia: (row.urgencia ?? "MEDIA").toUpperCase() as UrgenciaNotificacao,
     titulo: row.titulo ?? "Notificação",
     mensagem: row.mensagem ?? "",
-    processoId: row.processo_numero,
+    processoId: row.processo_numero ?? undefined,
     dataNotificacao: new Date(row.created_at ?? Date.now()),
     lida: row.lida ?? false,
   };
 }
 
-export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: NotificacaoHorus) => void) {
+export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: Notificacao) => void) {
   useEffect(() => {
     if (!userId) return;
 
@@ -37,7 +49,7 @@ export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: 
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          onNova(mapDbToHorus(payload.new));
+          onNova(mapRowToNotificacao(payload.new as NotificacaoRow));
         }
       )
       .subscribe();

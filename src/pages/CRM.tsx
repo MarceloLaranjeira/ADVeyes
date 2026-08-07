@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -142,7 +143,6 @@ const CRM = () => {
     return "text-green-600";
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <AppLayout>

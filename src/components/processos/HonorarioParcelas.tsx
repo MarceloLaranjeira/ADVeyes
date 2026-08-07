@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -112,7 +113,6 @@ export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: P
     doc.save(`recibo-parcela-${parcela.numero_parcela}-${processoNumero}.pdf`);
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const totalHonorarios = parcelas.reduce((s, p) => s + Number(p.valor), 0);
   const totalPago = parcelas.filter(p => p.status === "pago").reduce((s, p) => s + Number(p.valor), 0);
 

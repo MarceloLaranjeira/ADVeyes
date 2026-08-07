@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import type { NotificacaoHorus } from "@/services/horus/types";
+import type { Notificacao } from "@/types/notificacoes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
 
 export const NotificationPanel = () => {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<NotificacaoHorus[]>([]);
+  const [notifications, setNotifications] = useState<Notificacao[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
@@ -31,7 +31,7 @@ export const NotificationPanel = () => {
   }, []);
 
   // Receber novas notificações via Supabase Realtime
-  const handleNova = useCallback((n: NotificacaoHorus) => {
+  const handleNova = useCallback((n: Notificacao) => {
     setNotifications(prev => {
       if (prev.some(p => p.id === n.id)) return prev;
       const updated = [n, ...prev];
@@ -47,7 +47,7 @@ export const NotificationPanel = () => {
     try {
       const stored = localStorage.getItem("adveyes_notifications");
       if (stored) {
-        const loaded: NotificacaoHorus[] = JSON.parse(stored);
+        const loaded: Notificacao[] = JSON.parse(stored);
         setNotifications(loaded);
         setUnreadCount(loaded.filter(n => !n.lida).length);
       }
