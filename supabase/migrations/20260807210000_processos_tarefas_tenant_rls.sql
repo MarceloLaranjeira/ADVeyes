@@ -1,89 +1,142 @@
--- Processos e tarefas passam a pertencer ao escritório, não ao usuário que
--- digitou.
+-- Restaura o acesso do escritório aos próprios dados e prepara tarefas para
+-- trabalho em equipe.
 --
--- As duas tabelas ficaram para trás quando o sistema virou multi-tenant: a
--- coluna `tenant_id` foi adicionada e o gatilho passou a preenchê-la, mas as
--- políticas continuaram em `auth.uid() = user_id`. O efeito prático é que num
--- escritório com quatro advogados cada um enxerga apenas o que ele mesmo
--- criou — e um processo confirmado por um sócio some para os demais.
+-- ── O defeito ───────────────────────────────────────────────────────────────
+-- As políticas criadas em 20260729011540 (tenant_v1) e 20260729014626
+-- (tenant_v2) chamam `private.can_access_tenant_record` passando o NOME DA
+-- TABELA no parâmetro que a função lê como MÓDULO:
 --
--- Isso também é o que impede qualquer tela de equipe: quadro de tarefas do
--- escritório, atribuição a um responsável e produtividade por pessoa só fazem
--- sentido quando a leitura é por escritório.
+--     can_access_tenant_record(auth.uid(), tenant_id, 'processos', id)
+--                                                     ^^^^^^^^^^^
 --
--- Escolha deliberada: a política usa apenas `has_tenant_permission(..., 'legal',
--- ...)`, sem `can_access_tenant_record`. Essa segunda função nega acesso a
--- quem tem `data_scope` diferente de 'tenant' — e 'assigned' é justamente o
--- padrão de `tenant_memberships`. Somá-la aqui esconderia todos os processos
--- de todo advogado recém-convidado, que é o oposto do objetivo. Enquanto não
--- houver mapa de atribuição por registro, a visibilidade é do escritório.
+-- A função só reconhece os módulos 'legal', 'finance', 'contracts' e
+-- 'reports'. Recebendo 'processos', 'clientes', 'documentos' ou
+-- 'time_entries', ela cai no `return false` final — para o dono, para o
+-- admin, para o advogado, para todos.
+--
+-- Como a mesma migração derrubou as políticas antigas antes de criar essas,
+-- o resultado é que ninguém lê nada: processo, cliente, evento, tarefa,
+-- audiência, documento e apontamento de hora ficaram invisíveis para o
+-- próprio escritório que os criou. É por isso que o painel mostra zero em
+-- todos os cartões enquanto as linhas estão lá no banco.
+--
+-- ── A correção ──────────────────────────────────────────────────────────────
+-- As políticas passam a exigir apenas `has_tenant_permission`, com o mesmo
+-- módulo que já usavam. A condição por registro sai de cena porque, além de
+-- estar quebrada, ela nega acesso a quem tem `data_scope` diferente de
+-- 'tenant' — e 'assigned' é o padrão de `tenant_memberships`. Mantê-la,
+-- mesmo corrigida, esconderia tudo de todo advogado recém-convidado.
+--
+-- Ou seja: a visibilidade é do escritório. Restrição por registro volta
+-- quando existir o mapa de atribuição que a própria função diz esperar
+-- ("Team and assigned access stays denied until the module has an explicit
+-- assignment mapping").
 
 begin;
 
--- ─── Processos ──────────────────────────────────────────────────────────────
+-- ─── Políticas por escritório ───────────────────────────────────────────────
 
--- Linhas antigas sem escritório: herdam o do vínculo ativo de quem as criou.
--- Sem isso elas ficariam invisíveis para todo mundo depois da troca.
-update public.processos as process
-set tenant_id = membership.tenant_id
-from public.tenant_memberships as membership
-where process.tenant_id is null
-  and membership.user_id = process.user_id
-  and membership.status = 'active';
+do $$
+declare
+  alvo record;
+begin
+  for alvo in
+    select *
+    from (values
+      -- tabela,               módulo que a política já usava
+      ('clientes',             'legal'),
+      ('processos',            'legal'),
+      ('eventos',              'legal'),
+      ('tarefas',              'legal'),
+      ('audiencias',           'legal'),
+      ('documentos',           'legal'),
+      ('documentos_gerados',   'contracts'),
+      ('time_entries',         'finance')
+    ) as t(tabela, modulo)
+  loop
+    -- Gerações anteriores, todas substituídas aqui.
+    execute format('drop policy if exists tenant_v1_select on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v1_insert on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v1_update on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v1_delete on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v2_select on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v2_insert on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v2_update on public.%I', alvo.tabela);
+    execute format('drop policy if exists tenant_v2_delete on public.%I', alvo.tabela);
+    execute format('drop policy if exists %I on public.%I',
+      'Users can select own ' || alvo.tabela, alvo.tabela);
+    execute format('drop policy if exists %I on public.%I',
+      'Users can insert own ' || alvo.tabela, alvo.tabela);
+    execute format('drop policy if exists %I on public.%I',
+      'Users can update own ' || alvo.tabela, alvo.tabela);
+    execute format('drop policy if exists %I on public.%I',
+      'Users can delete own ' || alvo.tabela, alvo.tabela);
+    execute format('drop policy if exists %I on public.%I',
+      'owner_crud_' || alvo.tabela, alvo.tabela);
 
-drop policy if exists "Users can select own processos" on public.processos;
-drop policy if exists "Users can insert own processos" on public.processos;
-drop policy if exists "Users can update own processos" on public.processos;
-drop policy if exists "Users can delete own processos" on public.processos;
-drop policy if exists "Auth users can CRUD processos" on public.processos;
-drop policy if exists owner_crud_processos on public.processos;
+    execute format(
+      'create policy tenant_read on public.%I
+         for select to authenticated
+         using (private.has_tenant_permission(tenant_id, %L, ''read''))',
+      alvo.tabela, alvo.modulo
+    );
 
-create policy processos_tenant_read
-on public.processos
-for select
-to authenticated
-using (private.has_tenant_permission(tenant_id, 'legal', 'read'));
+    execute format(
+      'create policy tenant_insert on public.%I
+         for insert to authenticated
+         with check (
+           private.has_tenant_permission(tenant_id, %L, ''create'')
+           and private.is_active_tenant_member(auth.uid(), tenant_id)
+         )',
+      alvo.tabela, alvo.modulo
+    );
 
-create policy processos_tenant_insert
-on public.processos
-for insert
-to authenticated
-with check (
-  private.has_tenant_permission(tenant_id, 'legal', 'create')
-  and user_id = auth.uid()
-);
+    execute format(
+      'create policy tenant_update on public.%I
+         for update to authenticated
+         using (private.has_tenant_permission(tenant_id, %L, ''update''))
+         with check (private.has_tenant_permission(tenant_id, %L, ''update''))',
+      alvo.tabela, alvo.modulo, alvo.modulo
+    );
 
-create policy processos_tenant_update
-on public.processos
-for update
-to authenticated
-using (private.has_tenant_permission(tenant_id, 'legal', 'update'))
-with check (private.has_tenant_permission(tenant_id, 'legal', 'update'));
+    -- Exclusão continua estreita: em 'legal' ela é do dono; em 'finance' e
+    -- 'contracts', de quem a função já autorizava.
+    execute format(
+      'create policy tenant_delete on public.%I
+         for delete to authenticated
+         using (private.has_tenant_permission(tenant_id, %L, ''delete''))',
+      alvo.tabela, alvo.modulo
+    );
+  end loop;
+end;
+$$;
 
--- Apagar processo é irreversível e leva junto andamentos e documentos; fica
--- com quem tem a permissão de exclusão jurídica, hoje só o dono.
-create policy processos_tenant_delete
-on public.processos
-for delete
-to authenticated
-using (private.has_tenant_permission(tenant_id, 'legal', 'delete'));
+-- ─── Linhas órfãs ───────────────────────────────────────────────────────────
+-- Sem escritório, a linha não passa por nenhuma política acima e continuaria
+-- invisível. Herda o vínculo ativo de quem a criou.
 
--- ─── Tarefas ────────────────────────────────────────────────────────────────
+update public.processos as alvo
+set tenant_id = vinculo.tenant_id
+from public.tenant_memberships as vinculo
+where alvo.tenant_id is null
+  and vinculo.user_id = alvo.user_id
+  and vinculo.status = 'active';
 
-update public.tarefas as task
-set tenant_id = membership.tenant_id
-from public.tenant_memberships as membership
-where task.tenant_id is null
-  and membership.user_id = task.user_id
-  and membership.status = 'active';
+update public.tarefas as alvo
+set tenant_id = vinculo.tenant_id
+from public.tenant_memberships as vinculo
+where alvo.tenant_id is null
+  and vinculo.user_id = alvo.user_id
+  and vinculo.status = 'active';
+
+-- ─── Tarefas de equipe ──────────────────────────────────────────────────────
 
 -- Quem executa deixa de ser inferido de quem criou. Sem isso não há avatar no
 -- cartão, fila por pessoa nem produtividade por advogado.
 alter table public.tarefas
   add column if not exists responsavel_id uuid references auth.users(id);
 
--- Tarefa ligada ao processo: é o que põe o número CNJ no cartão e permite ver
--- a fila de um processo específico.
+-- Liga a tarefa ao processo: é o que põe o número CNJ no cartão.
 alter table public.tarefas
   add column if not exists processo_id uuid
   references public.processos(id) on delete set null;
@@ -98,64 +151,22 @@ set responsavel_id = user_id
 where responsavel_id is null;
 
 -- Tarefas já concluídas não têm quando. `created_at` é o melhor registro
--- existente e evita que o histórico apareça como se tivesse terminado hoje.
+-- existente e evita que o histórico apareça como concluído hoje.
 update public.tarefas
 set concluida_em = created_at
 where concluida_em is null
   and status = 'concluída';
 
-drop policy if exists "Users can select own tarefas" on public.tarefas;
-drop policy if exists "Users can insert own tarefas" on public.tarefas;
-drop policy if exists "Users can update own tarefas" on public.tarefas;
-drop policy if exists "Users can delete own tarefas" on public.tarefas;
-drop policy if exists "Auth users can CRUD tarefas" on public.tarefas;
-drop policy if exists owner_crud_tarefas on public.tarefas;
-
-create policy tarefas_tenant_read
-on public.tarefas
-for select
-to authenticated
-using (private.has_tenant_permission(tenant_id, 'legal', 'read'));
-
-create policy tarefas_tenant_insert
-on public.tarefas
-for insert
-to authenticated
-with check (
-  private.has_tenant_permission(tenant_id, 'legal', 'create')
-  and user_id = auth.uid()
-);
-
--- Atualizar inclui arrastar o cartão e reatribuir o responsável, que é
--- trabalho corriqueiro de equipe.
-create policy tarefas_tenant_update
-on public.tarefas
-for update
-to authenticated
-using (private.has_tenant_permission(tenant_id, 'legal', 'update'))
-with check (private.has_tenant_permission(tenant_id, 'legal', 'update'));
-
--- Cada um apaga a própria tarefa; apagar a de outro exige exclusão jurídica.
-create policy tarefas_tenant_delete
-on public.tarefas
-for delete
-to authenticated
-using (
-  user_id = auth.uid()
-  or private.has_tenant_permission(tenant_id, 'legal', 'delete')
-);
-
--- ─── Conclusão registrada pelo banco ────────────────────────────────────────
 -- A data de conclusão não pode depender de cada tela lembrar de gravá-la: a
 -- tarefa muda de status pelo arrastar do cartão, pelo formulário e por
 -- integração. O banco é o único ponto por onde todos passam.
-
 create or replace function private.stamp_task_completion()
 returns trigger
 language plpgsql
 as $$
 begin
-  if new.status = 'concluída' and coalesce(old.status, '') is distinct from 'concluída' then
+  if new.status = 'concluída'
+     and coalesce(old.status, '') is distinct from 'concluída' then
     new.concluida_em := now();
   elsif new.status is distinct from 'concluída' then
     new.concluida_em := null;
@@ -185,8 +196,6 @@ create index if not exists tarefas_concluida_em_idx
   on public.tarefas (tenant_id, concluida_em desc)
   where concluida_em is not null;
 
-comment on table public.processos is
-  'Processos do escritório. Leitura por escritório, não por usuário.';
 comment on column public.tarefas.responsavel_id is
   'Quem executa a tarefa. Distinto de user_id, que é quem a criou.';
 comment on column public.tarefas.concluida_em is
