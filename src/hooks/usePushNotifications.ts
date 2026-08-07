@@ -24,11 +24,9 @@ export function usePushNotifications() {
     if (sw) setPermission(Notification.permission);
   }, []);
 
-  // Register service worker once
-  useEffect(() => {
-    if (!supported) return;
-    navigator.serviceWorker.register("/sw.js").catch(console.error);
-  }, [supported]);
+  // O registro do service worker saiu daqui para `main.tsx`: preso a este
+  // hook, ele dependia de suporte a Notification e PushManager e nunca pedia
+  // atualização, então deploy novo não chegava ao navegador.
 
   const subscribe = async () => {
     if (!supported || !user) return false;

@@ -1,5 +1,8 @@
 // LEXIA — Service Worker para Push Notifications e PWA
-const CACHE_NAME = "lexia-v6";
+// A versão precisa mudar a cada correção que o usuário tem de receber: o
+// navegador só instala um service worker novo quando o arquivo difere byte a
+// byte do que ele já tem.
+const CACHE_NAME = "lexia-v7";
 
 const isBackendRequest = (url) =>
   url.includes("/rest/v1/") ||
