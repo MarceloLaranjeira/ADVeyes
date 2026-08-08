@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,21 +11,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, CheckCircle2, Clock, AlertCircle, Trash2, Pencil, LayoutList, Columns3, Calendar, Search, Tag } from "lucide-react";
+import { Plus, Clock, Trash2, Pencil, LayoutList, Columns3, Calendar, Search, Tag, UserRound, Trophy, TriangleAlert, Gauge, BarChart3, Star, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useActivities } from "@/hooks/useActivities";
+import { useActiveTeamMembers } from "@/hooks/useActiveTeamMembers";
+import {
+  ACTIVITY_STATUS_LABELS,
+  calculateActivityMetrics,
+  classifyActivityDueDate,
+} from "@/lib/activity-status";
+import type {
+  ActivityPriority,
+  ActivityStatus,
+  ActivityTeamMember,
+  ActivityWithUserState,
+} from "@/types/activities";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
-interface Tarefa {
-  id: string;
-  titulo: string;
-  descricao?: string;
-  prioridade: string;
-  status: string;
-  data_limite?: string | null;
-  processo_id?: string | null;
-}
+type Tarefa = ActivityWithUserState;
 
 interface Processo {
   id: string;
@@ -55,36 +61,31 @@ const PRIORIDADE_BADGE: Record<string, string> = {
   baixa: "bg-muted text-muted-foreground border-muted-foreground/20",
 };
 
-const prioridades = ["alta", "média", "baixa"];
-const statusList  = ["pendente", "em_andamento", "concluída"];
-const statusLabels: Record<string, string> = {
-  pendente: "A Fazer",
-  em_andamento: "Fazendo",
-  concluída: "Concluída",
-};
+const prioridades: ActivityPriority[] = ["alta", "média", "baixa"];
+const statusList: ActivityStatus[] = ["pendente", "em_andamento", "concluída"];
+const statusLabels = ACTIVITY_STATUS_LABELS;
 
 function fmtDate(d: string | null | undefined) {
-  if (!d) return null;
-  const dt = new Date(d + "T12:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diff = Math.ceil((dt.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return { label: "Hoje", urgent: true };
-  if (diff === 1) return { label: "Amanhã", urgent: false };
-  if (diff < 0)  return { label: `${Math.abs(diff)}d atrasada`, urgent: true };
-  return { label: dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }), urgent: false };
+  const due = classifyActivityDueDate(d);
+  return due.label ? due : null;
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 
 function KanbanCard({
-  tarefa, processos, onEdit, onDelete, onDragStart,
+  tarefa, processos, members, onEdit, onDelete, onFavorite, onDragStart,
 }: {
-  tarefa: Tarefa; processos: Processo[];
+  tarefa: Tarefa; processos: Processo[]; members: ActivityTeamMember[];
   onEdit: (t: Tarefa) => void; onDelete: (id: string) => void;
+  onFavorite: (t: Tarefa) => void;
   onDragStart: (id: string) => void;
 }) {
   const processo = processos.find(p => p.id === tarefa.processo_id);
+  const responsible = members.find(member => member.userId === tarefa.responsavel_id);
   const date = fmtDate(tarefa.data_limite);
 
   return (
@@ -94,8 +95,14 @@ function KanbanCard({
       className={`bg-card border border-l-4 ${PRIORIDADE_BORDER[tarefa.prioridade] || "border-l-muted"} rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-sm font-medium leading-snug flex-1">{tarefa.titulo}</p>
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <p className="text-sm font-medium leading-snug flex-1">
+          {!tarefa.userState?.lida_em && <span className="inline-block h-2 w-2 rounded-full bg-primary mr-2" title="Não lida" />}
+          {tarefa.titulo}
+        </p>
+        <div className="flex gap-0.5 shrink-0">
+          <button onClick={() => onFavorite(tarefa)} className="p-1 rounded hover:bg-muted text-muted-foreground" title={tarefa.userState?.favorita ? "Remover dos favoritos" : "Favoritar"}>
+            <Star className={`w-3 h-3 ${tarefa.userState?.favorita ? "fill-amber-400 text-amber-500" : ""}`} />
+          </button>
           <button onClick={() => onEdit(tarefa)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
             <Pencil className="w-3 h-3" />
           </button>
@@ -116,9 +123,17 @@ function KanbanCard({
       )}
 
       <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-dashed">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${PRIORIDADE_BADGE[tarefa.prioridade]}`}>
-          {tarefa.prioridade}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${PRIORIDADE_BADGE[tarefa.prioridade]}`}>
+            {tarefa.prioridade}
+          </span>
+          {responsible && (
+            <Avatar className="h-6 w-6" title={responsible.name}>
+              <AvatarImage src={responsible.avatarUrl ?? undefined} />
+              <AvatarFallback className="text-[9px]">{initials(responsible.name)}</AvatarFallback>
+            </Avatar>
+          )}
+        </div>
         {date && (
           <span className={`flex items-center gap-1 text-[10px] font-medium ${date.urgent ? "text-destructive" : "text-muted-foreground"}`}>
             <Clock className="w-3 h-3" />
@@ -133,10 +148,11 @@ function KanbanCard({
 // ─── Kanban Column ────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  col, tarefas, processos, onEdit, onDelete, onDragStart, onDrop, onAdd,
+  col, tarefas, processos, members, onEdit, onDelete, onFavorite, onDragStart, onDrop, onAdd,
 }: {
-  col: typeof KANBAN_COLS[0]; tarefas: Tarefa[]; processos: Processo[];
+  col: typeof KANBAN_COLS[0]; tarefas: Tarefa[]; processos: Processo[]; members: ActivityTeamMember[];
   onEdit: (t: Tarefa) => void; onDelete: (id: string) => void;
+  onFavorite: (t: Tarefa) => void;
   onDragStart: (id: string) => void; onDrop: (colId: string) => void;
   onAdd: (status: string) => void;
 }) {
@@ -179,8 +195,10 @@ function KanbanColumn({
             key={t.id}
             tarefa={t}
             processos={processos}
+            members={members}
             onEdit={onEdit}
             onDelete={onDelete}
+            onFavorite={onFavorite}
             onDragStart={onDragStart}
           />
         ))}
@@ -195,40 +213,42 @@ const Tarefas = () => {
   const { user } = useAuth();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const [tarefas, setTarefas]     = useState<Tarefa[]>([]);
+  const tenantId = currentTenant?.tenantId ?? null;
+  const userId = user?.id ?? null;
+  const activityData = useActivities(tenantId, userId);
+  const { data: members = [] } = useActiveTeamMembers(tenantId);
+  const tarefas = activityData.activities;
   const [processos, setProcessos] = useState<Processo[]>([]);
-  const [view, setView]           = useState<"kanban" | "lista">("kanban");
+  const [view, setView] = useState<"overview" | "kanban" | "lista" | "performance">("overview");
   const [showForm, setShowForm]   = useState(false);
   const [editData, setEditData]   = useState<Tarefa | null>(null);
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
   const [search, setSearch]       = useState("");
   const [filterPrioridade, setFilterPrioridade] = useState("Todos");
+  const [filterResponsavel, setFilterResponsavel] = useState("Todos");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const dragId = useRef<string | null>(null);
+
+  const changeView = (next: typeof view) => {
+    setView(next);
+    if (tenantId) sessionStorage.setItem(`adveyes:activity-view:${tenantId}`, next);
+  };
 
   const [form, setForm] = useState({
     titulo: "", descricao: "", prioridade: "média",
     status: "pendente", data_limite: "", processo_id: "",
+    responsavel_id: "", categoria: "", pontos: "0",
   });
 
   // ── Fetch ──
-  // A leitura agora é por escritório, então quem participa de mais de um
-  // veria as duas listas misturadas sem este filtro. A RLS garante o acesso;
-  // o filtro garante que a tela mostre o escritório que está selecionado.
-  const fetchTarefas = async () => {
-    if (!currentTenant) return;
-    const { data } = await supabase
-      .from("tarefas")
-      .select("*")
-      .eq("tenant_id", currentTenant.tenantId)
-      .order("created_at", { ascending: false });
-    if (data) setTarefas(data);
-  };
-
-  const fetchProcessos = async () => {
+  const fetchProcessos = useCallback(async () => {
+    if (!tenantId) return;
     const { data } = await supabase
       .from("processos")
       .select("id, numero, area, cliente_id")
+      .eq("tenant_id", tenantId)
       .order("numero");
     // also fetch client names
     if (data) {
@@ -238,14 +258,54 @@ const Tarefas = () => {
         const { data: clientes } = await supabase
           .from("clientes")
           .select("id, nome")
+          .eq("tenant_id", tenantId)
           .in("id", clientIds);
         if (clientes) clientes.forEach(c => { clientMap[c.id] = c.nome; });
       }
       setProcessos(data.map(p => ({ ...p, cliente_nome: clientMap[p.cliente_id] || null })));
     }
-  };
+  }, [tenantId]);
 
-  useEffect(() => { fetchTarefas(); fetchProcessos(); }, []);
+  useEffect(() => { void fetchProcessos(); }, [fetchProcessos]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    const saved = sessionStorage.getItem(`adveyes:activity-view:${tenantId}`);
+    if (["overview", "kanban", "lista", "performance"].includes(saved ?? "")) {
+      setView(saved as typeof view);
+    } else if (currentTenant?.role === "owner" || currentTenant?.role === "admin") {
+      setView("overview");
+    } else {
+      setView("lista");
+      if (userId) setFilterResponsavel(userId);
+    }
+
+    try {
+      const stored = JSON.parse(
+        sessionStorage.getItem(`adveyes:activity-filters:${tenantId}`) ?? "null",
+      ) as { search?: string; priority?: string; responsible?: string; favorites?: boolean; unread?: boolean } | null;
+      if (stored) {
+        setSearch(stored.search ?? "");
+        setFilterPrioridade(stored.priority ?? "Todos");
+        setFilterResponsavel(stored.responsible ?? "Todos");
+        setFavoritesOnly(Boolean(stored.favorites));
+        setUnreadOnly(Boolean(stored.unread));
+      }
+    } catch {
+      sessionStorage.removeItem(`adveyes:activity-filters:${tenantId}`);
+    }
+  }, [currentTenant?.role, tenantId, userId]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    sessionStorage.setItem(`adveyes:activity-filters:${tenantId}`, JSON.stringify({
+      search,
+      priority: filterPrioridade,
+      responsible: filterResponsavel,
+      favorites: favoritesOnly,
+      unread: unreadOnly,
+    }));
+  }, [favoritesOnly, filterPrioridade, filterResponsavel, search, tenantId, unreadOnly]);
 
   useEffect(() => {
     if (editData) {
@@ -256,11 +316,18 @@ const Tarefas = () => {
         status:      editData.status      || "pendente",
         data_limite: editData.data_limite || "",
         processo_id: editData.processo_id || "",
+        responsavel_id: editData.responsavel_id || "",
+        categoria: editData.categoria || "",
+        pontos: String(editData.pontos ?? 0),
       });
     } else {
-      setForm({ titulo: "", descricao: "", prioridade: "média", status: "pendente", data_limite: "", processo_id: "" });
+      setForm({
+        titulo: "", descricao: "", prioridade: "média", status: "pendente",
+        data_limite: "", processo_id: "", responsavel_id: userId ?? "",
+        categoria: "", pontos: "0",
+      });
     }
-  }, [editData, showForm]);
+  }, [editData, showForm, userId]);
 
   // ── Form submit ──
   const handleSubmit = async (e: React.FormEvent) => {
@@ -268,37 +335,52 @@ const Tarefas = () => {
     if (!form.titulo.trim()) { toast({ title: "Título é obrigatório", variant: "destructive" }); return; }
     setLoading(true);
     const payload = {
-      ...form,
+      titulo: form.titulo.trim(),
+      descricao: form.descricao.trim() || null,
+      prioridade: form.prioridade,
+      status: form.status,
       data_limite: form.data_limite || null,
       processo_id: form.processo_id || null,
+      responsavel_id: form.responsavel_id || null,
+      categoria: form.categoria.trim() || null,
+      pontos: Math.max(0, Number.parseInt(form.pontos, 10) || 0),
     };
-    if (editData) {
-      const { error } = await supabase.from("tarefas").update(payload).eq("id", editData.id);
-      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else { toast({ title: "Tarefa atualizada!" }); setShowForm(false); fetchTarefas(); }
-    } else {
-      // `tenant_id` explícito em vez de confiar no gatilho de compatibilidade:
-      // a política de inserção o exige, e depender do gatilho tornaria a falha
-      // silenciosa e difícil de ler. `responsavel_id` começa em quem criou e
-      // pode ser reatribuído depois.
-      const { error } = await supabase.from("tarefas").insert({
-        ...payload,
-        user_id: user!.id,
-        tenant_id: currentTenant!.tenantId,
-        responsavel_id: user!.id,
+    try {
+      if (editData) {
+        await activityData.update.mutateAsync({ id: editData.id, input: payload });
+        toast({ title: "Tarefa atualizada!" });
+      } else {
+        await activityData.create.mutateAsync({
+          ...payload,
+          user_id: user!.id,
+          tenant_id: currentTenant!.tenantId,
+        });
+        toast({ title: "Tarefa criada!" });
+      }
+      setShowForm(false);
+    } catch (error) {
+      toast({
+        title: "Não foi possível salvar a tarefa",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
       });
-      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else { toast({ title: "Tarefa criada!" }); setShowForm(false); fetchTarefas(); }
     }
     setLoading(false);
   };
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from("tarefas").delete().eq("id", deleteId);
-    toast({ title: "Tarefa excluída!" });
-    setDeleteId(null);
-    fetchTarefas();
+    try {
+      await activityData.remove.mutateAsync(deleteId);
+      toast({ title: "Tarefa excluída!" });
+      setDeleteId(null);
+    } catch (error) {
+      toast({
+        title: "Não foi possível excluir a tarefa",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
   };
 
   // ── Drag & Drop ──
@@ -306,9 +388,17 @@ const Tarefas = () => {
     if (!dragId.current) return;
     const tarefa = tarefas.find(t => t.id === dragId.current);
     if (!tarefa || tarefa.status === toStatus) return;
-    await supabase.from("tarefas").update({ status: toStatus }).eq("id", dragId.current);
+    const id = dragId.current;
     dragId.current = null;
-    fetchTarefas();
+    try {
+      await activityData.update.mutateAsync({ id, input: { status: toStatus } });
+    } catch (error) {
+      toast({
+        title: "Não foi possível mover a tarefa",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
   };
 
   // ── Open form helpers ──
@@ -317,7 +407,29 @@ const Tarefas = () => {
     setForm(f => ({ ...f, status }));
     setShowForm(true);
   };
-  const openEdit = (t: Tarefa) => { setEditData(t); setShowForm(true); };
+  const openEdit = (t: Tarefa) => {
+    setEditData(t);
+    setShowForm(true);
+    if (!t.userState?.lida_em) {
+      void activityData.setUserState
+        .mutateAsync({ id: t.id, lidaEm: new Date().toISOString() })
+        .catch(() => undefined);
+    }
+  };
+  const toggleFavorite = async (t: Tarefa) => {
+    try {
+      await activityData.setUserState.mutateAsync({
+        id: t.id,
+        favorita: !t.userState?.favorita,
+      });
+    } catch (error) {
+      toast({
+        title: "Não foi possível alterar o favorito",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
 
   // ── Filtered tarefas ──
   const filtered = tarefas.filter(t => {
@@ -325,7 +437,13 @@ const Tarefas = () => {
       t.titulo.toLowerCase().includes(search.toLowerCase()) ||
       (t.descricao || "").toLowerCase().includes(search.toLowerCase());
     const matchPri = filterPrioridade === "Todos" || t.prioridade === filterPrioridade;
-    return matchSearch && matchPri;
+    const matchResponsible = filterResponsavel === "Todos" ||
+      (filterResponsavel === "Sem responsável"
+        ? !t.responsavel_id
+        : t.responsavel_id === filterResponsavel);
+    const matchFavorite = !favoritesOnly || Boolean(t.userState?.favorita);
+    const matchUnread = !unreadOnly || !t.userState?.lida_em;
+    return matchSearch && matchPri && matchResponsible && matchFavorite && matchUnread;
   });
 
   const counts = {
@@ -333,6 +451,7 @@ const Tarefas = () => {
     em_andamento: filtered.filter(t => t.status === "em_andamento").length,
     concluída:    filtered.filter(t => t.status === "concluída").length,
   };
+  const metrics = calculateActivityMetrics(filtered);
 
   return (
     <AppLayout>
@@ -350,7 +469,7 @@ const Tarefas = () => {
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
           {KANBAN_COLS.map(col => (
             <Card key={col.id} className="border-none shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
@@ -362,6 +481,24 @@ const Tarefas = () => {
               </CardContent>
             </Card>
           ))}
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <TriangleAlert className="h-5 w-5 text-destructive" />
+              <div>
+                <p className="text-xs text-muted-foreground">Atrasadas</p>
+                <p className="text-2xl font-bold">{metrics.overdue}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              <div>
+                <p className="text-xs text-muted-foreground">Pontos concluídos</p>
+                <p className="text-2xl font-bold">{metrics.completedPoints}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Toolbar ── */}
@@ -389,22 +526,124 @@ const Tarefas = () => {
             </SelectContent>
           </Select>
 
+          <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+            <SelectTrigger className="w-48 h-9 text-xs">
+              <UserRound className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todos">Todos os responsáveis</SelectItem>
+              <SelectItem value="Sem responsável">Sem responsável</SelectItem>
+              {members.map(member => (
+                <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            type="button"
+            variant={favoritesOnly ? "default" : "outline"}
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={() => setFavoritesOnly(value => !value)}
+          >
+            <Star className="h-3.5 w-3.5" /> Favoritas
+          </Button>
+          <Button
+            type="button"
+            variant={unreadOnly ? "default" : "outline"}
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={() => setUnreadOnly(value => !value)}
+          >
+            <Mail className="h-3.5 w-3.5" /> Não lidas
+          </Button>
+
           {/* View toggle */}
           <div className="flex rounded-lg border overflow-hidden">
             <button
-              onClick={() => setView("kanban")}
-              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+              onClick={() => changeView("overview")}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "overview" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
             >
-              <Columns3 className="w-3.5 h-3.5" /> Kanban
+              <Gauge className="w-3.5 h-3.5" /> Visão geral
             </button>
             <button
-              onClick={() => setView("lista")}
+              onClick={() => changeView("lista")}
               className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "lista" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
             >
               <LayoutList className="w-3.5 h-3.5" /> Lista
             </button>
+            <button
+              onClick={() => changeView("kanban")}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              <Columns3 className="w-3.5 h-3.5" /> Quadro
+            </button>
+            <button
+              onClick={() => changeView("performance")}
+              className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "performance" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" /> Desempenho
+            </button>
           </div>
         </div>
+
+        {activityData.loading && (
+          <div className="mb-5 rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
+            Carregando atividades do escritório...
+          </div>
+        )}
+        {activityData.error && (
+          <div className="mb-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            Não foi possível carregar as atividades. Tente atualizar a página.
+          </div>
+        )}
+
+        {view === "overview" && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-5">
+                <h2 className="font-semibold mb-4">Prioridades imediatas</h2>
+                <div className="space-y-3">
+                  {filtered
+                    .filter(task => task.status !== "concluída")
+                    .sort((a, b) => (a.data_limite ?? "9999").localeCompare(b.data_limite ?? "9999"))
+                    .slice(0, 6)
+                    .map(task => {
+                      const due = fmtDate(task.data_limite);
+                      return (
+                        <button key={task.id} onClick={() => openEdit(task)} className="w-full flex items-center justify-between gap-3 rounded-lg border p-3 text-left hover:bg-muted/40">
+                          <span className="text-sm font-medium truncate">{task.titulo}</span>
+                          <span className={`text-xs shrink-0 ${due?.urgent ? "text-destructive" : "text-muted-foreground"}`}>{due?.label ?? "Sem prazo"}</span>
+                        </button>
+                      );
+                    })}
+                  {filtered.filter(task => task.status !== "concluída").length === 0 && (
+                    <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma atividade pendente.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-5">
+                <h2 className="font-semibold mb-4">Carga por responsável</h2>
+                <div className="space-y-4">
+                  {members.map(member => {
+                    const open = filtered.filter(task => task.responsavel_id === member.userId && task.status !== "concluída").length;
+                    const width = metrics.pending + metrics.inProgress === 0 ? 0 : Math.round((open / (metrics.pending + metrics.inProgress)) * 100);
+                    return (
+                      <div key={member.userId}>
+                        <div className="flex justify-between text-sm mb-1"><span>{member.name}</span><span className="text-muted-foreground">{open}</span></div>
+                        <div className="h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${width}%` }} /></div>
+                      </div>
+                    );
+                  })}
+                  {members.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Nenhum membro ativo encontrado.</p>}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* ── KANBAN VIEW ── */}
         {view === "kanban" && (
@@ -415,8 +654,10 @@ const Tarefas = () => {
                 col={col}
                 tarefas={filtered.filter(t => t.status === col.id)}
                 processos={processos}
+                members={members}
                 onEdit={openEdit}
                 onDelete={setDeleteId}
+                onFavorite={toggleFavorite}
                 onDragStart={id => { dragId.current = id; }}
                 onDrop={handleDrop}
                 onAdd={openNew}
@@ -436,6 +677,7 @@ const Tarefas = () => {
             {filtered.map(t => {
               const date = fmtDate(t.data_limite);
               const processo = processos.find(p => p.id === t.processo_id);
+              const responsible = members.find(member => member.userId === t.responsavel_id);
               return (
                 <div
                   key={t.id}
@@ -444,6 +686,7 @@ const Tarefas = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2">
                       <p className={`font-medium text-sm flex-1 ${t.status === "concluída" ? "line-through text-muted-foreground" : ""}`}>
+                        {!t.userState?.lida_em && <span className="inline-block h-2 w-2 rounded-full bg-primary mr-2" title="Não lida" />}
                         {t.titulo}
                       </p>
                       <Badge variant="outline" className={`text-[10px] shrink-0 ${PRIORIDADE_BADGE[t.prioridade]}`}>
@@ -473,6 +716,15 @@ const Tarefas = () => {
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {responsible && (
+                      <Avatar className="h-8 w-8 mr-1" title={responsible.name}>
+                        <AvatarImage src={responsible.avatarUrl ?? undefined} />
+                        <AvatarFallback className="text-[10px]">{initials(responsible.name)}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void toggleFavorite(t)} title={t.userState?.favorita ? "Remover dos favoritos" : "Favoritar"}>
+                      <Star className={`w-4 h-4 ${t.userState?.favorita ? "fill-amber-400 text-amber-500" : ""}`} />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -481,6 +733,30 @@ const Tarefas = () => {
                     </Button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
+
+        {view === "performance" && (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {members.map(member => {
+              const memberTasks = filtered.filter(task => task.responsavel_id === member.userId);
+              const memberMetrics = calculateActivityMetrics(memberTasks);
+              return (
+                <Card key={member.userId} className="border-none shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-3 mb-5">
+                      <Avatar><AvatarImage src={member.avatarUrl ?? undefined} /><AvatarFallback>{initials(member.name)}</AvatarFallback></Avatar>
+                      <div className="min-w-0"><p className="font-semibold truncate">{member.name}</p><p className="text-xs text-muted-foreground">{member.jobTitle || "Equipe"}</p></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-muted/50 p-2"><p className="text-xl font-bold">{memberMetrics.completed}</p><p className="text-[10px] text-muted-foreground">Concluídas</p></div>
+                      <div className="rounded-lg bg-muted/50 p-2"><p className="text-xl font-bold">{memberMetrics.pending + memberMetrics.inProgress}</p><p className="text-[10px] text-muted-foreground">Abertas</p></div>
+                      <div className="rounded-lg bg-muted/50 p-2"><p className="text-xl font-bold">{memberMetrics.completedPoints}</p><p className="text-[10px] text-muted-foreground">Pontos</p></div>
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
@@ -554,11 +830,47 @@ const Tarefas = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Prazo</Label>
+                <Label>Responsável</Label>
+                <Select
+                  value={form.responsavel_id || "none"}
+                  onValueChange={v => setForm({ ...form, responsavel_id: v === "none" ? "" : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecionar responsável" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem responsável</SelectItem>
+                    {members.map(member => (
+                      <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Prazo</Label>
+                  <Input
+                    type="date"
+                    value={form.data_limite}
+                    onChange={e => setForm({ ...form, data_limite: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pontos</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.pontos}
+                    onChange={e => setForm({ ...form, pontos: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Categoria</Label>
                 <Input
-                  type="date"
-                  value={form.data_limite}
-                  onChange={e => setForm({ ...form, data_limite: e.target.value })}
+                  value={form.categoria}
+                  onChange={e => setForm({ ...form, categoria: e.target.value })}
+                  placeholder="Ex.: prazo, audiência, atendimento"
                 />
               </div>
 

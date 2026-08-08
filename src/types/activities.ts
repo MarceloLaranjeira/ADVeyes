@@ -5,6 +5,18 @@ export type ActivityInsert = Database["public"]["Tables"]["tarefas"]["Insert"];
 export type ActivityUpdate = Database["public"]["Tables"]["tarefas"]["Update"];
 export type ActivityUserState = Database["public"]["Tables"]["tarefa_user_state"]["Row"];
 
+export interface ActivityWithUserState extends Activity {
+  userState: ActivityUserState | null;
+}
+
+export interface ActivityTeamMember {
+  id: string;
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  jobTitle: string | null;
+}
+
 export type ActivityStatus = "pendente" | "em_andamento" | "concluída";
 export type ActivityPriority = "alta" | "média" | "baixa";
 
@@ -42,4 +54,3 @@ export interface ActivityFilters {
   favoritesOnly: boolean;
   unreadOnly: boolean;
 }
-
