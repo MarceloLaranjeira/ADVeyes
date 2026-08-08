@@ -28,6 +28,10 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
+  if (error === "no_membership") {
+    return <Navigate to="/cadastro/concluir" replace />;
+  }
+
   if (error || !currentTenant) {
     const messages = {
       invalid_host: {
@@ -44,7 +48,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       },
       no_membership: {
         title: "Conta sem escritório",
-        description: "Peça ao administrador para adicionar sua conta a um escritório.",
+        description: "Conclua o cadastro para criar seu escritório.",
       },
       tenant_load_failed: {
         title: "Não foi possível carregar o escritório",

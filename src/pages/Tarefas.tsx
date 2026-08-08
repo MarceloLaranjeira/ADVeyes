@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Clock, Trash2, Pencil, LayoutList, Columns3, Calendar, Search, Tag, UserRound, Trophy, TriangleAlert, Gauge, BarChart3, Star, Mail } from "lucide-react";
+import { Plus, Clock, Trash2, Pencil, LayoutList, Columns3, Calendar, Search, Tag, UserRound, Trophy, TriangleAlert, Gauge, BarChart3, Star, Mail, Newspaper, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -416,6 +416,25 @@ const Tarefas = () => {
         .catch(() => undefined);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get("task");
+    if (!taskId || activityData.loading) return;
+    const task = tarefas.find((item) => item.id === taskId);
+    if (!task) return;
+    setView("lista");
+    openEdit(task);
+    params.delete("task");
+    const nextSearch = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`,
+    );
+  // `openEdit` usa apenas callbacks estáveis do hook e o item encontrado.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityData.loading, tarefas]);
   const toggleFavorite = async (t: Tarefa) => {
     try {
       await activityData.setUserState.mutateAsync({
@@ -768,6 +787,36 @@ const Tarefas = () => {
             <DialogHeader>
               <DialogTitle>{editData ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
             </DialogHeader>
+            {editData && (editData.source_type === "publicacao" || editData.processo_id) && (
+              <div className="flex flex-wrap gap-2">
+                {editData.source_type === "publicacao" && editData.source_id && (
+                  <Button
+                    asChild
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                  >
+                    <a href={`/publicacoes?publication=${editData.source_id}`}>
+                      <Newspaper className="mr-2 h-4 w-4" />
+                      Abrir publicação
+                    </a>
+                  </Button>
+                )}
+                {editData.processo_id && (
+                  <Button
+                    asChild
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                  >
+                    <a href={`/processos/${editData.processo_id}`}>
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Abrir processo
+                    </a>
+                  </Button>
+                )}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Título *</Label>

@@ -191,11 +191,102 @@ export async function ingestMovements(
   };
 }
 
+export interface PublicationTaskResult {
+  linked: number;
+  failed: number;
+}
+
 /**
- * Notifica os membros jurídicos ativos sobre publicações recém-criadas.
- * A função recebe apenas IDs retornados pelo `insert`, então uma reconciliação
- * idempotente nunca repete o alerta.
+ * Cria uma tarefa humana de revisão para cada publicação nova e persiste o
+ * vínculo explícito entre as duas entidades. A atribuição só é automática
+ * quando existe exatamente um destinatário responsável pelo processo.
  */
+export async function createPublicationReviewTasks(
+  admin: SupabaseClient,
+  input: { tenantId: string; publicationIds: string[] },
+): Promise<PublicationTaskResult> {
+  if (!input.publicationIds.length) return { linked: 0, failed: 0 };
+
+  const { data: publications, error } = await admin
+    .from("publicacoes")
+    .select(
+      "id, user_id, process_id, tribunal, numero_processo, tipo, conteudo",
+    )
+    .eq("tenant_id", input.tenantId)
+    .in("id", input.publicationIds);
+  if (error) throw error;
+
+  let linked = 0;
+  let failed = 0;
+  for (const publication of publications ?? []) {
+    try {
+      const recipients = await resolveRecipients(admin, {
+        tenantId: input.tenantId,
+        processId: publication.process_id as string | null,
+      });
+      const responsibleId = recipients.length === 1
+        ? recipients[0].userId
+        : null;
+      const reference = [
+        publication.numero_processo,
+        publication.tribunal,
+        publication.tipo,
+      ].filter(Boolean).join(" · ");
+
+      const { error: insertError } = await admin.from("tarefas").upsert({
+        tenant_id: input.tenantId,
+        user_id: publication.user_id,
+        responsavel_id: responsibleId,
+        processo_id: publication.process_id as string | null,
+        titulo: "Revisar intimação",
+        descricao: [
+          reference || "Nova publicação oficial recebida.",
+          String(publication.conteudo ?? "").slice(0, 280),
+          "Revise o conteúdo e confirme qualquer prazo sugerido antes de usá-lo.",
+        ].filter(Boolean).join("\n\n"),
+        prioridade: "alta",
+        status: "pendente",
+        categoria: "Publicação",
+        pontos: 1,
+        tags: ["intimação", "publicação-oficial"],
+        source_type: "publicacao",
+        source_id: publication.id,
+      }, {
+        onConflict: "tenant_id,source_type,source_id",
+        ignoreDuplicates: true,
+      });
+      if (insertError) throw insertError;
+
+      const { data: task, error: taskError } = await admin
+        .from("tarefas")
+        .select("id")
+        .eq("tenant_id", input.tenantId)
+        .eq("source_type", "publicacao")
+        .eq("source_id", publication.id)
+        .maybeSingle();
+      if (taskError || !task) throw taskError ?? new Error("task_not_found");
+
+      const { error: linkError } = await admin
+        .from("publication_task_links")
+        .upsert({
+          tenant_id: input.tenantId,
+          publication_id: publication.id,
+          task_id: task.id,
+        }, { onConflict: "tenant_id,publication_id" });
+      if (linkError) throw linkError;
+      linked += 1;
+    } catch {
+      failed += 1;
+      console.error("legal-ingestion: publication review task failed", {
+        tenantId: input.tenantId,
+        publicationId: publication.id,
+      });
+    }
+  }
+
+  return { linked, failed };
+}
+
 /**
  * Avisa sobre publicações novas. O alerta vai para o profissional dono da OAB
  * vinculada ao processo, não para a equipe inteira, e respeita as preferências
@@ -241,37 +332,6 @@ export async function notifyNewPublications(
     });
     delivered += result.inApp;
 
-    const recipients = await resolveRecipients(admin, {
-      tenantId: input.tenantId,
-      processId: publication.process_id as string | null,
-    });
-    const responsible = recipients[0];
-    if (responsible) {
-      const { error: taskError } = await admin.from("tarefas").upsert({
-        tenant_id: input.tenantId,
-        user_id: responsible.userId,
-        responsavel_id: responsible.userId,
-        processo_id: publication.process_id as string | null,
-        titulo: "Revisar intimação",
-        descricao: [
-          summary || "Nova publicação oficial recebida.",
-          "Revise o conteúdo e confirme qualquer prazo sugerido antes de usá-lo.",
-        ].join("\n\n"),
-        prioridade: "alta",
-        status: "pendente",
-        categoria: "Intimação",
-        pontos: 1,
-        tags: ["intimação", "publicação-oficial"],
-        source_type: "publicacao",
-        source_id: publication.id,
-      }, {
-        onConflict: "tenant_id,source_type,source_id",
-        ignoreDuplicates: true,
-      });
-      if (taskError) {
-        console.error("legal-ingestion: publication review task failed");
-      }
-    }
   }
 
   return delivered;

@@ -43,10 +43,11 @@ import {
   Search,
   Scale,
   ShieldCheck,
+  ListChecks,
 } from "lucide-react";
 import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
@@ -181,12 +182,16 @@ const Publicacoes = () => {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
   const [processos, setProcessos] = useState<Map<string, Processo>>(new Map());
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [syncSources, setSyncSources] = useState<SyncSource[]>([]);
+  const [taskByPublication, setTaskByPublication] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
@@ -217,22 +222,23 @@ const Publicacoes = () => {
       processesResult,
       runsResult,
       sourcesResult,
+      linksResult,
     ] = await Promise.all([
-        (supabase as any)
+        supabase
           .from("publicacoes")
           .select("*")
           .eq("tenant_id", tenantId)
           .order("data_publicacao", { ascending: false }),
-        (supabase as any)
+        supabase
           .from("process_movements")
           .select("*")
           .eq("tenant_id", tenantId)
           .order("occurred_at", { ascending: false }),
-        (supabase as any)
+        supabase
           .from("processos")
           .select("id, numero, cliente_nome")
           .eq("tenant_id", tenantId),
-        (supabase as any)
+        supabase
           .from("legal_sync_runs")
           .select(
             "id, provider, sync_kind, status, records_created, started_at, finished_at, error_code",
@@ -240,20 +246,28 @@ const Publicacoes = () => {
           .eq("tenant_id", tenantId)
           .order("started_at", { ascending: false })
           .limit(8),
-        (supabase as any)
+        supabase
           .from("legal_sync_sources")
           .select(
             "id, source_kind, provider, reference, active, next_sync_at, last_success_at, failure_count, last_error_code, paused_reason",
           )
           .eq("tenant_id", tenantId)
           .order("next_sync_at", { ascending: true }),
+        // A migration desta entrega ainda não integra o arquivo de tipos
+        // gerado; o acesso permanece tipado no resultado logo abaixo.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("publication_task_links")
+          .select("publication_id, task_id")
+          .eq("tenant_id", tenantId),
       ]);
 
     const firstError = publicationsResult.error ??
       movementsResult.error ??
       processesResult.error ??
       runsResult.error ??
-      sourcesResult.error;
+      sourcesResult.error ??
+      linksResult.error;
     if (firstError) {
       toast({
         title: "Não foi possível carregar o acompanhamento jurídico",
@@ -273,6 +287,12 @@ const Publicacoes = () => {
       );
       setSyncRuns(runsResult.data ?? []);
       setSyncSources(sourcesResult.data ?? []);
+      setTaskByPublication(new Map(
+        (linksResult.data ?? []).map((link: {
+          publication_id: string;
+          task_id: string;
+        }) => [link.publication_id, link.task_id]),
+      ));
     }
     setLoading(false);
   }, [currentTenant, toast]);
@@ -280,6 +300,11 @@ const Publicacoes = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const publicationId = searchParams.get("publication");
+    if (publicationId) setExpandedId(publicationId);
+  }, [searchParams]);
 
   const filteredPublications = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase("pt-BR");
@@ -370,7 +395,7 @@ const Publicacoes = () => {
 
   const markAsRead = async (publication: Publicacao) => {
     if (!currentTenant) return;
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("publicacoes")
       .update({ status: "lida" })
       .eq("tenant_id", currentTenant.tenantId)
@@ -795,6 +820,30 @@ const Publicacoes = () => {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        {taskByPublication.has(publication.id) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(
+                              `/tarefas?task=${taskByPublication.get(publication.id)}`,
+                            )}
+                          >
+                            <ListChecks className="mr-2 h-4 w-4" />
+                            Abrir tarefa
+                          </Button>
+                        )}
+                        {publication.process_id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(
+                              `/processos/${publication.process_id}`,
+                            )}
+                          >
+                            <Scale className="mr-2 h-4 w-4" />
+                            Abrir processo
+                          </Button>
+                        )}
                         {publication.possible_deadline &&
                           publication.review_status === "pending_review" && (
                             <Button

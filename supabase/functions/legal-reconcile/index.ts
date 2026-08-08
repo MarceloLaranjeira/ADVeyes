@@ -19,6 +19,7 @@ import {
   EscavadorApiError,
 } from "../_shared/escavador-client.ts";
 import {
+  createPublicationReviewTasks,
   indexProcessesByNumber,
   ingestMovements,
   ingestPublications,
@@ -441,6 +442,13 @@ async function persistDjenForSource(
   });
 
   let notificationError: string | null = null;
+  const taskResult = await createPublicationReviewTasks(context.admin, {
+    tenantId: source.tenant_id,
+    publicationIds: result.createdIds,
+  });
+  if (taskResult.failed > 0) {
+    notificationError = "publication_task_partial_failure";
+  }
   try {
     await notifyNewPublications(context.admin, {
       tenantId: source.tenant_id,
@@ -449,7 +457,7 @@ async function persistDjenForSource(
   } catch (error) {
     // A publicação oficial não pode ser descartada por uma falha secundária de
     // alerta. O erro permanece observável nos metadados da execução.
-    notificationError = errorCode(error);
+    notificationError = notificationError ?? errorCode(error);
     console.error("DJEN notification failure", {
       tenantId: source.tenant_id,
       sourceId: source.id,
