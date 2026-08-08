@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 import type {
   CalendarEvent,
   CalendarHearing,
@@ -65,27 +66,39 @@ export function normalizeOperationalCalendar(
 export async function loadOperationalCalendar(
   tenantId: string,
   now = new Date(),
+  range?: { from: Date; to: Date },
 ): Promise<OperationalCalendarData> {
+  let eventsQuery = supabase
+    .from("eventos")
+    .select("*")
+    .eq("tenant_id", tenantId);
+  let tasksQuery = supabase
+    .from("tarefas")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .neq("status", "concluída")
+    .not("data_limite", "is", null);
+  let hearingsQuery = supabase
+    .from("audiencias")
+    .select("*, processos(numero, cliente_nome)")
+    .eq("tenant_id", tenantId);
+
+  if (range) {
+    const fromIso = range.from.toISOString();
+    const toIso = range.to.toISOString();
+    const fromDate = format(range.from, "yyyy-MM-dd");
+    const toDate = format(range.to, "yyyy-MM-dd");
+    eventsQuery = eventsQuery.gte("data_inicio", fromIso).lte("data_inicio", toIso);
+    tasksQuery = tasksQuery.gte("data_limite", fromDate).lte("data_limite", toDate);
+    hearingsQuery = hearingsQuery.gte("data_hora", fromIso).lte("data_hora", toIso);
+  } else {
+    hearingsQuery = hearingsQuery.gte("data_hora", now.toISOString()).limit(50);
+  }
+
   const [eventsResult, tasksResult, hearingsResult] = await Promise.all([
-    supabase
-      .from("eventos")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .order("data_inicio"),
-    supabase
-      .from("tarefas")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .neq("status", "concluída")
-      .not("data_limite", "is", null)
-      .order("data_limite"),
-    supabase
-      .from("audiencias")
-      .select("*, processos(numero, cliente_nome)")
-      .eq("tenant_id", tenantId)
-      .gte("data_hora", now.toISOString())
-      .order("data_hora")
-      .limit(50),
+    eventsQuery.order("data_inicio"),
+    tasksQuery.order("data_limite"),
+    hearingsQuery.order("data_hora"),
   ]);
 
   ensure(eventsResult.error);

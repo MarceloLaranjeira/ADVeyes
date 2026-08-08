@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,7 @@ import { format, isSameDay, addDays, startOfWeek, endOfWeek, addWeeks, subWeeks,
 import { ptBR } from "date-fns/locale";
 import { googleCalendar } from "@/lib/google-calendar";
 import { Switch } from "@/components/ui/switch";
+import { parseAgendaDate } from "@/lib/compact-calendar";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface Evento {
@@ -166,6 +168,7 @@ function WeekView({ weekStart, eventos, onEdit, onDelete, onNewOnDay }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Agenda = () => {
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
@@ -179,8 +182,9 @@ const Agenda = () => {
   const [gcalConnected, setGcalConnected] = useState(false);
   const [gcalSyncing, setGcalSyncing] = useState(false);
   const [syncToGcal, setSyncToGcal] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const initialDate = parseAgendaDate(searchParams.get("date")) ?? new Date();
+  const [selectedDate, setSelectedDate] = useState<Date>(initialDate);
+  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(initialDate, { weekStartsOn: 1 }));
   const [viewMode, setViewMode]   = useState<"mes" | "semana" | "dia">("mes");
   const [activeTab, setActiveTab] = useState("compromissos");
   const [showForm, setShowForm]   = useState(false);
@@ -480,6 +484,7 @@ const Agenda = () => {
                 <CardContent className="p-3">
                   <Calendar
                     mode="single"
+                    defaultMonth={selectedDate}
                     selected={selectedDate}
                     onSelect={d => d && setSelectedDate(d)}
                     locale={ptBR}

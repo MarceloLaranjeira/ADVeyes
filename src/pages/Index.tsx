@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
 import { DepthCard } from "@/components/dashboard/DepthCard";
+import { CompactWorkspaceCalendar } from "@/components/dashboard/CompactWorkspaceCalendar";
 import { TrialBanner } from "@/components/TrialBanner";
 import { OnboardingResumeBanner } from "@/components/onboarding/OnboardingResumeBanner";
 import {
@@ -609,6 +610,8 @@ const Index = () => {
 
           {/* Sidebar cards */}
           <div className="space-y-3">
+            <CompactWorkspaceCalendar tenantId={currentTenant?.tenantId ?? null} />
+
             {/* Notificações */}
             <Card className="cursor-pointer" onClick={() => navigate("/publicacoes")}>
               <CardContent className="p-3">
