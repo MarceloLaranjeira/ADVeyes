@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
+import { useOperationalCalendar } from "@/hooks/useOperationalCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,10 +25,10 @@ import { Switch } from "@/components/ui/switch";
 interface Evento {
   id: string;
   titulo: string;
-  descricao?: string;
+  descricao?: string | null;
   tipo: string;
   data_inicio: string;
-  local?: string;
+  local?: string | null;
   google_event_id?: string | null;
 }
 
@@ -46,7 +48,7 @@ interface Audiencia {
   data_hora: string;
   vara?: string;
   status?: string;
-  processos?: { numero?: string; cliente_nome?: string } | null;
+  processos?: { numero?: string; cliente_nome?: string | null } | null;
   google_event_id?: string | null;
 }
 
@@ -165,7 +167,12 @@ function WeekView({ weekStart, eventos, onEdit, onDelete, onNewOnDay }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const Agenda = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const {
+    data: operationalCalendar,
+    refetch: refetchOperationalCalendar,
+  } = useOperationalCalendar(currentTenant?.tenantId ?? null);
   const [eventos, setEventos]       = useState<Evento[]>([]);
   const [tarefas, setTarefas]       = useState<Tarefa[]>([]);
   const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
@@ -185,6 +192,16 @@ const Agenda = () => {
   const [form, setForm] = useState({
     titulo: "", descricao: "", tipo: "reunião", data_inicio: "", hora_inicio: "09:00", local: "",
   });
+  const fetchAll = useCallback(async () => {
+    await refetchOperationalCalendar();
+  }, [refetchOperationalCalendar]);
+
+  useEffect(() => {
+    if (!operationalCalendar) return;
+    setEventos(operationalCalendar.events);
+    setTarefas(operationalCalendar.tasks);
+    setAudiencias(operationalCalendar.hearings);
+  }, [operationalCalendar]);
 
   useEffect(() => {
     const oauthResult = googleCalendar.handleOAuthResult();
@@ -255,21 +272,6 @@ const Agenda = () => {
     }
   };
 
-  const fetchAll = async () => {
-    const now = new Date();
-    const em30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const [evts, tar, aud] = await Promise.all([
-      supabase.from("eventos").select("*").order("data_inicio"),
-      supabase.from("tarefas").select("*").neq("status", "concluída").not("data_limite", "is", null).order("data_limite"),
-      supabase.from("audiencias").select("*, processos(numero, cliente_nome)").gte("data_hora", now.toISOString()).order("data_hora").limit(20),
-    ]);
-    if (evts.data) setEventos(evts.data);
-    if (tar.data)  setTarefas(tar.data);
-    if (aud.data)  setAudiencias(aud.data);
-  };
-
-  useEffect(() => { fetchAll(); }, []);
-
   useEffect(() => {
     if (editData) {
       const d = new Date(editData.data_inicio);
@@ -285,7 +287,7 @@ const Agenda = () => {
     setLoading(true);
     const data_inicio = `${form.data_inicio}T${form.hora_inicio}:00`;
     if (editData) {
-      const { error } = await supabase.from("eventos").update({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null }).eq("id", editData.id);
+      const { error } = await supabase.from("eventos").update({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null }).eq("tenant_id", currentTenant!.tenantId).eq("id", editData.id);
       if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
       else {
         if (gcalConnected && editData.google_event_id) {
@@ -302,7 +304,7 @@ const Agenda = () => {
         fetchAll();
       }
     } else {
-      const { data: inserted, error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id }).select().single();
+      const { data: inserted, error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id, tenant_id: currentTenant!.tenantId }).select().single();
       if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
       else {
         if (gcalConnected && syncToGcal && inserted) {
@@ -328,7 +330,7 @@ const Agenda = () => {
     if (gcalConnected && evento?.google_event_id) {
       await googleCalendar.deleteEvent(evento.google_event_id);
     }
-    await supabase.from("eventos").delete().eq("id", deleteId);
+    await supabase.from("eventos").delete().eq("tenant_id", currentTenant!.tenantId).eq("id", deleteId);
     toast({ title: "Evento excluído!" });
     setDeleteId(null);
     fetchAll();

@@ -32,6 +32,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { calculateActivityMetrics } from "@/lib/activity-status";
+import type { Activity } from "@/types/activities";
 
 interface Prazo {
   tipo: string;
@@ -56,6 +58,11 @@ const Index = () => {
   const [horasMes, setHorasMes] = useState(0);
   const [metaMes, setMetaMes] = useState<Record<string, any> | null>(null);
   const [tarefasHoje, setTarefasHoje] = useState(0);
+  const [activitySummary, setActivitySummary] = useState({
+    pending: 0,
+    completedThisMonth: 0,
+    pointsThisMonth: 0,
+  });
   const [nomeAdvogado, setNomeAdvogado] = useState("");
   const [horusMetrics, setHorusMetrics] = useState({
     processosMonitorados: 0,
@@ -98,7 +105,8 @@ const Index = () => {
       tenantTable("metas_financeiras").select("*").eq("tenant_id", tenantId).eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).maybeSingle(),
       tenantTable("tarefas").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("data_limite", hoje).neq("status", "concluída"),
       tenantTable("processo_monitoramento").select("tribunal, ultima_verificacao, ativo").eq("tenant_id", tenantId).eq("ativo", true),
-    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes, monitoramento]) => {
+      tenantTable("tarefas").select("*").eq("tenant_id", tenantId),
+    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes, monitoramento, activityRows]) => {
       const processRows = proc.data || [];
       setStats({ processos: processRows.length, clientes: cli.count || 0, documentos: doc.count || 0 });
       const areaCounts = processRows.reduce((counts: Record<string, number>, process: any) => {
@@ -151,6 +159,16 @@ const Index = () => {
       setHorasMes((timeE.data || []).reduce((s: number, e: any) => s + Number(e.horas), 0));
       setMetaMes(meta.data || null);
       setTarefasHoje(tarefasHojeRes.count || 0);
+      const allActivities = (activityRows.data ?? []) as Activity[];
+      const activityMetrics = calculateActivityMetrics(allActivities, now);
+      const completedThisMonth = allActivities.filter(activity =>
+        activity.concluida_em && activity.concluida_em >= inicioMes,
+      );
+      setActivitySummary({
+        pending: activityMetrics.pending + activityMetrics.inProgress,
+        completedThisMonth: completedThisMonth.length,
+        pointsThisMonth: completedThisMonth.reduce((total, activity) => total + activity.pontos, 0),
+      });
     });
   }, [currentTenant?.tenantId]);
 
@@ -264,7 +282,7 @@ const Index = () => {
         </div>
 
         {/* Row 1: Processos + Operacional */}
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 mb-4">
           <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/processos")}>
             <div className="flex items-start justify-between">
               <div>
@@ -343,6 +361,26 @@ const Index = () => {
                 <p className="text-[10px] text-muted-foreground mt-0.5">Tarefas</p>
               </div>
               <div className="p-2 rounded-lg bg-secondary"><CheckCircle2 className="w-4 h-4 text-muted-foreground" /></div>
+            </div>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pendentes</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{activitySummary.pending}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Atividades</p>
+              </div>
+              <div className="p-2 rounded-lg bg-secondary"><IconTarefas size={20} className="text-muted-foreground" /></div>
+            </div>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Taskscore</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{activitySummary.pointsThisMonth}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{activitySummary.completedThisMonth} concluídas</p>
+              </div>
+              <div className="p-2 rounded-lg bg-secondary"><Target size={20} className="text-muted-foreground" /></div>
             </div>
           </DepthCard>
         </div>
