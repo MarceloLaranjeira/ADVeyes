@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HardDrive, Upload } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { LogoFull } from "@/components/common/Logo";
 import { withTimeout } from "@/lib/async-timeout";
@@ -191,6 +191,13 @@ const Login = () => {
             </svg>
             {loadingGoogle ? "Redirecionando..." : "Entrar com Google"}
           </Button>
+
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            Ainda não tem conta?{" "}
+            <Link to="/cadastro" className="font-semibold text-primary hover:underline">
+              Começar grátis
+            </Link>
+          </p>
 
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">

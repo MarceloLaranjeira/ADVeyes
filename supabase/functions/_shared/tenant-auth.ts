@@ -83,6 +83,11 @@ export function postgresErrorCode(error: unknown): string {
     "team_required",
     "invalid_team",
     "invalid_action",
+    "signup_email_not_confirmed",
+    "signup_user_already_linked",
+    "signup_invitation_pending",
+    "signup_trial_plan_unavailable",
+    "signup_office_name_invalid",
   ]);
 
   return record.message && stable.has(record.message)
@@ -100,8 +105,12 @@ export function statusForError(code: string): number {
   }
   if (
     code === "member_already_active" || code === "already_accepted" ||
-    code === "invitation_not_pending"
+    code === "invitation_not_pending" ||
+    code === "signup_user_already_linked" ||
+    code === "signup_invitation_pending"
   ) return 409;
+  if (code === "signup_email_not_confirmed") return 403;
+  if (code === "signup_trial_plan_unavailable") return 503;
   if (code === "operation_failed") return 500;
   return 400;
 }

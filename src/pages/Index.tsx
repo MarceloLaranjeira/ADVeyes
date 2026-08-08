@@ -6,6 +6,7 @@ import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
 import { DepthCard } from "@/components/dashboard/DepthCard";
 import { TrialBanner } from "@/components/TrialBanner";
+import { OnboardingResumeBanner } from "@/components/onboarding/OnboardingResumeBanner";
 import {
   ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
   Briefcase, Users, KanbanSquare, Calendar, Gavel, Search, CheckSquare,
@@ -218,6 +219,7 @@ const Index = () => {
   return (
     <AppLayout>
       <div className="animate-fade-in">
+        <OnboardingResumeBanner />
         <TrialBanner />
         {/* Header - Astrea greeting */}
         <div className="mb-6">

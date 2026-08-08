@@ -50,7 +50,7 @@ const Nav = () => {
               Entrar
             </button>
             <button
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/cadastro")}
               className="bg-[#1a2a5e] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-[#243570] transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
             >
               Teste Grátis <ArrowRight className="w-3.5 h-3.5" />
@@ -73,7 +73,7 @@ const Nav = () => {
             ))}
             <div className="border-t border-gray-100 pt-3 mt-3 px-4 space-y-2">
               <button onClick={() => navigate("/login")} className="w-full text-sm font-medium py-2.5 border border-gray-200 rounded-xl">Entrar</button>
-              <button onClick={() => navigate("/login")} className="w-full bg-[#1a2a5e] text-white text-sm font-semibold py-2.5 rounded-xl">Começar grátis</button>
+              <button onClick={() => navigate("/cadastro")} className="w-full bg-[#1a2a5e] text-white text-sm font-semibold py-2.5 rounded-xl">Começar grátis</button>
             </div>
           </div>
         )}
@@ -121,7 +121,7 @@ const Hero = () => {
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <button
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/cadastro")}
                 className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-8 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
               >
                 Começar grátis agora
@@ -394,7 +394,7 @@ const Pricing = () => {
               </ul>
 
               <button
-                onClick={() => navigate(`/login?plan=${p.key}`)}
+                onClick={() => navigate(`/cadastro?plan=${p.key}`)}
                 className={`w-full py-3 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5 ${p.popular
                   ? "bg-[#1a2a5e] text-white hover:bg-[#243570] hover:shadow-lg"
                   : "border-2 border-[#1a2a5e] text-[#1a2a5e] hover:bg-[#1a2a5e] hover:text-white"
@@ -434,7 +434,7 @@ const CTABanner = () => {
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/cadastro")}
             className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-10 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
           >
             Começar piloto de 14 dias

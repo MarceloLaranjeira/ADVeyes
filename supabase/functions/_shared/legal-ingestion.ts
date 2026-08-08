@@ -3,7 +3,10 @@
 // Toda gravação carrega o tenant_id da fonte monitorada.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { deliverLegalAlert } from "./legal-notifications.ts";
+import {
+  deliverLegalAlert,
+  resolveRecipients,
+} from "./legal-notifications.ts";
 import {
   buildContentFingerprint,
   type NormalizedMovement,
@@ -237,6 +240,38 @@ export async function notifyNewPublications(
       },
     });
     delivered += result.inApp;
+
+    const recipients = await resolveRecipients(admin, {
+      tenantId: input.tenantId,
+      processId: publication.process_id as string | null,
+    });
+    const responsible = recipients[0];
+    if (responsible) {
+      const { error: taskError } = await admin.from("tarefas").upsert({
+        tenant_id: input.tenantId,
+        user_id: responsible.userId,
+        responsavel_id: responsible.userId,
+        processo_id: publication.process_id as string | null,
+        titulo: "Revisar intimação",
+        descricao: [
+          summary || "Nova publicação oficial recebida.",
+          "Revise o conteúdo e confirme qualquer prazo sugerido antes de usá-lo.",
+        ].join("\n\n"),
+        prioridade: "alta",
+        status: "pendente",
+        categoria: "Intimação",
+        pontos: 1,
+        tags: ["intimação", "publicação-oficial"],
+        source_type: "publicacao",
+        source_id: publication.id,
+      }, {
+        onConflict: "tenant_id,source_type,source_id",
+        ignoreDuplicates: true,
+      });
+      if (taskError) {
+        console.error("legal-ingestion: publication review task failed");
+      }
+    }
   }
 
   return delivered;

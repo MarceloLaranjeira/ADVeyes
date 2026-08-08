@@ -34,6 +34,9 @@ import Equipe from "./pages/Equipe";
 import Contratos from "./pages/Contratos";
 import Checkout from "./pages/Checkout";
 import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import CadastroConcluir from "./pages/CadastroConcluir";
+import Onboarding from "./pages/Onboarding";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
@@ -68,6 +71,12 @@ const App = () => (
                     <Route path="/privacidade" element={<PoliticaPrivacidade />} />
                     <Route path="/termos" element={<TermosUso />} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/cadastro" element={<Cadastro />} />
+                    <Route
+                      path="/cadastro/concluir"
+                      element={<AuthenticatedRoute><CadastroConcluir /></AuthenticatedRoute>}
+                    />
+                    <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/convite/aceitar" element={<ConviteAceite />} />
                     {/* Portal do Cliente (public, token-based) */}

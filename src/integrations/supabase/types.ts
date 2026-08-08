@@ -2876,6 +2876,8 @@ export type Database = {
           prioridade: string
           processo_id: string | null
           responsavel_id: string | null
+          source_id: string | null
+          source_type: string | null
           status: string
           tags: string[] | null
           tenant_id: string
@@ -2897,6 +2899,8 @@ export type Database = {
           prioridade?: string
           processo_id?: string | null
           responsavel_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
           status?: string
           tags?: string[] | null
           tenant_id: string
@@ -2918,6 +2922,8 @@ export type Database = {
           prioridade?: string
           processo_id?: string | null
           responsavel_id?: string | null
+          source_id?: string | null
+          source_type?: string | null
           status?: string
           tags?: string[] | null
           tenant_id?: string
@@ -3247,6 +3253,59 @@ export type Database = {
             foreignKeyName: "tenant_memberships_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_onboarding: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_step: string
+          dismissed_at: string | null
+          flow_version: number
+          oab_completed_at: string | null
+          oab_skipped_at: string | null
+          office_completed_at: string | null
+          team_completed_at: string | null
+          team_skipped_at: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          dismissed_at?: string | null
+          flow_version?: number
+          oab_completed_at?: string | null
+          oab_skipped_at?: string | null
+          office_completed_at?: string | null
+          team_completed_at?: string | null
+          team_skipped_at?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_step?: string
+          dismissed_at?: string | null
+          flow_version?: number
+          oab_completed_at?: string | null
+          oab_skipped_at?: string | null
+          office_completed_at?: string | null
+          team_completed_at?: string | null
+          team_skipped_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_onboarding_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
