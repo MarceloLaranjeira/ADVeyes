@@ -44,17 +44,28 @@ Criar com `npx supabase migration new task_operational_domain`.
 Adicionar em `public.tarefas`, somente quando ainda não existirem:
 
 - `updated_at timestamptz not null default now()`;
-- `lida_em timestamptz`;
-- `favorita boolean not null default false`;
 - `categoria text`;
 - `pontos integer not null default 0` com valor não negativo.
+
+Criar `public.tarefa_user_state` para estado individual por usuário:
+
+- `tenant_id`, `tarefa_id` e `user_id` como chave do vínculo;
+- `lida_em timestamptz`;
+- `favorita boolean not null default false`;
+- `updated_at timestamptz not null default now()`;
+- RLS restrita ao próprio usuário e membership ativa;
+- grants explícitos para `authenticated` e `service_role`.
+
+Leitura e favorita não podem ficar em `tarefas`: uma pessoa não deve marcar o
+item como lido ou favorito para todo o escritório.
 
 Adicionar índices para:
 
 - `(tenant_id, responsavel_id, status, data_limite)`;
 - `(tenant_id, concluida_em desc)` para concluídas;
-- `(tenant_id, favorita)` para favoritas;
-- `(tenant_id, lida_em)` para não lidas.
+- `(tenant_id, user_id)` em `tarefa_user_state`;
+- `(tenant_id, user_id, favorita)` para favoritas individuais;
+- índice parcial de não lidas em `tarefa_user_state`.
 
 Não criar uma tabela de etiquetas neste ciclo. `categoria` atende ao primeiro
 fluxo; etiquetas múltiplas ficam para uma evolução específica.
