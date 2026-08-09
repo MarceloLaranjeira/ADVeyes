@@ -1,8 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  Search, Sparkles, Plus, Upload, Timer, MessageSquare, Settings,
-  ChevronDown, Bell, LogOut, User as UserIcon,
+  Search, Plus, ChevronDown, Bell, LogOut, User as UserIcon,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -74,15 +73,6 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
       {/* Ações */}
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => navigate("/ia-juridica")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="IA"
-          title="Assistente IA"
-        >
-          <Sparkles className="w-4 h-4" />
-        </button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -104,44 +94,10 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <button
-          onClick={() => navigate("/documentos")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Importar"
-          title="Importar / Documentos"
-        >
-          <Upload className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => navigate("/time-tracking")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Cronômetro"
-          title="Cronômetro"
-        >
-          <Timer className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => navigate("/whatsapp")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Mensagens"
-          title="WhatsApp"
-        >
-          <MessageSquare className="w-4 h-4" />
-        </button>
-
         {/* Notificações reaproveitadas */}
         <div className="hidden sm:block">
           <NotificationPanel />
         </div>
-
-        <button
-          onClick={() => navigate("/configuracoes")}
-          className="hidden md:inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Configurações"
-          title="Configurações"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
 
         {/* Avatar */}
         <DropdownMenu>

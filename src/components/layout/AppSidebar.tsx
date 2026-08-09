@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
+import { readSidebarScroll, saveSidebarScroll } from "@/lib/sidebar-scroll";
 
 const sections: Array<{
   label?: string;
@@ -66,9 +67,6 @@ const sections: Array<{
   },
 ];
 
-/** Onde a rolagem da régua estava quando a página trocou. */
-const CHAVE_ROLAGEM = "adveyes:rolagem-menu";
-
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { isPlatformAdmin } = usePlatformAdmin();
@@ -83,15 +81,14 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
    * a rota de layout, que mantém a régua montada; enquanto ela não vem, a
    * posição é guardada e restaurada na montagem.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
 
-    const salvo = Number(sessionStorage.getItem(CHAVE_ROLAGEM));
-    if (salvo > 0) nav.scrollTop = salvo;
+    nav.scrollTop = readSidebarScroll(sessionStorage);
 
     const guardar = () => {
-      sessionStorage.setItem(CHAVE_ROLAGEM, String(nav.scrollTop));
+      saveSidebarScroll(sessionStorage, nav.scrollTop);
     };
     nav.addEventListener("scroll", guardar, { passive: true });
     return () => nav.removeEventListener("scroll", guardar);

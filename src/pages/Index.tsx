@@ -10,8 +10,8 @@ import { TrialBanner } from "@/components/TrialBanner";
 import { OnboardingResumeBanner } from "@/components/onboarding/OnboardingResumeBanner";
 import {
   ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
-  Briefcase, Users, KanbanSquare, Calendar, Gavel, Search, CheckSquare,
-  DollarSign, FolderOpen, BookOpen, BarChart3, Sparkles, Bell,
+  Briefcase, Users, KanbanSquare, Calendar, Gavel, CheckSquare,
+  Sparkles, Bell,
   AlertTriangle, Activity,
 } from "lucide-react";
 const IconProcessos = Briefcase;
@@ -19,13 +19,8 @@ const IconClientes = Users;
 const IconLeads = KanbanSquare;
 const IconAgenda = Calendar;
 const IconAudiencias = Gavel;
-const IconBusca = Search;
 const IconTarefas = CheckSquare;
-const IconFinanceiro = DollarSign;
 const IconHoras = Clock;
-const IconDocumentos = FolderOpen;
-const IconJurisprudencia = BookOpen;
-const IconRelatorios = BarChart3;
 const IconHorusIA = Sparkles;
 const IconBell = Bell;
 const IconAlerta = AlertTriangle;
@@ -205,17 +200,6 @@ const Index = () => {
     return "bg-card border-border";
   };
 
-
-  const quickActions = [
-    { label: "Busca Processual", icon: IconBusca, path: "/busca" },
-    { label: "Nova Tarefa", icon: IconTarefas, path: "/tarefas" },
-    { label: "Financeiro", icon: IconFinanceiro, path: "/financeiro" },
-    { label: "Controle Horas", icon: IconHoras, path: "/time-tracking" },
-    { label: "Novo Lead (CRM)", icon: IconLeads, path: "/crm" },
-    { label: "Documentos", icon: IconDocumentos, path: "/documentos" },
-    { label: "Jurisprudência", icon: IconJurisprudencia, path: "/jurisprudencia" },
-    { label: "Relatórios", icon: IconRelatorios, path: "/relatorios" },
-  ];
 
   return (
     <AppLayout>
@@ -498,32 +482,6 @@ const Index = () => {
             </CardContent>
           </Card>
         )}
-
-        {/* Quick Actions */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <IconSistema size={18} className="text-muted-foreground" />
-                <h3 className="font-serif font-semibold text-sm">Ações Rápidas</h3>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-              {quickActions.map((a) => (
-                <button
-                  key={a.path}
-                  onClick={() => navigate(a.path)}
-                  className="quick-action-card group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center group-hover:bg-secondary/70 group-hover:scale-105 transition-all">
-                    <a.icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  </div>
-                  <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">{a.label}</span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Horus AI Banner */}
         <Card
