@@ -1,4 +1,3 @@
-import { useLayoutEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
@@ -8,7 +7,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
-import { readSidebarScroll, saveSidebarScroll } from "@/lib/sidebar-scroll";
 
 const sections: Array<{
   label?: string;
@@ -70,36 +68,13 @@ const sections: Array<{
 export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
   const { isPlatformAdmin } = usePlatformAdmin();
-  const navRef = useRef<HTMLElement>(null);
-
-  /**
-   * Preserva a posição da rolagem entre as páginas.
-   *
-   * Cada uma das 23 páginas monta o próprio `AppLayout`, então navegar
-   * desmonta e remonta esta régua — e a rolagem volta ao topo. Quem clicava
-   * num item do fim do menu perdia de vista onde estava. A correção de raiz é
-   * a rota de layout, que mantém a régua montada; enquanto ela não vem, a
-   * posição é guardada e restaurada na montagem.
-   */
-  useLayoutEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    nav.scrollTop = readSidebarScroll(sessionStorage);
-
-    const guardar = () => {
-      saveSidebarScroll(sessionStorage, nav.scrollTop);
-    };
-    nav.addEventListener("scroll", guardar, { passive: true });
-    return () => nav.removeEventListener("scroll", guardar);
-  }, []);
 
   return (
     // A régua é navy nos tokens desde sempre (`--sidebar-background`), mas
     // estava com `bg-white` fixo aqui — o token nunca chegava a valer. Navy
     // separa navegação de conteúdo sem precisar de borda ou sombra.
     <aside className="h-full w-60 bg-sidebar border-r border-sidebar-border flex flex-col">
-      <nav ref={navRef} className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
+      <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
         {isPlatformAdmin && (
           <div className="mb-5">
             <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
