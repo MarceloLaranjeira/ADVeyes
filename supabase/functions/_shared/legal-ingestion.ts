@@ -10,6 +10,8 @@ import {
 import {
   buildContentFingerprint,
   type NormalizedMovement,
+  type NormalizedParty,
+  type NormalizedProcessMetadata,
   type NormalizedPublication,
   type PublicationProvider,
 } from "./legal-normalization.ts";
@@ -34,6 +36,124 @@ const EMPTY: IngestionResult = {
   ignored: 0,
   createdIds: [],
 };
+
+export async function ingestProcessMetadata(
+  admin: SupabaseClient,
+  input: {
+    tenantId: string;
+    processId: string;
+    metadata: NormalizedProcessMetadata;
+  },
+): Promise<void> {
+  const metadata = input.metadata;
+  const { error } = await admin.from("processos").update({
+    tribunal: metadata.tribunal,
+    class_code: metadata.classCode,
+    class_name: metadata.className,
+    subjects: metadata.subjects,
+    adjudicating_body: metadata.adjudicatingBody,
+    procedural_system: metadata.proceduralSystem,
+    court_level: metadata.courtLevel,
+    public_secrecy_level: metadata.publicSecrecyLevel,
+    legal_sync_status: "synced",
+    last_legal_sync_at: new Date().toISOString(),
+    legal_data_source: metadata.provider,
+    legal_metadata: {
+      provider: metadata.provider,
+      source_updated_at: metadata.lastUpdatedAt,
+      collected_at: new Date().toISOString(),
+    },
+  })
+    .eq("tenant_id", input.tenantId)
+    .eq("id", input.processId);
+  if (error) throw error;
+}
+
+export async function ingestProcessParties(
+  admin: SupabaseClient,
+  input: {
+    tenantId: string;
+    processId: string;
+    parties: NormalizedParty[];
+  },
+): Promise<IngestionResult> {
+  if (!input.parties.length) return { ...EMPTY };
+
+  const identified = await Promise.all(input.parties.map(async (party) => ({
+    party,
+    identityHash: await buildContentFingerprint([
+      input.tenantId,
+      input.processId,
+      // O ID externo pertence ao provedor e não identifica a pessoa entre
+      // fontes diferentes. Documento (quando disponível) e dados canônicos
+      // formam a identidade compartilhada; IDs externos ficam nas referências.
+      party.documentHash,
+      party.normalizedName,
+      party.personType,
+      party.side,
+    ]),
+  })));
+  const hashes = identified.map((item) => item.identityHash);
+  const { data: existing, error: existingError } = await admin
+    .from("process_parties")
+    .select("identity_hash, contact_id, internal_classification, classification_locked, source_references")
+    .eq("tenant_id", input.tenantId)
+    .eq("process_id", input.processId)
+    .in("identity_hash", hashes);
+  if (existingError) throw existingError;
+  const existingByHash = new Map(
+    (existing ?? []).map((row) => [row.identity_hash as string, row]),
+  );
+
+  const rows = identified.map(({ party, identityHash }) => {
+    const current = existingByHash.get(identityHash);
+    const locked = current?.classification_locked === true;
+    const references = current?.source_references &&
+        typeof current.source_references === "object"
+      ? current.source_references as Record<string, unknown>
+      : {};
+    return {
+      tenant_id: input.tenantId,
+      process_id: input.processId,
+      contact_id: current?.contact_id ?? null,
+      display_name: party.displayName,
+      normalized_name: party.normalizedName,
+      person_type: party.personType,
+      document_masked: party.documentMasked,
+      document_hash: party.documentHash,
+      side: party.side,
+      procedural_role: party.proceduralRole,
+      internal_classification: locked
+        ? current.internal_classification
+        : party.internalClassification,
+      classification_locked: locked,
+      related_lawyers: party.relatedLawyers,
+      provider: party.provider,
+      external_id: party.externalId,
+      identity_hash: identityHash,
+      source_references: {
+        ...references,
+        ...(party.externalId ? { [party.provider]: party.externalId } : {}),
+      },
+      provider_payload: party.payload,
+      last_seen_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await admin.from("process_parties").upsert(rows, {
+    onConflict: "tenant_id,process_id,identity_hash",
+    ignoreDuplicates: false,
+  });
+  if (error) throw error;
+
+  const created = rows.filter((row) => !existingByHash.has(row.identity_hash)).length;
+  return {
+    received: rows.length,
+    created,
+    ignored: rows.length - created,
+    createdIds: [],
+  };
+}
 
 /**
  * Persiste publicações já normalizadas. Um evento repetido atualiza o mesmo
@@ -95,6 +215,17 @@ export async function ingestPublications(
         provider_payload: publication.payload,
         review_status: "pending_review",
         possible_deadline: publication.possibleDeadline,
+        communication_type: publication.communicationType,
+        recipients: publication.recipients,
+        recipient_lawyers: publication.recipientLawyers,
+        court_body: publication.courtBody,
+        hearing_evidence: publication.hearingEvidence,
+        provenance: {
+          provider: input.provider,
+          source_name: publication.sourceName,
+          source_url: publication.sourceUrl,
+          collected_at: new Date().toISOString(),
+        },
       }, {
         onConflict: publication.externalId
           ? "tenant_id,provider,external_id"
@@ -145,9 +276,9 @@ export async function ingestMovements(
     .maybeSingle();
   if (processError) throw processError;
 
-  const rows = input.movements
+  const rows = await Promise.all(input.movements
     .filter((movement) => movement.externalId)
-    .map((movement) => ({
+    .map(async (movement) => ({
       tenant_id: input.tenantId,
       process_id: input.processId,
       process_number: process?.numero ?? null,
@@ -160,8 +291,30 @@ export async function ingestMovements(
       content: movement.content,
       source_name: movement.sourceName,
       source_url: movement.sourceUrl,
+      tpu_code: movement.tpuCode,
+      description: movement.description,
+      complements: movement.complements,
+      notes: movement.notes,
+      origin_system: movement.originSystem,
+      document_type: movement.documentType,
+      full_text_available: movement.fullTextAvailable,
+      document_url: movement.documentUrl,
+      content_hash: await buildContentFingerprint([
+        input.tenantId,
+        input.processId,
+        input.provider,
+        movement.externalId,
+        movement.occurredAt,
+        movement.content,
+      ]),
+      provenance: {
+        provider: input.provider,
+        source_name: movement.sourceName,
+        source_url: movement.sourceUrl,
+        collected_at: new Date().toISOString(),
+      },
       provider_payload: movement.payload,
-    }));
+    })));
 
   if (!rows.length) {
     return {
@@ -172,17 +325,73 @@ export async function ingestMovements(
     };
   }
 
+  const { data: existingRows, error: existingError } = await admin
+    .from("process_movements")
+    .select("external_id")
+    .eq("tenant_id", input.tenantId)
+    .eq("process_id", input.processId)
+    .eq("provider", input.provider)
+    .in("external_id", rows.map((row) => row.external_id));
+  if (existingError) throw existingError;
+  const existingIds = new Set(
+    (existingRows ?? []).map((row) => row.external_id as string),
+  );
+
   const { data, error } = await admin
     .from("process_movements")
     .upsert(rows, {
       onConflict: "tenant_id,process_id,provider,external_id",
-      ignoreDuplicates: true,
+      ignoreDuplicates: false,
     })
-    .select("id");
+    .select("id, external_id, movement_type, title, content, content_hash, occurred_at, document_type, document_url, full_text_available, source_name, source_url, provider_payload");
 
   if (error) throw error;
 
-  const created = data?.length ?? 0;
+  const documentRows = (data ?? [])
+    .filter((movement) => movement.movement_type === "DOCUMENTO")
+    .map((movement) => ({
+      tenant_id: input.tenantId,
+      process_id: input.processId,
+      movement_id: movement.id,
+      document_type: movement.document_type,
+      title: movement.title || movement.document_type || "Documento processual",
+      text_content: movement.full_text_available ? movement.content : null,
+      official_url: input.provider === "datajud" ? movement.document_url : null,
+      complementary_url: input.provider === "escavador" ? movement.document_url : null,
+      provider: input.provider,
+      external_id: movement.external_id,
+      content_hash: movement.content_hash,
+      occurred_at: movement.occurred_at,
+      availability_status: movement.full_text_available
+        ? "available"
+        : movement.document_url
+        ? "link_only"
+        : "unavailable",
+      is_public: true,
+      source_type: "movement",
+      source_id: movement.id,
+      source_references: {
+        [input.provider]: movement.external_id,
+      },
+      provenance: {
+        provider: input.provider,
+        source_name: movement.source_name,
+        source_url: movement.source_url,
+      },
+      provider_payload: movement.provider_payload,
+    }));
+
+  if (documentRows.length) {
+    const { error: documentError } = await admin
+      .from("process_documents")
+      .upsert(documentRows, {
+        onConflict: "tenant_id,process_id,content_hash",
+        ignoreDuplicates: false,
+      });
+    if (documentError) throw documentError;
+  }
+
+  const created = rows.filter((row) => !existingIds.has(row.external_id)).length;
   return {
     received: input.movements.length,
     created,

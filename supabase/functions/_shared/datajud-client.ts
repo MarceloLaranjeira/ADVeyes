@@ -137,6 +137,7 @@ export interface DataJudProcess extends DataJudProcessPayload {
   orgaoJulgador: string | null;
   dataAjuizamento: string | null;
   ultimaAtualizacao: string | null;
+  rawSource: Record<string, unknown>;
 }
 
 interface DataJudSearchResponse {
@@ -201,9 +202,22 @@ export async function fetchDataJudProcess(input: {
     ultimaAtualizacao: typeof source.dataHoraUltimaAtualizacao === "string"
       ? source.dataHoraUltimaAtualizacao
       : null,
+    assuntos: Array.isArray(source.assuntos)
+      ? source.assuntos as DataJudProcessPayload["assuntos"]
+      : [],
+    sistema: source.sistema as DataJudProcessPayload["sistema"],
+    grau: typeof source.grau === "string" ? source.grau : null,
+    nivelSigilo: typeof source.nivelSigilo === "number" ||
+        typeof source.nivelSigilo === "string"
+      ? source.nivelSigilo
+      : null,
+    partes: Array.isArray(source.partes)
+      ? source.partes as DataJudProcessPayload["partes"]
+      : [],
     movimentos: Array.isArray(source.movimentos)
       ? source.movimentos as DataJudProcessPayload["movimentos"]
       : [],
+    rawSource: source,
   };
 }
 

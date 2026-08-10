@@ -22,6 +22,8 @@ import {
   createPublicationReviewTasks,
   indexProcessesByNumber,
   ingestMovements,
+  ingestProcessMetadata,
+  ingestProcessParties,
   ingestPublications,
   notifyNewPublications,
   type IngestionResult,
@@ -32,6 +34,8 @@ import {
   DJEN_RECONCILIATION_INTERVAL_MS,
   nextAttemptDelayMs,
   normalizeDataJudMovements,
+  normalizeDataJudParties,
+  normalizeDataJudProcessMetadata,
   normalizeDjenPublication,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
@@ -270,12 +274,29 @@ async function reconcileProcessSource(
     return { received: 0, created: 0, ignored: 0, createdIds: [] };
   }
 
-  return await ingestMovements(context.admin, {
+  await ingestProcessMetadata(context.admin, {
+    tenantId: source.tenant_id,
+    processId: source.process_id,
+    metadata: normalizeDataJudProcessMetadata(found.rawSource),
+  });
+  const partyResult = await ingestProcessParties(context.admin, {
+    tenantId: source.tenant_id,
+    processId: source.process_id,
+    parties: normalizeDataJudParties(found.rawSource),
+  });
+  const movementResult = await ingestMovements(context.admin, {
     tenantId: source.tenant_id,
     processId: source.process_id,
     provider: "datajud",
     movements: normalizeDataJudMovements(found),
   });
+
+  return {
+    received: partyResult.received + movementResult.received,
+    created: partyResult.created + movementResult.created,
+    ignored: partyResult.ignored + movementResult.ignored,
+    createdIds: movementResult.createdIds,
+  };
 }
 
 async function reconcileSource(

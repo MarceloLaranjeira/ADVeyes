@@ -4,6 +4,8 @@ import {
   detectPossibleDeadline,
   formatCnj,
   nextAttemptDelayMs,
+  normalizeDataJudParties,
+  normalizeDataJudProcessMetadata,
   normalizeDataJudMovements,
   normalizeDjenPublication,
   normalizeEscavadorPublication,
@@ -30,7 +32,7 @@ describe("formatCnj", () => {
   });
 
   it("aceita número entregue como valor não textual", () => {
-    expect(formatCnj(8001234520238040001)).toBe("");
+    expect(formatCnj(Number("8001234520238040001"))).toBe("");
     expect(formatCnj({ numero: "x" })).toBe("");
   });
 });
@@ -218,6 +220,98 @@ describe("normalizeDjenPublication", () => {
       "PODER JUDICIÁRIO — Intimação da parte Á autora.",
     );
   });
+
+  it("preserva destinatários, advogados, órgão e evidência de audiência", () => {
+    const normalized = normalizeDjenPublication({
+      tipoComunicacao: "Intimação",
+      nomeOrgao: "2ª Vara Cível de Manaus",
+      texto: "Audiência de conciliação designada para 20/08/2026 às 09:30.",
+      destinatarios: [{ nome: "Maria da Silva", polo: "A" }],
+      destinatarioadvogados: [{ nome: "João Souza", numero_oab: "10099" }],
+    }, { receivedAt });
+
+    expect(normalized.communicationType).toBe("Intimação");
+    expect(normalized.courtBody).toBe("2ª Vara Cível de Manaus");
+    expect(normalized.recipients).toEqual([
+      { nome: "Maria da Silva", polo: "A" },
+    ]);
+    expect(normalized.recipientLawyers).toEqual([
+      { nome: "João Souza", numero_oab: "10099" },
+    ]);
+    expect(normalized.hearingEvidence).toContain("Audiência de conciliação");
+  });
+});
+
+describe("normalizeDataJudProcessMetadata", () => {
+  it("preserva metadados oficiais de capa sem inferir campos ausentes", () => {
+    const normalized = normalizeDataJudProcessMetadata({
+      numeroProcesso: "08001234520238040001",
+      tribunal: "TJAM",
+      classe: { codigo: 1116, nome: "Execução Fiscal" },
+      assuntos: [
+        { codigo: 5952, nome: "IPTU" },
+        { codigo: 6017, nome: "Taxas" },
+      ],
+      orgaoJulgador: { codigo: 987, nome: "3ª Vara da Fazenda Pública" },
+      sistema: { codigo: 1, nome: "PROJUDI" },
+      grau: "G1",
+      nivelSigilo: 0,
+      dataAjuizamento: "2026-01-10T10:30:00Z",
+      dataHoraUltimaAtualizacao: "2026-08-09T12:00:00Z",
+    });
+
+    expect(normalized.processNumber).toBe("0800123-45.2023.8.04.0001");
+    expect(normalized.classCode).toBe("1116");
+    expect(normalized.className).toBe("Execução Fiscal");
+    expect(normalized.subjects).toEqual([
+      { code: "5952", name: "IPTU" },
+      { code: "6017", name: "Taxas" },
+    ]);
+    expect(normalized.adjudicatingBody).toBe("3ª Vara da Fazenda Pública");
+    expect(normalized.proceduralSystem).toBe("PROJUDI");
+    expect(normalized.publicSecrecyLevel).toBe(0);
+  });
+});
+
+describe("normalizeDataJudParties", () => {
+  it("normaliza partes e advogados sem presumir quem é cliente", () => {
+    const parties = normalizeDataJudParties({
+      partes: [
+        {
+          id: 31,
+          nome: "José da Conceição",
+          polo: "ATIVO",
+          tipoPessoa: "Pessoa Física",
+          tipoParte: "AUTOR",
+          advogados: [{ nome: "Ana Lima", oab: "AM10099" }],
+        },
+        {
+          id: 32,
+          nomeParte: "Empresa Ré Ltda.",
+          polo: "PASSIVO",
+          tipoPessoa: "Pessoa Jurídica",
+          papel: "RÉU",
+        },
+      ],
+    });
+
+    expect(parties).toHaveLength(2);
+    expect(parties[0]).toMatchObject({
+      normalizedName: "JOSE DA CONCEICAO",
+      side: "ativo",
+      personType: "pessoa_fisica",
+      internalClassification: "terceiro",
+    });
+    expect(parties[0].relatedLawyers).toEqual([
+      { nome: "Ana Lima", oab: "AM10099" },
+    ]);
+    expect(parties[1]).toMatchObject({
+      normalizedName: "EMPRESA RE LTDA",
+      side: "passivo",
+      personType: "pessoa_juridica",
+      internalClassification: "parte_contraria",
+    });
+  });
 });
 
 describe("normalizeDataJudMovements", () => {
@@ -248,6 +342,10 @@ describe("normalizeDataJudMovements", () => {
     expect(movements[0].externalId).toBe("26:2026-07-02T10:00:00.000Z");
     expect(movements[0].title).toBe("Distribuição");
     expect(movements[0].content).toContain("Tipo: sorteio");
+    expect(movements[0].tpuCode).toBe("26");
+    expect(movements[0].complements).toEqual([
+      { key: "tipo", label: "Tipo", value: "sorteio" },
+    ]);
     expect(movements[1].externalId).toBe(
       "juntada-de-peticao:2026-07-01T09:30:00.000Z",
     );
@@ -292,6 +390,7 @@ describe("normalizeDataJudMovements", () => {
     expect(movements[0].movementType).toBe("DOCUMENTO");
     expect(movements[0].content).toContain("Tipo de documento: Certidão");
     expect(movements[0].content).toContain("Quantidade: 2");
+    expect(movements[0].documentType).toBe("Certidão");
   });
 
   it("substitui o título genérico Documento pelo tipo legível", () => {
@@ -331,7 +430,7 @@ describe("normalizeDataJudMovements", () => {
 
   it("não quebra quando o provedor envia número no lugar de texto", () => {
     const movements = normalizeDataJudMovements({
-      numeroProcesso: 8001234520238040001 as never,
+      numeroProcesso: Number("8001234520238040001") as never,
       tribunal: 4 as never,
       movimentos: [
         { nome: 987 as never, dataHora: "2026-07-02T09:30:00.000Z" },
