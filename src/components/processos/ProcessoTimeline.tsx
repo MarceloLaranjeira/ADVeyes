@@ -26,19 +26,16 @@ const appearance = {
   movement: {
     label: "Andamento",
     icon: Gavel,
-    dot: "bg-emerald-500 ring-emerald-100",
     badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
   },
   publication: {
     label: "Publicação",
     icon: BellRing,
-    dot: "bg-amber-500 ring-amber-100",
     badge: "border-amber-200 bg-amber-50 text-amber-700",
   },
   manual: {
     label: "Registro manual",
     icon: NotebookPen,
-    dot: "bg-violet-500 ring-violet-100",
     badge: "border-violet-200 bg-violet-50 text-violet-700",
   },
 };
@@ -81,18 +78,24 @@ export function ProcessoTimeline({
 
   return (
     <div>
-      <div className="relative space-y-6 py-2 md:space-y-8 md:py-4">
-        <div className="absolute bottom-4 left-[19px] top-4 w-px bg-gradient-to-b from-primary/20 via-primary/70 to-primary/10 md:left-1/2" />
-
-        {visible.map((event, index) => {
+      <div className="overflow-hidden rounded-2xl border bg-card">
+        {visible.map((event) => {
           const config = appearance[event.kind];
           const Icon = config.icon;
           const date = eventDate(event.occurredAt);
           const isOpen = expanded.has(event.id);
           const contentDiffers = event.content !== event.summary;
-          const card = (
-            <article className="rounded-2xl border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-              <div className="flex flex-wrap items-center gap-2">
+          return (
+            <article
+              key={event.id}
+              className="grid gap-3 border-b p-4 last:border-b-0 hover:bg-muted/20 md:grid-cols-[145px_minmax(0,1fr)] md:p-5"
+            >
+              <div className="text-xs text-muted-foreground">
+                <p className="font-medium text-foreground/70">{date.date}</p>
+                {date.time && <p className="mt-1">{date.time}</p>}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className={config.badge}>
                   <Icon className="mr-1.5 h-3.5 w-3.5" />
                   {config.label}
@@ -100,15 +103,12 @@ export function ProcessoTimeline({
                 {event.possibleDeadline && (
                   <Badge variant="destructive">Revisar prazo</Badge>
                 )}
-                <span className="ml-auto text-xs text-muted-foreground md:hidden">
-                  {date.date}{date.time ? ` · ${date.time}` : ""}
-                </span>
               </div>
-              <h3 className="mt-3 text-base font-semibold text-foreground">{event.title}</h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              <h3 className="mt-2 text-sm font-semibold text-foreground sm:text-base">{event.title}</h3>
+              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                 {isOpen ? event.content : event.summary}
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-3 text-xs text-muted-foreground">
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span>{event.sourceName || event.provider}</span>
                 {event.tribunal && <span>· {event.tribunal}</span>}
                 {isSafeExternalUrl(event.sourceUrl) && (
@@ -133,28 +133,8 @@ export function ProcessoTimeline({
                   </button>
                 )}
               </div>
+              </div>
             </article>
-          );
-
-          const dateBlock = (
-            <div className="hidden px-6 text-sm text-muted-foreground md:block">
-              <p className="font-medium text-foreground/70">{date.date}</p>
-              {date.time && <p className="mt-1 text-xs">{date.time}</p>}
-            </div>
-          );
-
-          return (
-            <div key={event.id} className="relative grid grid-cols-[40px_minmax(0,1fr)] items-center md:grid-cols-[minmax(0,1fr)_48px_minmax(0,1fr)]">
-              <div className={`absolute left-[13px] top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-background ring-4 md:left-1/2 md:-translate-x-1/2 ${config.dot}`} />
-
-              <div className="col-start-2 md:col-start-1">
-                {index % 2 === 0 ? card : dateBlock}
-              </div>
-              <div className="hidden md:block" />
-              <div className="hidden md:col-start-3 md:block">
-                {index % 2 === 0 ? dateBlock : card}
-              </div>
-            </div>
           );
         })}
       </div>
