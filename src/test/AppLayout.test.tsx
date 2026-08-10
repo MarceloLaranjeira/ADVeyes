@@ -11,6 +11,10 @@ vi.mock("@/components/layout/PlatformSupportBanner", () => ({
   PlatformSupportBanner: () => null,
 }));
 
+vi.mock("@/components/layout/PlatformPreviewBanner", () => ({
+  PlatformPreviewBanner: () => null,
+}));
+
 vi.mock("@/components/layout/AppSidebar", async () => {
   const { Link } = await import("react-router-dom");
   return {

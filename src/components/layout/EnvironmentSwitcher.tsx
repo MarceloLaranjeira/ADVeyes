@@ -56,7 +56,7 @@ export const EnvironmentSwitcher = ({
     ? "Conta geral — ADVeyes"
     : currentTenant?.branding.publicName ??
       currentTenant?.displayName ??
-      "Escritório";
+      (isPlatformAdmin ? "Visualização sem escritório" : "Escritório");
 
   if (loading && memberships.length < 2) {
     return (

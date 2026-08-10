@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { PlatformSupportBanner } from "./PlatformSupportBanner";
+import { PlatformPreviewBanner } from "./PlatformPreviewBanner";
 
 interface AppLayoutProps {
   children?: ReactNode;
@@ -51,6 +52,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         {/* Main */}
         <main className="pt-16 lg:pl-60 min-w-0">
           <PlatformSupportBanner />
+          <PlatformPreviewBanner />
           <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px]">
             {children ?? <Outlet />}
           </div>

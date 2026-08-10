@@ -39,7 +39,10 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (error === "no_membership" && isPlatformAdmin) {
-    return <Navigate to="/admin" replace />;
+    // A Conta Geral pode percorrer os módulos antes do primeiro escritório
+    // existir. As páginas recebem `currentTenant = null` e exibem seus estados
+    // vazios; operações que exigem tenant continuam protegidas no backend.
+    return <>{children}</>;
   }
 
   if (error === "no_membership" && !platformAdminError) {
