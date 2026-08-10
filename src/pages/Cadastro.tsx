@@ -8,7 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogoFull } from "@/components/common/Logo";
 import {
   provisionSelfServiceTenant,
   rememberSignupIntent,
@@ -119,7 +118,11 @@ const Cadastro = () => {
         <section className="relative hidden overflow-hidden bg-[#081B48] px-14 py-12 text-white lg:flex lg:flex-col">
           <div className="absolute -right-40 -top-36 h-96 w-96 rounded-full bg-[#2563EB]/25 blur-3xl" />
           <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl" />
-          <LogoFull dark size="lg" className="relative z-10" />
+          <img
+            src="/brand/adv-ta-on-club-dark.png"
+            alt="ADV Tá On Club"
+            className="relative z-10 h-[88px] w-[300px] object-contain object-left"
+          />
           <div className="relative z-10 my-auto max-w-xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-blue-100">
               <Sparkles className="h-4 w-4 text-yellow-300" /> 14 dias gratuitos, sem cartão
@@ -146,7 +149,13 @@ const Cadastro = () => {
 
         <section className="flex items-center justify-center px-6 py-10 sm:px-12 xl:px-20">
           <div className="w-full max-w-lg">
-            <LogoFull size="md" className="mb-10 lg:hidden" />
+            <div className="mb-10 rounded-2xl bg-[#13273E] px-5 py-2 lg:hidden">
+              <img
+                src="/brand/adv-ta-on-club-dark.png"
+                alt="ADV Tá On Club"
+                className="h-16 w-56 object-contain object-left"
+              />
+            </div>
             {confirmation ? (
               <div className="text-center">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-green-100 text-green-700"><Check className="h-8 w-8" /></div>
@@ -160,7 +169,7 @@ const Cadastro = () => {
               <>
                 <div className="mb-8">
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#2563EB]">Comece agora</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-[#081B48]">Crie seu escritório no ADVeyes</h2>
+                  <h2 className="mt-2 text-3xl font-semibold text-[#081B48]">Crie seu escritório no ADV Tá On Club</h2>
                   <p className="mt-2 text-slate-500">Leva menos de dois minutos. Não pedimos cartão.</p>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
