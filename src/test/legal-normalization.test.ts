@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildContentFingerprint,
+  buildPartyIdentityFingerprint,
   detectPossibleDeadline,
   formatCnj,
   nextAttemptDelayMs,
@@ -128,6 +129,29 @@ describe("buildContentFingerprint", () => {
     const first = await buildContentFingerprint(["tenant-a", "conteúdo"]);
     const second = await buildContentFingerprint(["tenant-b", "conteúdo"]);
     expect(first).not.toBe(second);
+  });
+});
+
+describe("buildPartyIdentityFingerprint", () => {
+  it("não depende do identificador externo do provedor", async () => {
+    const canonicalParty = {
+      documentHash: null,
+      normalizedName: "MARIA DA SILVA",
+      personType: "pessoa_fisica" as const,
+      side: "ativo" as const,
+    };
+    const fromDataJud = await buildPartyIdentityFingerprint({
+      tenantId: "tenant-a",
+      processId: "processo-a",
+      party: canonicalParty,
+    });
+    const fromComplementaryProvider = await buildPartyIdentityFingerprint({
+      tenantId: "tenant-a",
+      processId: "processo-a",
+      party: { ...canonicalParty },
+    });
+
+    expect(fromDataJud).toBe(fromComplementaryProvider);
   });
 });
 

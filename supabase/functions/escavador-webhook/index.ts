@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  createPublicationHearingCandidates,
   ingestMovements,
   ingestPublications,
 } from "../_shared/legal-ingestion.ts";
@@ -173,12 +174,16 @@ Deno.serve(async (request) => {
           fonte: movement.fonte ?? null,
         }, { receivedAt: callbackAt });
 
-        await ingestPublications(admin, {
+        const publicationResult = await ingestPublications(admin, {
           tenantId: monitor.tenant_id,
           provider: "escavador",
           fallbackUserId: process.user_id,
           publications: [normalized],
           defaultProcess: process,
+        });
+        await createPublicationHearingCandidates(admin, {
+          tenantId: monitor.tenant_id,
+          publicationIds: publicationResult.createdIds,
         });
       } else {
         await ingestMovements(admin, {
@@ -211,6 +216,13 @@ Deno.serve(async (request) => {
         }),
         sourceName: "Escavador",
         sourceUrl: document.links?.api ?? null,
+        tpuCode: null,
+        description: document.descricao ?? null,
+        complements: [],
+        notes: null,
+        documentType: document.titulo ?? null,
+        fullTextAvailable: false,
+        documentUrl: document.links?.api ?? null,
         payload: document as Record<string, unknown>,
       }],
     });

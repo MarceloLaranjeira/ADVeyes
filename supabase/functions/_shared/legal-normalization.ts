@@ -50,6 +50,22 @@ export interface NormalizedParty {
   payload: Record<string, unknown>;
 }
 
+/** Identidade canônica da parte dentro do processo, independente do provedor. */
+export function buildPartyIdentityFingerprint(input: {
+  tenantId: string;
+  processId: string;
+  party: Pick<NormalizedParty, "documentHash" | "normalizedName" | "personType" | "side">;
+}): Promise<string> {
+  return buildContentFingerprint([
+    input.tenantId,
+    input.processId,
+    input.party.documentHash,
+    input.party.normalizedName,
+    input.party.personType,
+    input.party.side,
+  ]);
+}
+
 /** Escala aprovada de retentativas: 1min, 5min, 30min, 2h e 6h. */
 export const RETRY_DELAYS_MS = [
   60_000,

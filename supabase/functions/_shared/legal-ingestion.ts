@@ -3,12 +3,14 @@
 // Toda gravação carrega o tenant_id da fonte monitorada.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { extractHearingCandidate } from "./legal-hearing-extraction.ts";
 import {
   deliverLegalAlert,
   resolveRecipients,
 } from "./legal-notifications.ts";
 import {
   buildContentFingerprint,
+  buildPartyIdentityFingerprint,
   type NormalizedMovement,
   type NormalizedParty,
   type NormalizedProcessMetadata,
@@ -81,17 +83,12 @@ export async function ingestProcessParties(
 
   const identified = await Promise.all(input.parties.map(async (party) => ({
     party,
-    identityHash: await buildContentFingerprint([
-      input.tenantId,
-      input.processId,
-      // O ID externo pertence ao provedor e não identifica a pessoa entre
-      // fontes diferentes. Documento (quando disponível) e dados canônicos
-      // formam a identidade compartilhada; IDs externos ficam nas referências.
-      party.documentHash,
-      party.normalizedName,
-      party.personType,
-      party.side,
-    ]),
+    // O ID externo pertence ao provedor e fica só nas referências da fonte.
+    identityHash: await buildPartyIdentityFingerprint({
+      tenantId: input.tenantId,
+      processId: input.processId,
+      party,
+    }),
   })));
   const hashes = identified.map((item) => item.identityHash);
   const { data: existing, error: existingError } = await admin
@@ -153,6 +150,101 @@ export async function ingestProcessParties(
     ignored: rows.length - created,
     createdIds: [],
   };
+}
+
+export interface ContactReconciliationResult {
+  linked: number;
+  created: number;
+}
+
+/**
+ * Materializa todas as partes processuais como contatos do escritório. Dados
+ * e classificações manuais nunca são sobrescritos pela sincronização.
+ */
+export async function reconcileProcessContacts(
+  admin: SupabaseClient,
+  input: { tenantId: string; processId: string },
+): Promise<ContactReconciliationResult> {
+  const { data: process, error: processError } = await admin
+    .from("processos")
+    .select("user_id")
+    .eq("tenant_id", input.tenantId)
+    .eq("id", input.processId)
+    .maybeSingle();
+  if (processError) throw processError;
+  if (!process?.user_id) return { linked: 0, created: 0 };
+
+  const { data: parties, error: partiesError } = await admin
+    .from("process_parties")
+    .select("id, contact_id, display_name, normalized_name, person_type, document_hash, internal_classification, provider, external_id, source_references")
+    .eq("tenant_id", input.tenantId)
+    .eq("process_id", input.processId);
+  if (partiesError) throw partiesError;
+  const unlinked = (parties ?? []).filter((party) => !party.contact_id);
+  if (!unlinked.length) return { linked: 0, created: 0 };
+
+  const names = [...new Set(unlinked.map((party) => String(party.normalized_name)))];
+  const { data: contacts, error: contactsError } = await admin
+    .from("clientes")
+    .select("id, normalized_name, person_type, document_hash")
+    .eq("tenant_id", input.tenantId)
+    .in("normalized_name", names);
+  if (contactsError) throw contactsError;
+
+  const byCanonicalKey = new Map<string, { id: string; document_hash: string | null }>();
+  for (const contact of contacts ?? []) {
+    byCanonicalKey.set(
+      `${contact.normalized_name}|${contact.person_type ?? "desconhecido"}`,
+      contact as { id: string; document_hash: string | null },
+    );
+  }
+
+  let linked = 0;
+  let created = 0;
+  for (const party of unlinked) {
+    const key = `${party.normalized_name}|${party.person_type}`;
+    let contact = byCanonicalKey.get(key);
+    if (contact?.document_hash && party.document_hash &&
+      contact.document_hash !== party.document_hash) {
+      contact = undefined;
+    }
+
+    if (!contact) {
+      const { data: inserted, error: insertError } = await admin
+        .from("clientes")
+        .insert({
+          tenant_id: input.tenantId,
+          user_id: process.user_id,
+          nome: party.display_name,
+          normalized_name: party.normalized_name,
+          person_type: party.person_type,
+          relationship_type: party.internal_classification,
+          source_provider: party.provider,
+          external_id: null,
+          document_hash: party.document_hash,
+          classification_locked: false,
+          source_metadata: {
+            process_ids: [input.processId],
+            source_references: party.source_references ?? {},
+          },
+        })
+        .select("id, document_hash")
+        .single();
+      if (insertError) throw insertError;
+      contact = inserted as { id: string; document_hash: string | null };
+      byCanonicalKey.set(key, contact);
+      created += 1;
+    }
+
+    const { error: linkError } = await admin.from("process_parties")
+      .update({ contact_id: contact.id })
+      .eq("tenant_id", input.tenantId)
+      .eq("id", party.id);
+    if (linkError) throw linkError;
+    linked += 1;
+  }
+
+  return { linked, created };
 }
 
 /**
@@ -403,6 +495,56 @@ export async function ingestMovements(
 export interface PublicationTaskResult {
   linked: number;
   failed: number;
+}
+
+/** Cria candidatos de audiência a partir de publicações, sempre pendentes. */
+export async function createPublicationHearingCandidates(
+  admin: SupabaseClient,
+  input: { tenantId: string; publicationIds: string[] },
+): Promise<{ created: number }> {
+  if (!input.publicationIds.length) return { created: 0 };
+  const { data: publications, error } = await admin.from("publicacoes")
+    .select("id, user_id, process_id, numero_processo, cliente_nome, provider, external_id, court_body, hearing_evidence, conteudo")
+    .eq("tenant_id", input.tenantId)
+    .in("id", input.publicationIds);
+  if (error) throw error;
+
+  const rows = (publications ?? []).flatMap((publication) => {
+    if (!publication.user_id) return [];
+    const candidate = extractHearingCandidate(
+      publication.hearing_evidence || publication.conteudo,
+    );
+    if (!candidate) return [];
+    return [{
+      tenant_id: input.tenantId,
+      user_id: publication.user_id,
+      processo_id: publication.process_id,
+      processo_numero: publication.numero_processo,
+      cliente_nome: publication.cliente_nome,
+      tipo: candidate.type,
+      data_hora: candidate.startsAt,
+      vara: publication.court_body,
+      observacoes: `${candidate.evidence}\n\nEvento detectado automaticamente. Confirme data, horário e local antes de utilizar.`,
+      status: "A confirmar",
+      source_provider: publication.provider,
+      external_id: `publicacao:${publication.id}`,
+      publication_id: publication.id,
+      extraction_confidence: candidate.confidence,
+      source_evidence: candidate.evidence,
+      review_status: "pending",
+      detected_at: new Date().toISOString(),
+    }];
+  });
+  if (!rows.length) return { created: 0 };
+
+  const { data, error: insertError } = await admin.from("audiencias")
+    .upsert(rows, {
+      onConflict: "tenant_id,source_provider,external_id",
+      ignoreDuplicates: true,
+    })
+    .select("id");
+  if (insertError) throw insertError;
+  return { created: data?.length ?? 0 };
 }
 
 /**

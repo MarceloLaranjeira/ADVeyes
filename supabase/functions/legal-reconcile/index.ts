@@ -20,10 +20,12 @@ import {
 } from "../_shared/escavador-client.ts";
 import {
   createPublicationReviewTasks,
+  createPublicationHearingCandidates,
   indexProcessesByNumber,
   ingestMovements,
   ingestProcessMetadata,
   ingestProcessParties,
+  reconcileProcessContacts,
   ingestPublications,
   notifyNewPublications,
   type IngestionResult,
@@ -284,6 +286,10 @@ async function reconcileProcessSource(
     processId: source.process_id,
     parties: normalizeDataJudParties(found.rawSource),
   });
+  await reconcileProcessContacts(context.admin, {
+    tenantId: source.tenant_id,
+    processId: source.process_id,
+  });
   const movementResult = await ingestMovements(context.admin, {
     tenantId: source.tenant_id,
     processId: source.process_id,
@@ -464,6 +470,10 @@ async function persistDjenForSource(
 
   let notificationError: string | null = null;
   const taskResult = await createPublicationReviewTasks(context.admin, {
+    tenantId: source.tenant_id,
+    publicationIds: result.createdIds,
+  });
+  await createPublicationHearingCandidates(context.admin, {
     tenantId: source.tenant_id,
     publicationIds: result.createdIds,
   });
