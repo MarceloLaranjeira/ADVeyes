@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  User, Bell, Shield, Palette, Plus, Pencil, Trash2,
+  User, Bell, Shield, Palette,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
   CreditCard, Crown, Clock, Star, ArrowRight, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
@@ -19,18 +19,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
 import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
-
-type TribunalCredencial = Tables<"tribunal_credenciais">;
 
 // ─── Importar Processos Manualmente ─────────────────────────────────────────
 const ImportarProcessos = () => {
@@ -106,60 +102,6 @@ const ImportarProcessos = () => {
   );
 };
 
-const tribunaisDisponiveis = [
-  // Superiores
-  { id: "stf", nome: "STF - Supremo Tribunal Federal" },
-  { id: "stj", nome: "STJ - Superior Tribunal de Justiça" },
-  { id: "tst", nome: "TST - Tribunal Superior do Trabalho" },
-  { id: "stm", nome: "STM - Superior Tribunal Militar" },
-  { id: "tse", nome: "TSE - Tribunal Superior Eleitoral" },
-  // TRFs
-  { id: "trf1", nome: "TRF1 - Tribunal Regional Federal da 1ª Região" },
-  { id: "trf2", nome: "TRF2 - Tribunal Regional Federal da 2ª Região" },
-  { id: "trf3", nome: "TRF3 - Tribunal Regional Federal da 3ª Região" },
-  { id: "trf4", nome: "TRF4 - Tribunal Regional Federal da 4ª Região" },
-  { id: "trf5", nome: "TRF5 - Tribunal Regional Federal da 5ª Região" },
-  { id: "trf6", nome: "TRF6 - Tribunal Regional Federal da 6ª Região" },
-  // Estaduais
-  { id: "tjac", nome: "TJAC - Tribunal de Justiça do Acre" },
-  { id: "tjal", nome: "TJAL - Tribunal de Justiça de Alagoas" },
-  { id: "tjam", nome: "TJAM - Tribunal de Justiça do Amazonas" },
-  { id: "tjap", nome: "TJAP - Tribunal de Justiça do Amapá" },
-  { id: "tjba", nome: "TJBA - Tribunal de Justiça da Bahia" },
-  { id: "tjce", nome: "TJCE - Tribunal de Justiça do Ceará" },
-  { id: "tjdft", nome: "TJDFT - Tribunal de Justiça do DF e Territórios" },
-  { id: "tjes", nome: "TJES - Tribunal de Justiça do Espírito Santo" },
-  { id: "tjgo", nome: "TJGO - Tribunal de Justiça de Goiás" },
-  { id: "tjma", nome: "TJMA - Tribunal de Justiça do Maranhão" },
-  { id: "tjmg", nome: "TJMG - Tribunal de Justiça de Minas Gerais" },
-  { id: "tjms", nome: "TJMS - Tribunal de Justiça de Mato Grosso do Sul" },
-  { id: "tjmt", nome: "TJMT - Tribunal de Justiça de Mato Grosso" },
-  { id: "tjpa", nome: "TJPA - Tribunal de Justiça do Pará" },
-  { id: "tjpb", nome: "TJPB - Tribunal de Justiça da Paraíba" },
-  { id: "tjpe", nome: "TJPE - Tribunal de Justiça de Pernambuco" },
-  { id: "tjpi", nome: "TJPI - Tribunal de Justiça do Piauí" },
-  { id: "tjpr", nome: "TJPR - Tribunal de Justiça do Paraná" },
-  { id: "tjrj", nome: "TJRJ - Tribunal de Justiça do Rio de Janeiro" },
-  { id: "tjrn", nome: "TJRN - Tribunal de Justiça do Rio Grande do Norte" },
-  { id: "tjro", nome: "TJRO - Tribunal de Justiça de Rondônia" },
-  { id: "tjrr", nome: "TJRR - Tribunal de Justiça de Roraima" },
-  { id: "tjrs", nome: "TJRS - Tribunal de Justiça do Rio Grande do Sul" },
-  { id: "tjsc", nome: "TJSC - Tribunal de Justiça de Santa Catarina" },
-  { id: "tjse", nome: "TJSE - Tribunal de Justiça de Sergipe" },
-  { id: "tjsp", nome: "TJSP - Tribunal de Justiça de São Paulo" },
-  { id: "tjto", nome: "TJTO - Tribunal de Justiça do Tocantins" },
-  // TRTs
-  ...Array.from({ length: 24 }, (_, i) => ({
-    id: `trt${i + 1}`,
-    nome: `TRT${i + 1} - Tribunal Regional do Trabalho da ${i + 1}ª Região`,
-  })),
-  // Sistemas especiais
-  { id: "seeu", nome: "SEEU - Sistema Eletrônico de Execução Unificado" },
-  { id: "projudi", nome: "Projudi - Processo Judicial Digital" },
-];
-
-const emptyForm = { tribunal: "", token_acesso: "", numero_oab: "", seccional_oab: "", cpf: "" };
-
 const Configuracoes = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -170,12 +112,6 @@ const Configuracoes = () => {
     trialDaysLeft,
   } = useSubscription();
   const { toast } = useToast();
-  const [credenciais, setCredenciais] = useState<TribunalCredencial[]>([]);
-  const [showCredForm, setShowCredForm] = useState(false);
-  const [editCred, setEditCred] = useState<TribunalCredencial | null>(null);
-  const [deleteCred, setDeleteCred] = useState<string | null>(null);
-  const [credForm, setCredForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
 
   // Google Calendar state
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
@@ -319,55 +255,6 @@ const Configuracoes = () => {
       u.rate = 1.05;
       window.speechSynthesis.speak(u);
     }
-  };
-
-  const fetchCredenciais = async () => {
-    const { data } = await supabase.from("tribunal_credenciais").select("*").order("created_at");
-    if (data) setCredenciais(data);
-  };
-
-  useEffect(() => { fetchCredenciais(); }, []);
-
-  const openNewCred = () => { setEditCred(null); setCredForm(emptyForm); setShowCredForm(true); };
-  const openEditCred = (c: TribunalCredencial) => {
-    setEditCred(c);
-    setCredForm({ tribunal: (c.tribunal as string) || "", token_acesso: (c.token_acesso as string) || "", numero_oab: (c.numero_oab as string) || "", seccional_oab: (c.seccional_oab as string) || "", cpf: (c.cpf as string) || "" });
-    setShowCredForm(true);
-  };
-
-  const handleCredSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!credForm.tribunal) { toast({ title: "Selecione o tribunal", variant: "destructive" }); return; }
-    setLoading(true);
-    const tribunalInfo = tribunaisDisponiveis.find(t => t.id === credForm.tribunal);
-    const payload = {
-      ...credForm,
-      user_id: user!.id,
-      nome_tribunal: tribunalInfo?.nome || credForm.tribunal,
-      tipo_autenticacao: "token",
-      ativo: true,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = editCred
-      ? await supabase.from("tribunal_credenciais").update(payload).eq("id", editCred.id)
-      : await supabase.from("tribunal_credenciais").insert(payload);
-    if (error) {
-      if (error.code === "23505") toast({ title: "Credencial já existe para este tribunal", variant: "destructive" });
-      else toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: editCred ? "Credencial atualizada!" : "Credencial cadastrada!" });
-      setShowCredForm(false);
-      fetchCredenciais();
-    }
-    setLoading(false);
-  };
-
-  const handleDeleteCred = async () => {
-    if (!deleteCred) return;
-    await supabase.from("tribunal_credenciais").delete().eq("id", deleteCred);
-    toast({ title: "Credencial removida!" });
-    setDeleteCred(null);
-    fetchCredenciais();
   };
 
   return (
@@ -688,58 +575,33 @@ const Configuracoes = () => {
           <TabsContent value="tribunais" className="space-y-4">
             <Card>
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Key className="w-5 h-5 text-primary" />
-                    <h3 className="font-semibold font-serif">Credenciais dos Tribunais</h3>
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">Integração jurídica segura</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Processos e andamentos são consultados no DataJud/CNJ; publicações e intimações,
+                  no DJEN/CNJ. Quando disponível, o Escavador complementa partes e documentos públicos.
+                  Nenhuma dessas consultas exige que o escritório envie token pessoal de tribunal.
+                </p>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border bg-muted/20 p-4">
+                    <p className="text-sm font-semibold">Consultas e monitoramento</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      São executados no servidor com fontes públicas e credenciais globais protegidas.
+                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchCredenciais} className="gap-1">
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button size="sm" onClick={openNewCred} className="gap-1">
-                      <Plus className="w-3.5 h-3.5" /> Adicionar
-                    </Button>
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                    <p className="text-sm font-semibold">Protocolo e assinatura</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      A3, PIN e certificado ficam no computador do advogado. O protocolo é concluído
+                      exclusivamente no portal ou aplicativo oficial do tribunal.
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Configure tokens de acesso e dados da OAB para integração com todos os tribunais, PJe, SEEU e Projudi.
-                  A API DataJud (CNJ) já está ativa para consulta pública — as credenciais habilitam peticionamento e funcionalidades avançadas.
-                </p>
-
-                {credenciais.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl border-dashed">
-                    <Key className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    Nenhuma credencial configurada. Adicione seus tokens para habilitar peticionamento eletrônico.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {credenciais.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between p-3 rounded-xl border hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          {c.ativo
-                            ? <CheckCircle className="w-4 h-4 text-[hsl(var(--success))]" />
-                            : <XCircle className="w-4 h-4 text-destructive" />}
-                          <div>
-                            <p className="text-sm font-medium">{c.nome_tribunal}</p>
-                            <div className="flex gap-3 text-xs text-muted-foreground">
-                              {c.numero_oab && <span>OAB: {c.numero_oab}/{c.seccional_oab}</span>}
-                              <span>Token: {c.token_acesso ? "••••••" + c.token_acesso.slice(-4) : "Não definido"}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCred(c)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteCred(c.id)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <Button variant="outline" className="mt-5 gap-2" onClick={() => navigate("/integracoes-juridicas")}>
+                  <Key className="w-4 h-4" /> Ver cobertura das fontes jurídicas
+                </Button>
               </CardContent>
             </Card>
 
@@ -769,13 +631,12 @@ const Configuracoes = () => {
                 <div className="mb-5 rounded-lg border border-blue-500/20 p-4 bg-blue-500/5">
                   <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">SEEU — Sistema Eletrônico de Execução Unificado</p>
                   <p className="text-xs text-muted-foreground mb-2">
-                    O SEEU gerencia execuções penais em <strong>35+ estabelecimentos</strong>. A consulta é feita via DataJud (índice <code className="bg-muted px-1 rounded text-[10px]">api_seeu</code>).
-                    Para acesso avançado com peticionamento, configure:
+                    A consulta pública de processos e movimentos disponíveis é feita pelas fontes jurídicas integradas.
+                    Para protocolar, assinar ou consultar autos restritos, abra o SEEU oficial.
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <p>1. Acesse o portal SEEU e gere um token de acesso vinculado ao seu CPF/OAB.</p>
-                    <p>2. Cadastre-o acima em <strong>Credenciais → SEEU</strong> com número OAB e seccional AM.</p>
-                    <p>3. Após cadastro, o botão "Peticionar" ficará habilitado para processos SEEU.</p>
+                    <p>O certificado A1/A3, o PIN e qualquer dispositivo físico permanecem no computador do advogado.</p>
+                    <p>O ADVeyes não solicita nem armazena credenciais pessoais do SEEU.</p>
                   </div>
                 </div>
 
@@ -784,13 +645,12 @@ const Configuracoes = () => {
                   <p className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2">Projudi — Processo Judicial Digital</p>
                   <p className="text-xs text-muted-foreground mb-2">
                     O Projudi é usado pelo <strong>TJAM</strong>, TJPR, TJRR, TJRO e outros TJs. A consulta pública é feita via DataJud.
-                    Para peticionamento eletrônico no Projudi TJAM:
+                    O peticionamento eletrônico continua no portal oficial do tribunal:
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>1. Acesse <span className="italic">projudi.tjam.jus.br</span> e faça login com certificado digital A1/A3.</p>
-                    <p>2. Gere um token de sessão ou use as credenciais OAB/CPF do sistema.</p>
-                    <p>3. Cadastre-o acima em <strong>Credenciais → Projudi</strong>.</p>
-                    <p>4. Para outros TJs com Projudi, repita o processo com o índice correto de cada tribunal.</p>
+                    <p>2. Assine e envie a peça no ambiente oficial.</p>
+                    <p>3. Não copie token, PIN ou certificado para o ADVeyes.</p>
                   </div>
                 </div>
 
@@ -799,13 +659,12 @@ const Configuracoes = () => {
                   <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2">PJe — Processo Judicial Eletrônico (CNJ)</p>
                   <p className="text-xs text-muted-foreground mb-2">
                     O PJe é o sistema padrão de peticionamento do CNJ, usado pela maioria dos tribunais federais, TRTs e vários TJs.
-                    A integração usa o protocolo <strong>MNI (Message Negotiation Interface)</strong>.
+                    A consulta pública do ADVeyes não representa protocolo no PJe.
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>1. Instale o software PJe ou acesse via navegador com certificado A1/A3.</p>
-                    <p>2. Obtenha o token JWT no portal do tribunal (ex: <span className="italic">pje.tjam.jus.br</span>, <span className="italic">pje.trf1.jus.br</span>).</p>
-                    <p>3. Cadastre o token em <strong>Credenciais → [Tribunal correspondente]</strong>.</p>
-                    <p>4. O sistema usará esse token para peticionamento via API MNI do PJe.</p>
+                    <p>2. Use o PJeOffice e o certificado apenas no ambiente oficial.</p>
+                    <p>3. O ADVeyes abre o portal, mas não recebe certificado, PIN ou token de sessão.</p>
                   </div>
                 </div>
 
@@ -833,9 +692,9 @@ const Configuracoes = () => {
                     { label: "TRFs 1-6", ok: true },
                     { label: "STF / STJ / TST / STM / TSE", ok: true },
                     { label: "Horus IA (Gemini)", ok: true },
-                    { label: "PJe / MNI (token necessário)", ok: false },
-                    { label: "Projudi AM (token necessário)", ok: false },
-                    { label: "SEEU Peticionamento (token necessário)", ok: false },
+                    { label: "PJe: protocolo no portal oficial", ok: false },
+                    { label: "Projudi: protocolo no portal oficial", ok: false },
+                    { label: "SEEU: protocolo no portal oficial", ok: false },
                   ].map((item) => (
                     <span
                       key={item.label}
@@ -1081,68 +940,6 @@ const Configuracoes = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Credential Form Dialog */}
-        <Dialog open={showCredForm} onOpenChange={setShowCredForm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editCred ? "Editar Credencial" : "Nova Credencial de Tribunal"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCredSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Tribunal / Sistema *</Label>
-                <Select value={credForm.tribunal} onValueChange={(v) => setCredForm({ ...credForm, tribunal: v })} disabled={!!editCred}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tribunal ou sistema" /></SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {tribunaisDisponiveis.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Número OAB</Label>
-                  <Input value={credForm.numero_oab} onChange={(e) => setCredForm({ ...credForm, numero_oab: e.target.value })} placeholder="12345" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Seccional</Label>
-                  <Input value={credForm.seccional_oab} onChange={(e) => setCredForm({ ...credForm, seccional_oab: e.target.value })} placeholder="AM" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>CPF</Label>
-                <Input value={credForm.cpf} onChange={(e) => setCredForm({ ...credForm, cpf: e.target.value })} placeholder="000.000.000-00" />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  Token de Acesso / API Key
-                  <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Opcional</span>
-                </Label>
-                <Input type="password" value={credForm.token_acesso} onChange={(e) => setCredForm({ ...credForm, token_acesso: e.target.value })} placeholder="Cole aqui o token do tribunal (opcional)" />
-                <p className="text-xs text-muted-foreground">
-                  Token JWT para peticionamento eletrônico (PJe, SEEU, Projudi). Deixe em branco se quiser apenas monitorar publicações via DataJud/CNJ — isso funciona só com OAB ou CPF.
-                </p>
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setShowCredForm(false)}>Cancelar</Button>
-                <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editCred ? "Atualizar" : "Cadastrar"}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={!!deleteCred} onOpenChange={(o) => !o && setDeleteCred(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remover credencial?</AlertDialogTitle>
-              <AlertDialogDescription>Esta ação removerá a credencial do tribunal. Você poderá recadastrá-la depois.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteCred} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remover</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </AppLayout>
   );

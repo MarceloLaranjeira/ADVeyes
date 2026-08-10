@@ -73,28 +73,6 @@ const DATAJUD_ENDPOINTS: Record<string, string> = {
   trt24:"https://api-publica.datajud.cnj.jus.br/api_publica_trt24/_search",
 };
 
-// === PJe MNI ===
-const PJE_ENDPOINTS: Record<string, string> = {
-  tjam:"https://pje.tjam.jus.br/pje/mni/",
-  tjba:"https://pje.tjba.jus.br/pje/mni/",
-  tjce:"https://pje.tjce.jus.br/pje/mni/",
-  tjdft:"https://pje.tjdft.jus.br/pje/mni/",
-  tjgo:"https://pje.tjgo.jus.br/pje/mni/",
-  tjmg:"https://pje.tjmg.jus.br/pje/mni/",
-  tjpe:"https://pje.tjpe.jus.br/pje/mni/",
-  tjpi:"https://pje.tjpi.jus.br/pje/mni/",
-  tjrn:"https://pje.tjrn.jus.br/pje/mni/",
-  tjsp:"https://pje.tjsp.jus.br/pje/mni/",
-  trf1:"https://pje.trf1.jus.br/pje/mni/",
-  trf2:"https://pje.trf2.jus.br/pje/mni/",
-  trf3:"https://pje.trf3.jus.br/pje/mni/",
-  trf4:"https://pje.trf4.jus.br/pje/mni/",
-  trf5:"https://pje.trf5.jus.br/pje/mni/",
-  stj:"https://pje.stj.jus.br/pje/mni/",
-  stf:"https://pje.stf.jus.br/pje/mni/",
-  tst:"https://pje.tst.jus.br/pje/mni/",
-};
-
 // === Portais SEEU ===
 const SEEU_PORTALS: Record<string, string> = {
   nacional:"https://seeu.pje.jus.br",
@@ -112,6 +90,20 @@ const PROJUDI_PORTALS: Record<string, string> = {
   tjmt:"https://projudi.tjmt.jus.br",
   tjal:"https://projudi.tjal.jus.br",
 };
+
+function officialPortalUrl(requestedSystem: string, tribunal: string): string {
+  if (requestedSystem === "seeu") return SEEU_PORTALS[tribunal] || SEEU_PORTALS.nacional;
+  if (requestedSystem === "projudi" && PROJUDI_PORTALS[tribunal]) {
+    return PROJUDI_PORTALS[tribunal];
+  }
+
+  // Somente domínios institucionais derivados de chaves previamente
+  // validadas na lista DataJud. Nunca aceite uma URL enviada pelo cliente.
+  if (!Object.hasOwn(DATAJUD_ENDPOINTS, tribunal)) {
+    throw new Error("Portal oficial não localizado para o tribunal informado.");
+  }
+  return `https://www.${tribunal}.jus.br`;
+}
 
 /**
  * Detecta o tribunal DataJud a partir do número CNJ padrão.
@@ -215,7 +207,7 @@ serve(async (req) => {
     }
     const userId = claimsData.user.id;
 
-    const { action, tribunal, numero_processo, documento, processo_id, sistema } = await req.json();
+    const { action, tribunal, numero_processo, processo_id, sistema } = await req.json();
 
     // Resolver o tribunal: pode vir como "seeu" ou "projudi" → detectar pelo número CNJ
     const tribunalKey = (sistema || tribunal || "tjam").toLowerCase();
@@ -227,15 +219,6 @@ serve(async (req) => {
         realKey = detected;
       }
     }
-
-    // Fetch user's tribunal credentials
-    const { data: cred } = await supabase
-      .from("tribunal_credenciais")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("tribunal", tribunalKey)
-      .eq("ativo", true)
-      .maybeSingle();
 
     let result: Record<string, unknown> = {};
 
@@ -287,36 +270,12 @@ serve(async (req) => {
         break;
       }
 
-      case "peticionar": {
-        if (!cred) {
-          return new Response(JSON.stringify({
-            error: `Credenciais não configuradas para ${tribunalKey.toUpperCase()}. Configure em Configurações > Tribunais.`,
-          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-
-        const baseUrl = PJE_ENDPOINTS[realKey];
-        const sistemaDesc = baseUrl ? "PJe/MNI"
-          : SEEU_PORTALS[realKey] ? "SEEU"
-          : PROJUDI_PORTALS[realKey] ? "Projudi"
-          : "sistema judicial";
-
+      case "portal_oficial": {
         result = {
-          status: "preparado",
-          message: `Petição preparada para envio ao ${tribunalKey.toUpperCase()} via ${sistemaDesc}.`,
-          endpoint: baseUrl || SEEU_PORTALS[realKey] || PROJUDI_PORTALS[realKey] || "N/A",
-          credencial: { oab: cred.numero_oab, seccional: cred.seccional_oab },
-          nota: `O peticionamento real requer certificado digital A1/A3 para o ${sistemaDesc}. Acesse o portal para assinar e enviar.`,
-          documento_info: documento ? { nome: documento.nome, tipo: documento.tipo } : null,
+          url: officialPortalUrl(tribunalKey, realKey),
+          tribunal: realKey.toUpperCase(),
+          message: "Assinatura e protocolo são realizados exclusivamente no portal oficial.",
         };
-
-        await supabase.from("notificacoes").insert({
-          user_id: userId,
-          titulo: "Petição preparada",
-          mensagem: `Petição preparada para o processo ${numero_processo} no ${tribunalKey.toUpperCase()} via ${sistemaDesc}.`,
-          tipo: "info",
-          processo_numero: numero_processo,
-          tribunal: tribunalKey,
-        });
         break;
       }
 

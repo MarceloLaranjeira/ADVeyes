@@ -331,28 +331,24 @@ const BuscaJurisprudencia = () => {
     }
   };
 
-  const peticionar = async (numProcesso: string) => {
+  const abrirPortalOficial = async (numProcesso: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("tribunal-api", {
-        body: { action: "peticionar", tribunal, numero_processo: numProcesso },
+        body: { action: "portal_oficial", tribunal, numero_processo: numProcesso },
       });
       if (error) throw error;
-      // O retorno traz o endereço do sistema do tribunal. Abrir a aba é o
-      // que o botão promete; o protocolo acontece lá, com certificado.
-      if (data?.endpoint && data.endpoint !== "N/A") {
-        window.open(data.endpoint, "_blank", "noopener,noreferrer");
+      if (!data?.url) {
+        throw new Error("Portal oficial não localizado para este tribunal.");
       }
+      window.open(data.url, "_blank", "noopener,noreferrer");
       toast({
-        title: "Dados preparados",
-        description: data?.nota ??
-          "Conclua o protocolo no portal do tribunal, com seu certificado digital.",
+        title: "Portal oficial aberto",
+        description: "Assinatura e protocolo são concluídos exclusivamente no ambiente do tribunal.",
       });
     } catch (e) {
       const falha = await readEdgeFunctionError(e);
-      // A causa mais comum é não haver credencial do tribunal cadastrada, e
-      // a função diz isso — mas a mensagem só aparece se for lida do corpo.
       toast({
-        title: "Não foi possível preparar a petição",
+        title: "Não foi possível abrir o portal",
         description: falha.message,
         variant: "destructive",
       });
@@ -397,11 +393,7 @@ const BuscaJurisprudencia = () => {
               <Bell className="w-3 h-3" />
               {monitorando.includes(p.numero) ? "Monitorando" : "Monitorar"}
             </Button>
-            {/* Não peticiona: o protocolo real exige certificado A1/A3 no
-                portal do tribunal. O botão prepara os dados e leva para lá —
-                chamá-lo de "Peticionar" fazia o advogado acreditar que a
-                peça tinha sido protocolada. */}
-            <Button variant="outline" size="sm" className="gap-1 text-xs h-8" onClick={() => peticionar(p.numero)}>
+            <Button variant="outline" size="sm" className="gap-1 text-xs h-8" onClick={() => abrirPortalOficial(p.numero)}>
               <ExternalLink className="w-3 h-3" /> Abrir no portal
             </Button>
           </div>
