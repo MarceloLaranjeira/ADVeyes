@@ -2,6 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Navigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
@@ -14,8 +15,17 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     selectTenant,
     refresh,
   } = useTenant();
+  const {
+    isPlatformAdmin,
+    loading: platformAdminLoading,
+    error: platformAdminError,
+  } = usePlatformAdmin();
 
-  if (loading || (session && tenantLoading)) {
+  if (
+    loading ||
+    (session && tenantLoading) ||
+    (session && error === "no_membership" && platformAdminLoading)
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -28,7 +38,11 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  if (error === "no_membership") {
+  if (error === "no_membership" && isPlatformAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (error === "no_membership" && !platformAdminError) {
     return <Navigate to="/cadastro/concluir" replace />;
   }
 

@@ -83,22 +83,22 @@ const App = () => (
                     {/* Portal do Cliente (public, token-based) */}
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
+                    {/* A conta geral existe acima dos escritórios: o dono da
+                        plataforma pode administrá-la mesmo sem membership/OAB. */}
+                    <Route
+                      element={
+                        <AuthenticatedRoute>
+                          <PlatformAdminRoute>
+                            <AppLayout />
+                          </PlatformAdminRoute>
+                        </AuthenticatedRoute>
+                      }
+                    >
+                      <Route path="/admin" element={<PlatformAdmin />} />
+                    </Route>
                     {/* Protected lawyer routes */}
                     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                      <Route
-                        path="/"
-                        element={<AuthenticatedRoute><HomeEntry /></AuthenticatedRoute>}
-                      />
-                      <Route
-                        path="/admin"
-                        element={
-                          <AuthenticatedRoute>
-                            <PlatformAdminRoute>
-                              <PlatformAdmin />
-                            </PlatformAdminRoute>
-                          </AuthenticatedRoute>
-                        }
-                      />
+                      <Route path="/" element={<HomeEntry />} />
                       <Route path="/processos" element={<Processos />} />
                       <Route path="/processos/:id" element={<ProcessoDetalhe />} />
                       <Route path="/clientes" element={<Clientes />} />

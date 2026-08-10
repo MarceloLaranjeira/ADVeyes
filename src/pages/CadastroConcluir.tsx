@@ -11,10 +11,12 @@ import {
   provisionSelfServiceTenant,
   readSignupIntent,
 } from "@/services/self-service-signup";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
 const CadastroConcluir = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isPlatformAdmin, loading: platformAdminLoading } = usePlatformAdmin();
   const intent = readSignupIntent();
   const metadataOffice = typeof user?.user_metadata?.office_name === "string"
     ? user.user_metadata.office_name
@@ -37,11 +39,30 @@ const CadastroConcluir = () => {
   };
 
   useEffect(() => {
+    if (platformAdminLoading || isPlatformAdmin) return;
     const automaticName = (intent.displayName ?? metadataOffice).trim();
     if (automaticName) void finish(automaticName);
     // A intenção é lida uma vez após o retorno do provedor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPlatformAdmin, platformAdminLoading]);
+
+  useEffect(() => {
+    if (!user?.id || platformAdminLoading || !isPlatformAdmin) return;
+
+    // Descarta qualquer escritório de suporte que tenha sido removido. A
+    // conta geral não depende de tenant para abrir o painel administrativo.
+    sessionStorage.removeItem(`adveyes:platform-tenant:${user.id}`);
+    sessionStorage.removeItem(`adveyes:selected-tenant:${user.id}`);
+    navigate("/admin", { replace: true });
+  }, [isPlatformAdmin, navigate, platformAdminLoading, user?.id]);
+
+  if (platformAdminLoading || isPlatformAdmin) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#2563EB]" />
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
