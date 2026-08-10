@@ -10,6 +10,7 @@ import {
   normalizeDataJudMovements,
   normalizeDjenPublication,
   normalizeEscavadorPublication,
+  normalizeEscavadorProcessParties,
   resolveOriginSystem,
   RETRY_DELAYS_MS,
 } from "../../supabase/functions/_shared/legal-normalization.ts";
@@ -335,6 +336,49 @@ describe("normalizeDataJudParties", () => {
       personType: "pessoa_juridica",
       internalClassification: "parte_contraria",
     });
+  });
+});
+
+describe("normalizeEscavadorProcessParties", () => {
+  it("une fontes e remove documentos pessoais do payload persistido", () => {
+    const parties = normalizeEscavadorProcessParties({
+      fontes: [{
+        id: 3,
+        envolvidos: [{
+          nome: "Maria da Conceição",
+          tipo_pessoa: "FISICA",
+          polo: "ATIVO",
+          tipo_normalizado: "Requerente",
+          cpf: "12345678900",
+          advogados: [{
+            nome: "Ana Lima",
+            cpf: "98765432100",
+            oabs: [{ uf: "AM", numero: 10099 }],
+          }],
+        }],
+      }, {
+        id: 4,
+        envolvidos: [{
+          nome: "Maria da Conceição",
+          tipo_pessoa: "FISICA",
+          polo: "ATIVO",
+        }],
+      }],
+    });
+
+    expect(parties).toHaveLength(1);
+    expect(parties[0]).toMatchObject({
+      normalizedName: "MARIA DA CONCEICAO",
+      personType: "pessoa_fisica",
+      side: "ativo",
+      provider: "escavador",
+    });
+    expect(JSON.stringify(parties[0].payload)).not.toContain("12345678900");
+    expect(JSON.stringify(parties[0].payload)).not.toContain("98765432100");
+    expect(parties[0].relatedLawyers).toEqual([{
+      nome: "Ana Lima",
+      oabs: [{ uf: "AM", numero: 10099 }],
+    }]);
   });
 });
 

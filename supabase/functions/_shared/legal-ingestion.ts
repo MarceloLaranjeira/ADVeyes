@@ -130,7 +130,7 @@ export async function ingestProcessParties(
       identity_hash: identityHash,
       source_references: {
         ...references,
-        ...(party.externalId ? { [party.provider]: party.externalId } : {}),
+        [party.provider]: party.externalId ?? true,
       },
       provider_payload: party.payload,
       last_seen_at: new Date().toISOString(),

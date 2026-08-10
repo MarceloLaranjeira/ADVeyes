@@ -17,6 +17,7 @@ import {
 import {
   discoverLawyerProcesses,
   EscavadorApiError,
+  fetchEscavadorProcessCover,
 } from "../_shared/escavador-client.ts";
 import {
   createPublicationReviewTasks,
@@ -39,6 +40,7 @@ import {
   normalizeDataJudParties,
   normalizeDataJudProcessMetadata,
   normalizeDjenPublication,
+  normalizeEscavadorProcessParties,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
@@ -290,6 +292,54 @@ async function reconcileProcessSource(
     tenantId: source.tenant_id,
     processId: source.process_id,
   });
+
+  // A capa complementar é paga e só é buscada na primeira reconciliação.
+  // Depois disso, monitor e webhook mantêm movimentos/documentos atualizados.
+  if (context.escavadorToken && source.sync_cursor !== "escavador-cover") {
+    try {
+      await assertProviderBudget(context.admin, {
+        tenantId: source.tenant_id,
+        provider: "escavador",
+        service: "process_cover",
+      });
+      const cover = await fetchEscavadorProcessCover({
+        token: context.escavadorToken,
+        processNumber: process.numero,
+      });
+      const complementaryParties = await ingestProcessParties(context.admin, {
+        tenantId: source.tenant_id,
+        processId: source.process_id,
+        parties: normalizeEscavadorProcessParties(cover),
+      });
+      await reconcileProcessContacts(context.admin, {
+        tenantId: source.tenant_id,
+        processId: source.process_id,
+      });
+      await recordProviderUsage(context.admin, {
+        tenantId: source.tenant_id,
+        provider: "escavador",
+        operation: "process_lookup",
+        service: "process_cover",
+        itemCount: complementaryParties.received,
+        externalReference: process.numero,
+        metadata: { processId: source.process_id },
+      });
+      await context.admin.from("legal_sync_sources").update({
+        sync_cursor: "escavador-cover",
+      }).eq("tenant_id", source.tenant_id).eq("id", source.id);
+      partyResult.received += complementaryParties.received;
+      partyResult.created += complementaryParties.created;
+      partyResult.ignored += complementaryParties.ignored;
+    } catch (error) {
+      // A fonte complementar nunca invalida a reconciliação oficial. Sem o
+      // cursor de sucesso, ela será tentada novamente em outro ciclo.
+      console.error("Escavador complementary cover failed", {
+        tenantId: source.tenant_id,
+        processId: source.process_id,
+        code: errorCode(error),
+      });
+    }
+  }
   const movementResult = await ingestMovements(context.admin, {
     tenantId: source.tenant_id,
     processId: source.process_id,

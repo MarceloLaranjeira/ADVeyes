@@ -21,6 +21,19 @@ export interface EscavadorProcessItem {
   [key: string]: unknown;
 }
 
+export interface EscavadorProcessCover extends EscavadorProcessItem {
+  fontes?: Array<{
+    id?: number | string | null;
+    sigla?: string | null;
+    sistema?: string | null;
+    grau_formatado?: string | null;
+    envolvidos?: Array<Record<string, unknown>> | null;
+    audiencias?: Array<Record<string, unknown>> | null;
+    capa?: Record<string, unknown> | null;
+    [key: string]: unknown;
+  }> | null;
+}
+
 interface EscavadorLawyerProcessesResponse {
   advogado_encontrado?: EscavadorLawyer | null;
   items?: EscavadorProcessItem[];
@@ -53,6 +66,35 @@ function safeNextUrl(next: string | null | undefined): string | null {
     throw new EscavadorApiError(502, "invalid_provider_pagination");
   }
   return parsed.toString();
+}
+
+async function getJson<T>(token: string, url: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+  if (!response.ok) {
+    throw new EscavadorApiError(
+      response.status,
+      errorCodeForStatus(response.status),
+    );
+  }
+  return await response.json() as T;
+}
+
+/** Capa complementar V2; inclui envolvidos e audiências por fonte. */
+export function fetchEscavadorProcessCover(input: {
+  token: string;
+  processNumber: string;
+}): Promise<EscavadorProcessCover> {
+  const number = encodeURIComponent(input.processNumber);
+  return getJson<EscavadorProcessCover>(
+    input.token,
+    `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}`,
+  );
 }
 
 export async function discoverLawyerProcesses(input: {

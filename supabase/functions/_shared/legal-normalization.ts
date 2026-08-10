@@ -593,6 +593,64 @@ export function normalizeDataJudParties(
   });
 }
 
+/** Envolvidos da capa complementar do Escavador, sem CPF/CNPJ bruto. */
+export function normalizeEscavadorProcessParties(
+  source: { fontes?: Array<{ id?: unknown; envolvidos?: Array<Record<string, unknown>> | null }> | null },
+): NormalizedParty[] {
+  const parties = new Map<string, NormalizedParty>();
+  for (const processSource of source.fontes ?? []) {
+    for (const party of processSource.envolvidos ?? []) {
+      const displayName = collapse(party.nome ?? party.nome_normalizado);
+      if (!displayName) continue;
+      const sideRaw = normalizePartyName(party.polo).toLocaleLowerCase("pt-BR");
+      const side: NormalizedParty["side"] = sideRaw.includes("ativo")
+        ? "ativo"
+        : sideRaw.includes("passivo")
+        ? "passivo"
+        : sideRaw.includes("terceiro")
+        ? "terceiro"
+        : sideRaw.includes("interessado")
+        ? "interessado"
+        : "desconhecido";
+      const typeRaw = normalizePartyName(party.tipo_pessoa).toLocaleLowerCase("pt-BR");
+      const personType: NormalizedParty["personType"] = typeRaw.includes("juridica")
+        ? "pessoa_juridica"
+        : typeRaw.includes("fisica")
+        ? "pessoa_fisica"
+        : "desconhecido";
+      const normalizedName = normalizePartyName(displayName);
+      const key = `${normalizedName}|${personType}|${side}`;
+      if (parties.has(key)) continue;
+      const lawyers = recordArray(party.advogados).map((lawyer) => ({
+        nome: collapse(lawyer.nome ?? lawyer.nome_normalizado),
+        oabs: recordArray(lawyer.oabs),
+      }));
+      parties.set(key, {
+        externalId: null,
+        displayName,
+        normalizedName,
+        personType,
+        documentMasked: null,
+        documentHash: null,
+        side,
+        proceduralRole: collapse(party.tipo_normalizado ?? party.tipo) || null,
+        internalClassification: side === "passivo" ? "parte_contraria" : "terceiro",
+        relatedLawyers: lawyers,
+        provider: "escavador",
+        payload: {
+          nome: displayName,
+          polo: collapse(party.polo) || null,
+          tipo: collapse(party.tipo_normalizado ?? party.tipo) || null,
+          tipo_pessoa: collapse(party.tipo_pessoa) || null,
+          advogados: lawyers,
+          fonte_id: processSource.id ?? null,
+        },
+      });
+    }
+  }
+  return Array.from(parties.values());
+}
+
 function slug(value: string): string {
   return value
     .normalize("NFD")
