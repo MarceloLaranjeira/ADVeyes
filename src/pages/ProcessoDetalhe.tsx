@@ -83,13 +83,13 @@ const ProcessoDetalhe = () => {
   const [notFound, setNotFound] = useState(false);
   const [partialFailure, setPartialFailure] = useState(false);
   const [editing, setEditing] = useState(false);
+  const tenantId = currentTenant?.tenantId;
 
   const load = useCallback(async () => {
-    if (!id || !currentTenant) return;
+    if (!id || !tenantId) return;
     setLoading(true);
     setNotFound(false);
     setPartialFailure(false);
-    const tenantId = currentTenant.tenantId;
     const processResult = await (supabase as any)
       .from("processos")
       .select("*")
@@ -115,7 +115,7 @@ const ProcessoDetalhe = () => {
       (supabase as any).from("documentos").select("*").eq("tenant_id", tenantId).eq("processo_id", id).order("created_at", { ascending: false }),
       (supabase as any).from("time_entries").select("*").eq("tenant_id", tenantId).eq("processo_id", id).order("data", { ascending: false }),
       (supabase as any).from("process_documents").select("id, process_id, movement_id, document_type, title, text_content, official_url, complementary_url, provider, external_id, occurred_at, mime_type, availability_status, is_public, source_type, source_id, created_at").eq("tenant_id", tenantId).eq("process_id", id).order("occurred_at", { ascending: false }),
-      (supabase as any).from("process_parties").select("id, display_name, person_type, side, procedural_role, internal_classification, classification_locked, related_lawyers, contact_id").eq("tenant_id", tenantId).eq("process_id", id).order("display_name", { ascending: true }),
+      (supabase as any).from("process_parties").select("id, display_name, person_type, document_masked, side, procedural_role, internal_classification, classification_locked, related_lawyers, contact_data, contact_id, contact:clientes!process_parties_tenant_id_contact_id_fkey(nome, cpf, telefone, email, endereco, relationship_type, source_provider)").eq("tenant_id", tenantId).eq("process_id", id).order("display_name", { ascending: true }),
       (supabase as any).from("tarefas").select("*").eq("tenant_id", tenantId).eq("processo_id", id).order("created_at", { ascending: false }),
     ]);
 
@@ -137,7 +137,7 @@ const ProcessoDetalhe = () => {
       tasks: values[9] ?? [],
     });
     setLoading(false);
-  }, [currentTenant, id]);
+  }, [id, tenantId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -161,6 +161,7 @@ const ProcessoDetalhe = () => {
       display_type: item.document_type || "Documento do tribunal",
       display_date: item.occurred_at || item.created_at,
       display_url: item.official_url || item.complementary_url,
+      text_content: item.text_content || null,
       source_kind: "tribunal",
     })),
     ...collections.documents.map((item) => ({
@@ -169,6 +170,7 @@ const ProcessoDetalhe = () => {
       display_type: item.tipo || "Documento interno",
       display_date: item.created_at,
       display_url: item.url,
+      text_content: item.text_content || item.conteudo || null,
       source_kind: "escritorio",
     })),
     ...collections.movements
@@ -196,6 +198,22 @@ const ProcessoDetalhe = () => {
     if (item.status === "pago") summary.paid += value;
     return summary;
   }, { total: 0, paid: 0 }), [collections.finance]);
+
+  const activePartiesText = useMemo(() => {
+    if (processo?.polo_ativo) return processo.polo_ativo;
+    const active = collections.parties
+      .filter((p) => p.side === "ativo")
+      .map((p) => p.display_name);
+    return active.length ? active.join(", ") : null;
+  }, [collections.parties, processo?.polo_ativo]);
+
+  const passivePartiesText = useMemo(() => {
+    if (processo?.polo_passivo) return processo.polo_passivo;
+    const passive = collections.parties
+      .filter((p) => p.side === "passivo")
+      .map((p) => p.display_name);
+    return passive.length ? passive.join(", ") : null;
+  }, [collections.parties, processo?.polo_passivo]);
 
   if (loading) {
     return (
@@ -226,10 +244,10 @@ const ProcessoDetalhe = () => {
             </Button>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-mono text-xl font-bold tracking-tight sm:text-2xl">{processo.numero}</h1>
-              <AreaBadge area={processo.area || "Cível"} />
+              <AreaBadge area={processo.area || processo.class_name || "Cível"} />
               <Badge variant="outline">{processo.status || "Em andamento"}</Badge>
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">{processo.cliente_nome || "Cliente não identificado"} · {processo.vara || "Vara não informada"}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{processo.cliente_nome || "Cliente não identificado"} · {processo.vara || processo.adjudicating_body || "Vara não informada"}</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="gap-2" onClick={() => exportProcessosPDF([processo as any])}><Download className="h-4 w-4" /> Relatório</Button>
@@ -240,6 +258,13 @@ const ProcessoDetalhe = () => {
         {partialFailure && (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Parte das informações complementares está temporariamente indisponível. O processo e os demais módulos continuam acessíveis.
+          </div>
+        )}
+
+        {processo.legal_sync_status === "pending" && !processo.last_legal_sync_at && (
+          <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            <strong>Primeira sincronização oficial na fila.</strong>{" "}
+            Tribunal, classe, assuntos, partes e andamentos aparecerão automaticamente após a coleta do DataJud/CNJ. Não é necessário importar novamente.
           </div>
         )}
 
@@ -260,14 +285,43 @@ const ProcessoDetalhe = () => {
           </div>
 
           <TabsContent value="resumo" className="space-y-8">
+            {processo.legal_summary_status === "ready" && processo.legal_summary ? (
+              <section className="rounded-2xl border bg-card p-5 shadow-sm">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="font-semibold">Resumo processual</h2>
+                  <span className="text-xs text-muted-foreground">
+                    {processo.legal_summary_provider === "escavador"
+                      ? "Fonte: Escavador"
+                      : "Gerado pelo sistema"}
+                    {processo.legal_summary_updated_at
+                      ? ` · ${displayDate(processo.legal_summary_updated_at, true)}`
+                      : ""}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                  {processo.legal_summary}
+                </p>
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-dashed bg-muted/20 p-5">
+                <h2 className="font-semibold">Resumo processual</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {processo.legal_summary_status === "processing"
+                    ? "O Escavador está elaborando o resumo. O sistema verificará o resultado automaticamente."
+                    : processo.legal_summary_status === "failed"
+                      ? "A geração não foi concluída e será tentada novamente sem bloquear os demais dados."
+                      : "O resumo será solicitado depois que houver conteúdo processual suficiente."}
+                </p>
+              </section>
+            )}
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-2xl border bg-card p-5 shadow-sm">
                 <div className="mb-2 flex items-center gap-2"><Gavel className="h-5 w-5 text-primary" /><h2 className="font-semibold">Dados do processo</h2></div>
-                <dl><InfoRow label="Processo" value={processo.numero} /><InfoRow label="Natureza" value={processo.area} /><InfoRow label="Status" value={processo.status} /><InfoRow label="Ajuizamento" value={displayDate(processo.data_ajuizamento)} /><InfoRow label="Fonte" value={processo.fonte} /></dl>
+                <dl><InfoRow label="Processo" value={processo.numero} /><InfoRow label="Tribunal" value={processo.tribunal} /><InfoRow label="Classe" value={processo.class_name || processo.area} /><InfoRow label="Assuntos" value={Array.isArray(processo.subjects) ? processo.subjects.map((subject: { name?: string }) => subject.name).filter(Boolean).join(", ") : null} /><InfoRow label="Órgão julgador" value={processo.adjudicating_body || processo.vara} /><InfoRow label="Sistema" value={processo.procedural_system} /><InfoRow label="Grau" value={processo.court_level} /><InfoRow label="Status" value={processo.status || "Em andamento"} /><InfoRow label="Ajuizamento" value={displayDate(processo.data_ajuizamento || processo.filed_at)} /><InfoRow label="Última sincronização" value={displayDate(processo.last_legal_sync_at, true)} /><InfoRow label="Fonte" value={processo.legal_data_source || processo.fonte || (processo.last_legal_sync_at ? "DataJud/CNJ" : null)} /></dl>
               </section>
               <section className="rounded-2xl border bg-card p-5 shadow-sm">
                 <div className="mb-2 flex items-center gap-2"><Users className="h-5 w-5 text-primary" /><h2 className="font-semibold">Partes e responsável</h2></div>
-                <dl><InfoRow label="Cliente" value={processo.cliente_nome} /><InfoRow label="Polo ativo" value={processo.polo_ativo} /><InfoRow label="Polo passivo" value={processo.polo_passivo} /><InfoRow label="Advogado" value={processo.advogado} /><InfoRow label="Vara" value={processo.vara} /></dl>
+                <dl><InfoRow label="Cliente" value={processo.cliente_nome} /><InfoRow label="Polo ativo" value={activePartiesText} /><InfoRow label="Polo passivo" value={passivePartiesText} /><InfoRow label="Advogado" value={processo.advogado} /><InfoRow label="Vara" value={processo.vara || processo.adjudicating_body} /></dl>
               </section>
             </div>
             {processo.descricao && <section className="rounded-2xl border bg-card p-5 text-sm leading-6 shadow-sm"><h2 className="mb-2 font-semibold">Observações</h2><p className="whitespace-pre-wrap text-muted-foreground">{processo.descricao}</p></section>}
@@ -299,6 +353,18 @@ const ProcessoDetalhe = () => {
                 <div>
                   <p className="font-medium">{party.display_name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{party.procedural_role || "Papel não informado"} · Polo {party.side || "desconhecido"}</p>
+                  {party.document_masked && <p className="mt-1 text-xs text-muted-foreground">Documento: {party.document_masked}</p>}
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {(party.contact?.telefone || party.contact_data?.phone) && <p>Telefone: {party.contact?.telefone || party.contact_data?.phone}</p>}
+                    {(party.contact?.email || party.contact_data?.email) && <p>E-mail: {party.contact?.email || party.contact_data?.email}</p>}
+                    {(party.contact?.endereco || party.contact_data?.address) && <p>Endereço: {party.contact?.endereco || party.contact_data?.address}</p>}
+                    {!party.contact?.telefone && !party.contact?.email && !party.contact?.endereco && !party.contact_data?.phone && !party.contact_data?.email && !party.contact_data?.address && <p>Dados de contato não disponibilizados pela fonte.</p>}
+                  </div>
+                  {Array.isArray(party.related_lawyers) && party.related_lawyers.length > 0 && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Advogados relacionados: {party.related_lawyers.map((lawyer: { nome?: string }) => lawyer.nome).filter(Boolean).join(", ")}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{String(party.internal_classification || "terceiro").replace("parte_contraria", "parte contrária")}</Badge>

@@ -46,6 +46,11 @@ export interface NormalizedParty {
   proceduralRole: string | null;
   internalClassification: "cliente" | "parte_contraria" | "terceiro";
   relatedLawyers: Array<Record<string, unknown>>;
+  contact: {
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+  };
   provider: "datajud" | "djen" | "escavador" | "manual" | "legacy";
   payload: Record<string, unknown>;
 }
@@ -327,6 +332,54 @@ function recordArray(value: unknown): Array<Record<string, unknown>> {
   );
 }
 
+function firstScalar(...values: unknown[]): string | null {
+  for (const value of values) {
+    const direct = collapse(value);
+    if (direct) return direct;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const nested = typeof item === "object" && item !== null
+          ? collapse(
+            (item as Record<string, unknown>).valor ??
+              (item as Record<string, unknown>).value ??
+              (item as Record<string, unknown>).numero ?? item,
+          )
+          : collapse(item);
+        if (nested) return nested;
+      }
+    }
+  }
+  return null;
+}
+
+function normalizedAddress(value: unknown): string | null {
+  const direct = collapse(value);
+  if (direct) return direct;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const address = value as Record<string, unknown>;
+  const line = [address.logradouro, address.numero, address.complemento]
+    .map(collapse).filter(Boolean).join(", ");
+  const locality = [address.bairro, address.cidade ?? address.municipio, address.uf ?? address.estado]
+    .map(collapse).filter(Boolean).join(" - ");
+  const postalCode = collapse(address.cep);
+  return [line, locality, postalCode].filter(Boolean).join(" · ") || null;
+}
+
+function partyContact(party: Record<string, unknown>): NormalizedParty["contact"] {
+  return {
+    phone: firstScalar(
+      party.telefone,
+      party.celular,
+      party.telefones,
+      party.phones,
+    ),
+    email: firstScalar(party.email, party.emails),
+    address: normalizedAddress(
+      party.endereco ?? party.endereço ?? party.address ?? party.enderecos,
+    ),
+  };
+}
+
 function hearingEvidence(content: string): string | null {
   const match = content.match(/[^.!?]*(?:audi[êe]ncia|sess[ãa]o de julgamento)[^.!?]*[.!?]?/i);
   return match?.[0]?.trim().slice(0, 500) || null;
@@ -430,6 +483,19 @@ export interface EscavadorMovementPayload {
   [key: string]: unknown;
 }
 
+export interface EscavadorPublicDocumentPayload {
+  id?: number | string | null;
+  titulo?: string | null;
+  descricao?: string | null;
+  data?: string | null;
+  tipo?: string | null;
+  extensao_arquivo?: string | null;
+  quantidade_paginas?: number | null;
+  key?: string | null;
+  links?: { api?: string | null } | null;
+  [key: string]: unknown;
+}
+
 /** Converte um andamento do Escavador no contrato interno. */
 export function normalizeEscavadorMovement(
   raw: EscavadorMovementPayload,
@@ -458,6 +524,40 @@ export function normalizeEscavadorMovement(
     documentType: null,
     fullTextAvailable: false,
     documentUrl: null,
+    payload: raw as Record<string, unknown>,
+  };
+}
+
+/** Converte um documento público do Escavador em evento/documento idempotente. */
+export function normalizeEscavadorPublicDocument(
+  raw: EscavadorPublicDocumentPayload,
+): NormalizedMovement {
+  const title = collapse(raw.titulo) || "Documento público";
+  const description = collapse(raw.descricao) || null;
+  const extension = collapse(raw.extensao_arquivo).toUpperCase() || null;
+  const pages = typeof raw.quantidade_paginas === "number"
+    ? `${raw.quantidade_paginas} página(s)`
+    : null;
+
+  return {
+    externalId: raw.id == null ? "" : `document:${String(raw.id)}`,
+    movementType: "DOCUMENTO",
+    occurredAt: isoOrNull(raw.data),
+    title,
+    content: description || title,
+    originSystem: "unknown",
+    sourceName: "Escavador — documento público",
+    sourceUrl: raw.links?.api ?? null,
+    tpuCode: null,
+    description,
+    complements: [
+      ...(extension ? [{ key: "extensao", label: "Extensão", value: extension }] : []),
+      ...(pages ? [{ key: "paginas", label: "Páginas", value: pages }] : []),
+    ],
+    notes: null,
+    documentType: collapse(raw.tipo) || extension || "Documento público",
+    fullTextAvailable: false,
+    documentUrl: raw.links?.api ?? null,
     payload: raw as Record<string, unknown>,
   };
 }
@@ -587,6 +687,7 @@ export function normalizeDataJudParties(
       proceduralRole: collapse(party.tipoParte ?? party.papel) || null,
       internalClassification: side === "passivo" ? "parte_contraria" : "terceiro",
       relatedLawyers: recordArray(party.advogados),
+      contact: partyContact(party),
       provider: "datajud",
       payload: party,
     }];
@@ -636,6 +737,7 @@ export function normalizeEscavadorProcessParties(
         proceduralRole: collapse(party.tipo_normalizado ?? party.tipo) || null,
         internalClassification: side === "passivo" ? "parte_contraria" : "terceiro",
         relatedLawyers: lawyers,
+        contact: partyContact(party),
         provider: "escavador",
         payload: {
           nome: displayName,
@@ -643,6 +745,7 @@ export function normalizeEscavadorProcessParties(
           tipo: collapse(party.tipo_normalizado ?? party.tipo) || null,
           tipo_pessoa: collapse(party.tipo_pessoa) || null,
           advogados: lawyers,
+          contato: partyContact(party),
           fonte_id: processSource.id ?? null,
         },
       });

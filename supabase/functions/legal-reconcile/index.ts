@@ -4,10 +4,19 @@
 // a falha de uma fonte nunca interrompe as demais.
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders, json } from "../_shared/tenant-auth.ts";
+import {
+  corsHeaders,
+  json,
+  resolveTenantLegalAccess,
+  type TenantLegalAccess,
+} from "../_shared/tenant-auth.ts";
 import { describeError, postgrestErrorCode } from "../_shared/error-mapping.ts";
 import { normalizeDataJudAuthorization } from "../_shared/datajud-auth.ts";
-import { DataJudApiError, fetchDataJudProcess } from "../_shared/datajud-client.ts";
+import {
+  DataJudApiError,
+  discoverProcessesByOab,
+  fetchDataJudProcess,
+} from "../_shared/datajud-client.ts";
 import {
   DjenApiError,
   fetchDjenPublications,
@@ -18,6 +27,11 @@ import {
   discoverLawyerProcesses,
   EscavadorApiError,
   fetchEscavadorProcessCover,
+  fetchEscavadorProcessMovements,
+  fetchEscavadorProcessSummary,
+  fetchEscavadorProcessSummaryStatus,
+  fetchEscavadorPublicDocuments,
+  requestEscavadorProcessSummary,
 } from "../_shared/escavador-client.ts";
 import {
   createPublicationReviewTasks,
@@ -41,25 +55,35 @@ import {
   normalizeDataJudProcessMetadata,
   normalizeDjenPublication,
   normalizeEscavadorProcessParties,
+  normalizeEscavadorMovement,
+  normalizeEscavadorPublicDocument,
   RECONCILIATION_INTERVAL_MS,
 } from "../_shared/legal-normalization.ts";
 import { getEscavadorToken } from "../_shared/provider-secrets.ts";
+import {
+  autoImportDiscoveries,
+  resolveRegistrationActor,
+} from "../_shared/legal-auto-import.ts";
 import {
   assertProviderBudget,
   ProviderBudgetError,
   recordProviderUsage,
 } from "../_shared/provider-quota.ts";
+import { selectFairLegalSources } from "../_shared/legal-source-scheduling.ts";
 
 const CNJ_PATTERN = /^[0-9]{7}-[0-9]{2}\.[0-9]{4}\.[0-9]\.[0-9]{2}\.[0-9]{4}$/;
 const DEFAULT_BATCH = 40;
 const MAX_BATCH = 200;
+// A importação é durável e continua no cron seguinte. Limitar cada passagem
+// evita que uma OAB com centenas de processos esgote a vida útil do worker e
+// deixe a execução presa em "running".
+const AUTO_IMPORT_BATCH = 200;
 const DJEN_INITIAL_LOOKBACK_DAYS = 7;
 const DJEN_OVERLAP_DAYS = 1;
 
 /** Falhas que não se resolvem com retentativa e exigem ação humana. */
 const PERMANENT_FAILURES = new Set([
   "escavador_unauthorized",
-  "escavador_insufficient_balance",
   "datajud_unauthorized",
   "datajud_court_not_supported",
   "djen_invalid_reference",
@@ -71,10 +95,13 @@ interface SyncSource {
   source_kind: "oab" | "process";
   provider: "djen" | "escavador" | "datajud";
   process_id: string | null;
+  lawyer_registration_id: string | null;
   reference: string;
   failure_count: number;
   last_success_at: string | null;
   sync_cursor: string | null;
+  next_sync_at: string;
+  created_at: string;
 }
 
 interface ReconcileContext {
@@ -104,7 +131,13 @@ async function authenticate(
   request: Request,
 ): Promise<
   | { mode: "scheduled"; admin: SupabaseClient; tenantId: null; userId: null }
-  | { mode: "manual"; admin: SupabaseClient; tenantId: string; userId: string }
+  | {
+    mode: "manual";
+    admin: SupabaseClient;
+    tenantId: string;
+    userId: string;
+    access: TenantLegalAccess;
+  }
   | Response
 > {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -150,30 +183,65 @@ async function authenticate(
   const tenantId = body.tenantId?.trim();
   if (!tenantId) return json({ error: "invalid_payload" }, 400);
 
-  const { data: membership, error: membershipError } = await admin
-    .from("tenant_memberships")
+  let access: TenantLegalAccess | null;
+  try {
+    access = await resolveTenantLegalAccess(admin, data.user.id, tenantId);
+  } catch {
+    return json({ error: "operation_failed" }, 500);
+  }
+  if (!access || !access.canMutate) {
+    return json({ error: "permission_denied" }, 403);
+  }
+
+  return { mode: "manual", admin, tenantId, userId: data.user.id, access };
+}
+
+async function pendingCandidateIds(
+  admin: SupabaseClient,
+  input: {
+    tenantId: string;
+    registrationId: string;
+    provider: "datajud" | "escavador";
+    processNumbers: string[];
+  },
+): Promise<string[]> {
+  if (!input.processNumbers.length) return [];
+  const { data, error } = await admin.from("process_discoveries")
+    .select("id")
+    .eq("tenant_id", input.tenantId)
+    .eq("lawyer_registration_id", input.registrationId)
+    .eq("provider", input.provider)
+    .eq("state", "candidate")
+    .in("numero_cnj", input.processNumbers)
+    .limit(AUTO_IMPORT_BATCH);
+  if (error) throw error;
+  return (data ?? []).map((row) => row.id);
+}
+
+async function importStoredCandidates(
+  context: ReconcileContext,
+  tenantId: string,
+  registrationId: string,
+): Promise<void> {
+  const { data, error } = await context.admin.from("process_discoveries")
     .select("id")
     .eq("tenant_id", tenantId)
-    .eq("user_id", data.user.id)
-    .eq("status", "active")
-    .maybeSingle();
-  if (membershipError) return json({ error: "operation_failed" }, 500);
-  if (!membership) return json({ error: "permission_denied" }, 403);
-
-  return { mode: "manual", admin, tenantId, userId: data.user.id };
+    .eq("lawyer_registration_id", registrationId)
+    .eq("state", "candidate")
+    .limit(AUTO_IMPORT_BATCH);
+  if (error) throw error;
+  await autoImportDiscoveries(context.admin, {
+    tenantId,
+    candidateIds: (data ?? []).map((row) => row.id),
+  });
 }
 
 async function reconcileOabSource(
   context: ReconcileContext,
   source: SyncSource,
 ): Promise<IngestionResult> {
-  if (!context.escavadorToken) {
-    throw new Error("integration_not_configured");
-  }
-
   // O Escavador não expõe consulta de diários por OAB sob demanda: publicações
-  // vêm do DJEN. O que a OAB rende aqui é a descoberta de processos novos,
-  // registrados como candidatos para confirmação humana.
+  // vêm do DJEN. A descoberta por OAB é importada automaticamente.
   const [oabNumber, oabState] = source.reference.split("/");
   const { data: registration, error: registrationError } = await context.admin
     .from("lawyer_registrations")
@@ -184,6 +252,10 @@ async function reconcileOabSource(
     .maybeSingle();
   if (registrationError) throw registrationError;
   if (!registration) throw new Error("registration_not_found");
+  await importStoredCandidates(context, source.tenant_id, registration.id);
+  if (!context.escavadorToken) {
+    throw new Error("integration_not_configured");
+  }
 
   // A reconciliação roda sozinha: sem a trava, o custo cresceria sem
   // ninguém perceber. Estourada a cota, o provedor não é chamado.
@@ -228,23 +300,110 @@ async function reconcileOabSource(
     }));
 
   if (!rows.length) {
-    return { received: result.processes.length, created: 0, ignored: 0 };
+    return { received: result.processes.length, created: 0, ignored: 0, createdIds: [] };
   }
 
-  const { data: saved, error: saveError } = await context.admin
+  const { error: saveError } = await context.admin
     .from("process_discoveries")
     .upsert(rows, {
       onConflict: "tenant_id,lawyer_registration_id,numero_cnj,provider",
       ignoreDuplicates: true,
-    })
-    .select("id");
+    });
   if (saveError) throw saveError;
 
-  const created = saved?.length ?? 0;
+  const candidateIds = await pendingCandidateIds(context.admin, {
+    tenantId: source.tenant_id,
+    registrationId: registration.id,
+    provider: "escavador",
+    processNumbers: rows.map((row) => row.numero_cnj),
+  });
+  const imported = await autoImportDiscoveries(context.admin, {
+    tenantId: source.tenant_id,
+    candidateIds,
+  });
   return {
     received: result.processes.length,
-    created,
-    ignored: result.processes.length - created,
+    created: imported.imported,
+    ignored: result.processes.length - imported.imported,
+    createdIds: imported.processes.map((process) => process.processId),
+  };
+}
+
+async function reconcileDataJudOabSource(
+  context: ReconcileContext,
+  source: SyncSource,
+): Promise<IngestionResult> {
+  const [oabNumber, oabState] = source.reference.split("/");
+  const { data: registration, error: registrationError } = await context.admin
+    .from("lawyer_registrations")
+    .select("id")
+    .eq("tenant_id", source.tenant_id)
+    .eq("oab_number", oabNumber)
+    .eq("oab_state", oabState)
+    .maybeSingle();
+  if (registrationError) throw registrationError;
+  if (!registration) throw new Error("registration_not_found");
+  await importStoredCandidates(context, source.tenant_id, registration.id);
+  if (!context.dataJudAuthorization) {
+    throw new Error("integration_not_configured");
+  }
+
+  const discovered = await discoverProcessesByOab({
+    authorization: context.dataJudAuthorization,
+    oabNumber,
+    oabState,
+  });
+  const rows = discovered.flatMap((item) => {
+    const processNumber = formatCnj(item.numeroProcesso);
+    if (!CNJ_PATTERN.test(processNumber)) return [];
+    return [{
+      tenant_id: source.tenant_id,
+      lawyer_registration_id: registration.id,
+      numero_cnj: processNumber,
+      provider: "datajud",
+      state: "candidate",
+      title_active_party: item.poloAtivo,
+      title_passive_party: item.poloPassivo,
+      tribunal: item.tribunal,
+      court_unit: item.orgaoJulgador,
+      process_status: null,
+      last_movement_at: item.ultimaAtualizacao,
+      provider_fetched_at: new Date().toISOString(),
+      provider_payload: item,
+    }];
+  });
+
+  if (rows.length) {
+    const { error } = await context.admin.from("process_discoveries").upsert(
+      rows,
+      {
+        onConflict: "tenant_id,lawyer_registration_id,numero_cnj,provider",
+        ignoreDuplicates: true,
+      },
+    );
+    if (error) throw error;
+  }
+
+  const candidateIds = await pendingCandidateIds(context.admin, {
+    tenantId: source.tenant_id,
+    registrationId: registration.id,
+    provider: "datajud",
+    processNumbers: rows.map((row) => row.numero_cnj),
+  });
+  const imported = await autoImportDiscoveries(context.admin, {
+    tenantId: source.tenant_id,
+    candidateIds,
+  });
+
+  await context.admin.from("lawyer_registrations").update({
+    last_discovery_at: new Date().toISOString(),
+  }).eq("tenant_id", source.tenant_id).eq("id", registration.id);
+
+  return {
+    received: discovered.length,
+    created: imported.imported,
+    ignored: discovered.length - imported.imported,
+    createdIds: imported.processes.map((process) => process.processId),
   };
 }
 
@@ -252,7 +411,7 @@ async function reconcileProcessSource(
   context: ReconcileContext,
   source: SyncSource,
 ): Promise<IngestionResult> {
-  if (!context.dataJudAuthorization) {
+  if (!context.dataJudAuthorization && !context.escavadorToken) {
     throw new Error("integration_not_configured");
   }
   if (!source.process_id) {
@@ -261,37 +420,61 @@ async function reconcileProcessSource(
 
   const { data: process, error } = await context.admin
     .from("processos")
-    .select("id, numero")
+    .select("id, numero, cliente_nome, tribunal, vara, status, legal_summary_status, legal_summary_request_id, legal_summary_requested_at")
     .eq("tenant_id", source.tenant_id)
     .eq("id", source.process_id)
     .maybeSingle();
   if (error) throw error;
   if (!process) throw new Error("process_not_found");
 
-  // `processos` não guarda a sigla do tribunal; o índice público é derivado
-  // do segmento e do código do próprio número CNJ.
-  const found = await fetchDataJudProcess({
-    authorization: context.dataJudAuthorization,
-    cnj: source.reference,
-  });
-  if (!found) {
-    return { received: 0, created: 0, ignored: 0, createdIds: [] };
-  }
+  const partyResult: IngestionResult = { received: 0, created: 0, ignored: 0, createdIds: [] };
+  const movementResult: IngestionResult = { received: 0, created: 0, ignored: 0, createdIds: [] };
 
-  await ingestProcessMetadata(context.admin, {
-    tenantId: source.tenant_id,
-    processId: source.process_id,
-    metadata: normalizeDataJudProcessMetadata(found.rawSource),
-  });
-  const partyResult = await ingestProcessParties(context.admin, {
-    tenantId: source.tenant_id,
-    processId: source.process_id,
-    parties: normalizeDataJudParties(found.rawSource),
-  });
-  await reconcileProcessContacts(context.admin, {
-    tenantId: source.tenant_id,
-    processId: source.process_id,
-  });
+  // Tenta a reconciliação oficial do DataJud sem bloquear o Escavador se falhar ou não retornar dados.
+  if (context.dataJudAuthorization) {
+    try {
+      const found = await fetchDataJudProcess({
+        authorization: context.dataJudAuthorization,
+        cnj: source.reference,
+      });
+      if (found) {
+        await ingestProcessMetadata(context.admin, {
+          tenantId: source.tenant_id,
+          processId: source.process_id,
+          metadata: normalizeDataJudProcessMetadata(found.rawSource),
+        });
+        const djParties = await ingestProcessParties(context.admin, {
+          tenantId: source.tenant_id,
+          processId: source.process_id,
+          parties: normalizeDataJudParties(found.rawSource),
+        });
+        await reconcileProcessContacts(context.admin, {
+          tenantId: source.tenant_id,
+          processId: source.process_id,
+        });
+        partyResult.received += djParties.received;
+        partyResult.created += djParties.created;
+        partyResult.ignored += djParties.ignored;
+
+        const djMovements = await ingestMovements(context.admin, {
+          tenantId: source.tenant_id,
+          processId: source.process_id,
+          provider: "datajud",
+          movements: normalizeDataJudMovements(found),
+        });
+        movementResult.received += djMovements.received;
+        movementResult.created += djMovements.created;
+        movementResult.ignored += djMovements.ignored;
+        movementResult.createdIds.push(...djMovements.createdIds);
+      }
+    } catch (dataJudError) {
+      console.error("DataJud lookup failed in reconciliation pass", {
+        tenantId: source.tenant_id,
+        processId: source.process_id,
+        code: errorCode(dataJudError),
+      });
+    }
+  }
 
   // A capa complementar é paga e só é buscada na primeira reconciliação.
   // Depois disso, monitor e webhook mantêm movimentos/documentos atualizados.
@@ -340,12 +523,196 @@ async function reconcileProcessSource(
       });
     }
   }
-  const movementResult = await ingestMovements(context.admin, {
-    tenantId: source.tenant_id,
-    processId: source.process_id,
-    provider: "datajud",
-    movements: normalizeDataJudMovements(found),
-  });
+
+  // O Escavador complementa com o histórico paginado e com os documentos públicos, sem sobrescrever dados.
+  if (context.escavadorToken) {
+    try {
+      await assertProviderBudget(context.admin, {
+        tenantId: source.tenant_id,
+        provider: "escavador",
+        service: "process_movements",
+      });
+      const [movements, documents] = await Promise.all([
+        fetchEscavadorProcessMovements({
+          token: context.escavadorToken,
+          processNumber: process.numero,
+        }),
+        fetchEscavadorPublicDocuments({
+          token: context.escavadorToken,
+          processNumber: process.numero,
+        }),
+      ]);
+      const complementaryResult = await ingestMovements(context.admin, {
+        tenantId: source.tenant_id,
+        processId: source.process_id,
+        provider: "escavador",
+        movements: [
+          ...movements.items.map(normalizeEscavadorMovement),
+          ...documents.items.map(normalizeEscavadorPublicDocument),
+        ],
+      });
+      await recordProviderUsage(context.admin, {
+        tenantId: source.tenant_id,
+        provider: "escavador",
+        operation: "process_lookup",
+        service: "process_movements",
+        itemCount: complementaryResult.received,
+        externalReference: process.numero,
+        metadata: {
+          processId: process.id,
+          movementPages: movements.pages,
+          documentPages: documents.pages,
+          documents: documents.items.length,
+        },
+      });
+      movementResult.received += complementaryResult.received;
+      movementResult.created += complementaryResult.created;
+      movementResult.ignored += complementaryResult.ignored;
+      movementResult.createdIds.push(...complementaryResult.createdIds);
+    } catch (complementaryError) {
+      console.error("Escavador movements/documents failed", {
+        tenantId: source.tenant_id,
+        processId: process.id,
+        code: errorCode(complementaryError),
+      });
+    }
+  }
+
+  let needsInternalSummary = !context.escavadorToken &&
+    process.legal_summary_status !== "ready";
+  if (context.escavadorToken && process.legal_summary_status !== "ready") {
+    try {
+      const requestedAt = process.legal_summary_requested_at
+        ? new Date(process.legal_summary_requested_at).getTime()
+        : 0;
+      const isTimedOut = requestedAt > 0 && (Date.now() - requestedAt > 24 * 60 * 60 * 1000);
+
+      if (
+        process.legal_summary_status === "processing" &&
+        process.legal_summary_request_id &&
+        process.legal_summary_request_id !== "undefined" &&
+        !isTimedOut
+      ) {
+        const job = await fetchEscavadorProcessSummaryStatus({
+          token: context.escavadorToken,
+          processNumber: process.numero,
+          requestId: process.legal_summary_request_id,
+        });
+        const statusUpper = String(job.status || "").toUpperCase();
+        if (["FINALIZADO", "CONCLUIDO", "SUCESSO", "DONE", "READY"].includes(statusUpper)) {
+          const summary = await fetchEscavadorProcessSummary({
+            token: context.escavadorToken,
+            processNumber: process.numero,
+          });
+          const content = (summary.conteudo || summary.resumo || summary.texto || "").trim();
+          await context.admin.from("processos").update({
+            legal_summary: content || null,
+            legal_summary_status: content ? "ready" : "unavailable",
+            legal_summary_provider: "escavador",
+            legal_summary_updated_at: summary.atualizado_em ?? new Date().toISOString(),
+          }).eq("tenant_id", source.tenant_id).eq("id", process.id);
+          needsInternalSummary = !content;
+        } else if (["ERRO", "FAILED", "ERROR"].includes(statusUpper)) {
+          needsInternalSummary = true;
+        }
+      } else if (isTimedOut) {
+        needsInternalSummary = true;
+      } else {
+        await assertProviderBudget(context.admin, {
+          tenantId: source.tenant_id,
+          provider: "escavador",
+          service: "process_ai_summary",
+        });
+        const job = await requestEscavadorProcessSummary({
+          token: context.escavadorToken,
+          processNumber: process.numero,
+        });
+        const jobId = String(job.id || "");
+        const statusUpper = String(job.status || "").toUpperCase();
+
+        if (["FINALIZADO", "CONCLUIDO", "SUCESSO", "DONE", "READY"].includes(statusUpper) || !jobId) {
+          const summary = await fetchEscavadorProcessSummary({
+            token: context.escavadorToken,
+            processNumber: process.numero,
+          });
+          const content = (summary.conteudo || summary.resumo || summary.texto || "").trim();
+          await context.admin.from("processos").update({
+            legal_summary: content || null,
+            legal_summary_status: content ? "ready" : "unavailable",
+            legal_summary_provider: "escavador",
+            legal_summary_updated_at: summary.atualizado_em ?? new Date().toISOString(),
+          }).eq("tenant_id", source.tenant_id).eq("id", process.id);
+          needsInternalSummary = !content;
+        } else {
+          await Promise.all([
+            context.admin.from("processos").update({
+              legal_summary_status: "processing",
+              legal_summary_provider: "escavador",
+              legal_summary_request_id: jobId,
+              legal_summary_requested_at: new Date().toISOString(),
+            }).eq("tenant_id", source.tenant_id).eq("id", process.id),
+            recordProviderUsage(context.admin, {
+              tenantId: source.tenant_id,
+              provider: "escavador",
+              operation: "process_lookup",
+              service: "process_ai_summary",
+              externalReference: process.numero,
+              metadata: { processId: process.id, requestId: jobId },
+            }),
+          ]);
+        }
+      }
+    } catch (summaryError) {
+      // Resumo é complementar e assíncrono. A reconciliação oficial continua
+      // útil e a próxima passagem retoma o estado persistido.
+      console.error("Escavador process summary failed", {
+        tenantId: source.tenant_id,
+        processId: process.id,
+        code: errorCode(summaryError),
+      });
+      needsInternalSummary = true;
+    }
+  }
+
+  if (needsInternalSummary) {
+    const [{ data: parties }, { data: movements }] = await Promise.all([
+      context.admin.from("process_parties")
+        .select("display_name, side, procedural_role")
+        .eq("tenant_id", source.tenant_id)
+        .eq("process_id", process.id)
+        .order("created_at", { ascending: true })
+        .limit(12),
+      context.admin.from("process_movements")
+        .select("occurred_at, title, content")
+        .eq("tenant_id", source.tenant_id)
+        .eq("process_id", process.id)
+        .order("occurred_at", { ascending: false })
+        .limit(3),
+    ]);
+    const active = (parties ?? []).filter((party) => party.side === "ativo")
+      .map((party) => party.display_name);
+    const passive = (parties ?? []).filter((party) => party.side === "passivo")
+      .map((party) => party.display_name);
+    const latest = movements?.[0];
+    const parts = [
+      `Processo ${process.numero}.`,
+      process.status ? `Situação cadastrada: ${process.status}.` : null,
+      process.tribunal || process.vara
+        ? `Tramitação: ${[process.tribunal, process.vara].filter(Boolean).join(" — ")}.`
+        : null,
+      active.length ? `Polo ativo: ${active.join(", ")}.` : null,
+      passive.length ? `Polo passivo: ${passive.join(", ")}.` : null,
+      latest
+        ? `Último andamento registrado em ${new Date(latest.occurred_at).toLocaleDateString("pt-BR", { timeZone: "America/Manaus" })}: ${(latest.title || latest.content || "movimentação processual").slice(0, 500)}.`
+        : "Ainda não há andamento disponível na fonte consultada.",
+    ].filter(Boolean);
+    await context.admin.from("processos").update({
+      legal_summary: parts.join(" "),
+      legal_summary_status: "ready",
+      legal_summary_provider: "internal",
+      legal_summary_updated_at: new Date().toISOString(),
+    }).eq("tenant_id", source.tenant_id).eq("id", process.id);
+  }
 
   return {
     received: partyResult.received + movementResult.received,
@@ -373,8 +740,10 @@ async function reconcileSource(
   }).select("id").maybeSingle();
 
   try {
-    const result = source.provider === "escavador"
-      ? await reconcileOabSource(context, source)
+    const result = source.source_kind === "oab"
+      ? source.provider === "escavador"
+        ? await reconcileOabSource(context, source)
+        : await reconcileDataJudOabSource(context, source)
       : await reconcileProcessSource(context, source);
 
     const finishedAt = new Date().toISOString();
@@ -407,14 +776,17 @@ async function reconcileSource(
     // a fonte permanece ativa e volta a ser tentada na próxima janela. A cota
     // se renova no mês seguinte, então desativar exigiria religar na mão.
     const pending = code === "integration_not_configured" ||
+      code === "escavador_insufficient_balance" ||
       code === "tenant_budget_exceeded" ||
       code === "platform_budget_exceeded";
     const permanent = !pending && PERMANENT_FAILURES.has(code);
     const delay = pending || permanent
       ? null
       : nextAttemptDelayMs(source.failure_count);
-    const exhausted = !pending && !permanent && delay === null;
-    const stopped = permanent || exhausted;
+    // Depois da escala curta, falhas transitórias continuam ativas no ritmo
+    // normal. O limite antigo desligava a fonte para sempre e obrigava o
+    // advogado a sincronizar manualmente.
+    const stopped = permanent;
 
     await context.admin.from("legal_sync_sources").update({
       failure_count: pending
@@ -424,7 +796,7 @@ async function reconcileSource(
       last_error_code: code,
       last_error_message: errorMessage(error),
       active: !stopped,
-      paused_reason: permanent ? code : exhausted ? "max_retries" : null,
+      paused_reason: permanent ? code : null,
       next_sync_at: new Date(
         Date.now() + (delay ?? RECONCILIATION_INTERVAL_MS),
       ).toISOString(),
@@ -507,10 +879,22 @@ async function persistDjenForSource(
   const normalized = fetched.items.map((publication) =>
     normalizeDjenPublication(publication, { receivedAt })
   );
+  const registrationActor = source.lawyer_registration_id
+    ? await resolveRegistrationActor(
+      context.admin,
+      source.tenant_id,
+      source.lawyer_registration_id,
+    )
+    : null;
+  const fallbackUserId = context.actorId ?? registrationActor ??
+    processRows.find((process) => process.user_id)?.user_id ?? null;
+  if (!fallbackUserId) {
+    throw new Error("tenant_operational_user_not_found");
+  }
   const result = await ingestPublications(context.admin, {
     tenantId: source.tenant_id,
     provider: "djen",
-    fallbackUserId: context.actorId,
+    fallbackUserId,
     processByNumber: indexProcessesByNumber(processRows, formatCnj),
     defaultProcess: source.process_id
       ? processRows.find((process) => process.id === source.process_id) ?? null
@@ -697,6 +1081,39 @@ async function reconcileDjenGroup(
   }
 }
 
+async function drainPendingImportQueue(
+  context: ReconcileContext,
+  tenantId: string | null,
+): Promise<{ tenants: number; imported: number; failed: number }> {
+  let query = context.admin.from("process_discoveries")
+    .select("id, tenant_id")
+    .eq("state", "candidate")
+    .order("created_at", { ascending: true })
+    .limit(2_000);
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const byTenant = new Map<string, string[]>();
+  for (const candidate of data ?? []) {
+    const ids = byTenant.get(candidate.tenant_id) ?? [];
+    if (ids.length < AUTO_IMPORT_BATCH) ids.push(candidate.id);
+    byTenant.set(candidate.tenant_id, ids);
+  }
+
+  let imported = 0;
+  let failed = 0;
+  for (const [candidateTenantId, candidateIds] of byTenant) {
+    const result = await autoImportDiscoveries(context.admin, {
+      tenantId: candidateTenantId,
+      candidateIds,
+    });
+    imported += result.imported;
+    failed += result.failed;
+  }
+  return { tenants: byTenant.size, imported, failed };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -725,24 +1142,127 @@ Deno.serve(async (request) => {
     dataJudAuthorization,
   };
 
-  let query = auth.admin
-    .from("legal_sync_sources")
-    .select(
-      "id, tenant_id, source_kind, provider, process_id, reference, failure_count, last_success_at, sync_cursor",
-    )
-    .eq("active", true)
-    .order("next_sync_at", { ascending: true })
-    .limit(auth.mode === "manual" ? MAX_BATCH : DEFAULT_BATCH);
+  // Uma interrupção abrupta do runtime não passa pelos blocos de captura. Na
+  // execução seguinte, encerramos registros órfãos antes de abrir novos runs.
+  const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { error: staleRunError } = await auth.admin.from("legal_sync_runs")
+    .update({
+      status: "failed",
+      error_code: "worker_interrupted",
+      error_message:
+        "A execução anterior foi interrompida; a fonte voltou automaticamente para a fila.",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("status", "running")
+    .lt("started_at", staleCutoff);
+  if (staleRunError) {
+    console.error("legal-reconcile: stale run cleanup failed", staleRunError);
+  }
+
+  let queueImport = { tenants: 0, imported: 0, failed: 0 };
+  // A fila é consumida em todas as execuções; ela não depende de uma nova
+  // consulta paga da OAB. Assim, centenas de descobertas avançam a cada dez
+  // minutos até zerar, mesmo que as fontes estejam no intervalo de 6 horas.
+  if (auth.mode === "scheduled" || auth.access.canManageAll) {
+    try {
+      queueImport = await drainPendingImportQueue(
+        context,
+        auth.mode === "manual" ? auth.tenantId : null,
+      );
+    } catch (queueError) {
+      console.error("legal-reconcile: automatic import queue failed", {
+        code: errorCode(queueError),
+      });
+    }
+  }
+
+  const sourceFields =
+    "id, tenant_id, source_kind, provider, process_id, lawyer_registration_id, reference, failure_count, last_success_at, sync_cursor, next_sync_at, created_at";
+  let sources: SyncSource[] = [];
 
   if (auth.mode === "manual") {
     // A sincronização manual ignora o agendamento do escritório atual.
-    query = query.eq("tenant_id", auth.tenantId);
+    const [processResult, oabResult] = await Promise.all([
+      auth.admin.from("legal_sync_sources").select(sourceFields)
+        .eq("active", true).eq("tenant_id", auth.tenantId)
+        .eq("source_kind", "process")
+        .order("next_sync_at", { ascending: true }).limit(MAX_BATCH * 5),
+      auth.admin.from("legal_sync_sources").select(sourceFields)
+        .eq("active", true).eq("tenant_id", auth.tenantId)
+        .eq("source_kind", "oab")
+        .order("next_sync_at", { ascending: true }).limit(MAX_BATCH * 5),
+    ]);
+    if (processResult.error || oabResult.error) {
+      return json({ error: "operation_failed" }, 500);
+    }
+    sources = [
+      ...((processResult.data ?? []) as SyncSource[]),
+      ...((oabResult.data ?? []) as SyncSource[]),
+    ];
   } else {
-    query = query.lte("next_sync_at", new Date().toISOString());
+    const dueAt = new Date().toISOString();
+    // Consulta os processos diretamente. Aplicar um limite global antes de
+    // separar OABs deixava processos novos escondidos atrás de uma fila grande
+    // de descoberta e mantinha o resumo vazio por vários ciclos.
+    const { data: processSources, error: processError } = await auth.admin
+      .from("legal_sync_sources")
+      .select(sourceFields)
+      .eq("active", true)
+      .eq("source_kind", "process")
+      .lte("next_sync_at", dueAt)
+      .order("next_sync_at", { ascending: true })
+      .limit(DEFAULT_BATCH * 5);
+    if (processError) return json({ error: "operation_failed" }, 500);
+
+    const { data: oabSources, error: oabError } = await auth.admin
+      .from("legal_sync_sources")
+      .select(sourceFields)
+      .eq("active", true)
+      .eq("source_kind", "oab")
+      .lte("next_sync_at", dueAt)
+      .order("next_sync_at", { ascending: true })
+      .limit(DEFAULT_BATCH * 5);
+    if (oabError) return json({ error: "operation_failed" }, 500);
+    sources = [
+      ...((processSources ?? []) as SyncSource[]),
+      ...((oabSources ?? []) as SyncSource[]),
+    ];
   }
 
-  const { data: sources, error } = await query;
-  if (error) return json({ error: "operation_failed" }, 500);
+  let scopedSources = sources;
+  if (auth.mode === "manual" && !auth.access.canManageAll) {
+    const { data: ownProfessionals, error: professionalError } = await auth.admin
+      .from("equipe")
+      .select("id")
+      .eq("tenant_id", auth.tenantId)
+      .eq("user_id", auth.userId)
+      .eq("ativo", true);
+    if (professionalError) return json({ error: "operation_failed" }, 500);
+    const professionalIds = (ownProfessionals ?? []).map((row) => row.id);
+    const { data: registrations, error: registrationError } = professionalIds.length
+      ? await auth.admin.from("lawyer_registrations").select("id")
+        .eq("tenant_id", auth.tenantId).in("professional_id", professionalIds)
+      : { data: [], error: null };
+    if (registrationError) return json({ error: "operation_failed" }, 500);
+    const registrationIds = new Set((registrations ?? []).map((row) => row.id));
+    const { data: links, error: linkError } = registrationIds.size
+      ? await auth.admin.from("process_lawyers").select("process_id")
+        .eq("tenant_id", auth.tenantId)
+        .in("lawyer_registration_id", [...registrationIds])
+      : { data: [], error: null };
+    if (linkError) return json({ error: "operation_failed" }, 500);
+    const processIds = new Set((links ?? []).map((row) => row.process_id));
+    scopedSources = scopedSources.filter((source) =>
+      (source.lawyer_registration_id && registrationIds.has(source.lawyer_registration_id)) ||
+      (source.process_id && processIds.has(source.process_id))
+    );
+  }
+
+  scopedSources = selectFairLegalSources(
+    scopedSources.filter((source) => source.source_kind === "process"),
+    scopedSources.filter((source) => source.source_kind === "oab"),
+    auth.mode === "manual" ? MAX_BATCH : DEFAULT_BATCH,
+  );
 
   const results = {
     processed: 0,
@@ -753,7 +1273,7 @@ Deno.serve(async (request) => {
   };
   const failures: Array<{ reference: string; code: string }> = [];
 
-  const typedSources = (sources ?? []) as SyncSource[];
+  const typedSources = scopedSources;
   const legacySources = typedSources.filter((source) =>
     source.provider !== "djen"
   );
@@ -801,6 +1321,7 @@ Deno.serve(async (request) => {
   return json({
     mode: auth.mode,
     ...results,
+    queueImport,
     failures: failures.slice(0, 20),
     message: results.processed === 0
       ? "Nenhuma fonte monitorada estava pendente."

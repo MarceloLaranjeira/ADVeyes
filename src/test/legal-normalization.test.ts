@@ -10,10 +10,36 @@ import {
   normalizeDataJudMovements,
   normalizeDjenPublication,
   normalizeEscavadorPublication,
+  normalizeEscavadorPublicDocument,
   normalizeEscavadorProcessParties,
   resolveOriginSystem,
   RETRY_DELAYS_MS,
 } from "../../supabase/functions/_shared/legal-normalization.ts";
+
+describe("normalizeEscavadorPublicDocument", () => {
+  it("preserva metadados e cria identidade separada dos andamentos", () => {
+    const document = normalizeEscavadorPublicDocument({
+      id: 91,
+      titulo: "Sentença",
+      descricao: "Pedido julgado procedente.",
+      data: "2026-08-10 13:45:00",
+      tipo: "PUBLICO",
+      extensao_arquivo: "pdf",
+      quantidade_paginas: 7,
+      links: { api: "https://api.escavador.com/api/v2/documentos/91" },
+    });
+
+    expect(document.externalId).toBe("document:91");
+    expect(document.movementType).toBe("DOCUMENTO");
+    expect(document.title).toBe("Sentença");
+    expect(document.documentType).toBe("PUBLICO");
+    expect(document.documentUrl).toContain("/documentos/91");
+    expect(document.complements).toEqual(expect.arrayContaining([
+      { key: "extensao", label: "Extensão", value: "PDF" },
+      { key: "paginas", label: "Páginas", value: "7 página(s)" },
+    ]));
+  });
+});
 
 describe("formatCnj", () => {
   it("formata um número CNJ com 20 dígitos", () => {
@@ -308,6 +334,14 @@ describe("normalizeDataJudParties", () => {
           polo: "ATIVO",
           tipoPessoa: "Pessoa Física",
           tipoParte: "AUTOR",
+          telefone: "(92) 99999-0000",
+          email: "jose@example.com",
+          endereco: {
+            logradouro: "Rua das Flores",
+            numero: "10",
+            cidade: "Manaus",
+            uf: "AM",
+          },
           advogados: [{ nome: "Ana Lima", oab: "AM10099" }],
         },
         {
@@ -330,6 +364,11 @@ describe("normalizeDataJudParties", () => {
     expect(parties[0].relatedLawyers).toEqual([
       { nome: "Ana Lima", oab: "AM10099" },
     ]);
+    expect(parties[0].contact).toEqual({
+      phone: "(92) 99999-0000",
+      email: "jose@example.com",
+      address: "Rua das Flores, 10 · Manaus - AM",
+    });
     expect(parties[1]).toMatchObject({
       normalizedName: "EMPRESA RE LTDA",
       side: "passivo",
@@ -349,6 +388,8 @@ describe("normalizeEscavadorProcessParties", () => {
           tipo_pessoa: "FISICA",
           polo: "ATIVO",
           tipo_normalizado: "Requerente",
+          telefones: [{ valor: "92988887777" }],
+          emails: ["maria@example.com"],
           cpf: "12345678900",
           advogados: [{
             nome: "Ana Lima",
@@ -379,6 +420,11 @@ describe("normalizeEscavadorProcessParties", () => {
       nome: "Ana Lima",
       oabs: [{ uf: "AM", numero: 10099 }],
     }]);
+    expect(parties[0].contact).toEqual({
+      phone: "92988887777",
+      email: "maria@example.com",
+      address: null,
+    });
   });
 });
 

@@ -44,6 +44,22 @@ export interface LegalMonitor {
   updated_at: string;
 }
 
+export interface LegalSyncSourceStatus {
+  id: string;
+  source_kind: "oab" | "process";
+  provider: "djen" | "datajud" | "escavador";
+  lawyer_registration_id: string | null;
+  process_id: string | null;
+  reference: string;
+  active: boolean;
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_sync_at: string | null;
+  failure_count: number;
+  last_error_code: string | null;
+  paused_reason: string | null;
+}
+
 export interface ProviderUsage {
   provider: string;
   period_start: string;
@@ -55,11 +71,17 @@ export interface ProviderUsage {
 
 export interface LegalOverview {
   providerConfigured: boolean;
+  access: {
+    role: string;
+    canManageAll: boolean;
+    canMutate: boolean;
+  };
   usage: ProviderUsage | null;
   professionals: LegalProfessional[];
   registrations: LawyerRegistration[];
   discoveries: ProcessDiscovery[];
   monitors: LegalMonitor[];
+  sources: LegalSyncSourceStatus[];
 }
 
 const messages: Record<string, string> = {
@@ -81,6 +103,11 @@ const messages: Record<string, string> = {
   datajud_request_failed: "O DataJud não respondeu a tempo.",
   datajud_court_not_supported:
     "O DataJud não cobre os tribunais dessa seccional.",
+  registration_owned_by_other_professional:
+    "Esta OAB já pertence a outro profissional do escritório.",
+  registration_not_found: "A OAB não está mais disponível.",
+  registration_already_exists: "Esta OAB já está cadastrada no escritório.",
+  professional_not_found: "O profissional não está ativo ou não foi encontrado.",
   operation_failed: "Não foi possível concluir a operação.",
 };
 
@@ -163,6 +190,52 @@ export const legalIntegrationService = {
       totalCandidates?: number;
       discoveryError?: string;
     }>("legal-discover-lawyer-processes", input, 45_000),
+
+  register: (input: {
+    tenantId: string;
+    professionalId: string;
+    oabNumber: string;
+    oabState: string;
+  }) =>
+    invoke<{
+      registrationId: string;
+      registrationSaved: true;
+      discoveryPending: true;
+      totalCandidates: number;
+    }>("legal-discover-lawyer-processes", {
+      ...input,
+      action: "register",
+      deferDiscovery: true,
+    }),
+
+  updateRegistration: (input: {
+    tenantId: string;
+    registrationId: string;
+    professionalId: string;
+    oabNumber: string;
+    oabState: string;
+  }) =>
+    invoke<{
+      registrationId: string;
+      professionalId: string;
+      oabNumber: string;
+      oabState: string;
+      synchronizationScheduled: true;
+    }>("legal-discover-lawyer-processes", {
+      ...input,
+      action: "update",
+    }),
+
+  disableRegistration: (tenantId: string, registrationId: string) =>
+    invoke<{
+      registrationId: string;
+      disabled: true;
+      preservedProcesses: true;
+    }>("legal-discover-lawyer-processes", {
+      action: "disable",
+      tenantId,
+      registrationId,
+    }),
 
   confirm: (
     tenantId: string,

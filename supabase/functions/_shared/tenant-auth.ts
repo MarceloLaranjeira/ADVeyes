@@ -27,6 +27,72 @@ export interface TenantAuthContext {
   admin: SupabaseClient;
 }
 
+export interface TenantLegalAccess {
+  kind: "membership" | "platform";
+  role: string;
+  canManageAll: boolean;
+  canMutate: boolean;
+  supportSessionId: string | null;
+}
+
+/**
+ * Resolve o escopo jurídico sem confiar em claims editáveis do JWT.
+ * Administradores da plataforma podem diagnosticar qualquer tenant, mas só
+ * podem alterar dados durante uma sessão de suporte ativa.
+ */
+export async function resolveTenantLegalAccess(
+  admin: SupabaseClient,
+  userId: string,
+  tenantId: string,
+): Promise<TenantLegalAccess | null> {
+  const { data: membership, error: membershipError } = await admin
+    .from("tenant_memberships")
+    .select("role")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+  if (membership) {
+    return {
+      kind: "membership",
+      role: membership.role,
+      canManageAll: ["owner", "admin"].includes(membership.role),
+      canMutate: true,
+      supportSessionId: null,
+    };
+  }
+
+  const { data: platformAdmin, error: platformError } = await admin
+    .from("platform_admins")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (platformError) throw platformError;
+  if (!platformAdmin) return null;
+
+  const { data: support, error: supportError } = await admin
+    .from("platform_support_sessions")
+    .select("id")
+    .eq("platform_admin_user_id", userId)
+    .eq("tenant_id", tenantId)
+    .is("ended_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (supportError) throw supportError;
+
+  return {
+    kind: "platform",
+    role: "platform_admin",
+    canManageAll: true,
+    canMutate: Boolean(support),
+    supportSessionId: support?.id ?? null,
+  };
+}
+
 export async function authenticateTenantRequest(
   request: Request,
 ): Promise<TenantAuthContext | Response> {
@@ -89,6 +155,9 @@ export function postgresErrorCode(error: unknown): string {
     "signup_trial_plan_unavailable",
     "signup_office_name_invalid",
     "pilot_seat_limit",
+    "registration_not_found",
+    "registration_already_exists",
+    "professional_not_found",
   ]);
 
   return record.message && stable.has(record.message)
@@ -104,12 +173,16 @@ export function statusForError(code: string): number {
   if (code === "member_not_found" || code === "invitation_not_found") {
     return 404;
   }
+  if (code === "registration_not_found" || code === "professional_not_found") {
+    return 404;
+  }
   if (
     code === "member_already_active" || code === "already_accepted" ||
     code === "invitation_not_pending" ||
     code === "signup_user_already_linked" ||
     code === "signup_invitation_pending" ||
-    code === "pilot_seat_limit"
+    code === "pilot_seat_limit" ||
+    code === "registration_already_exists"
   ) return 409;
   if (code === "signup_email_not_confirmed") return 403;
   if (code === "signup_trial_plan_unavailable") return 503;

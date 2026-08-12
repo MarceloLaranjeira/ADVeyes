@@ -84,9 +84,11 @@ Deno.serve(async (request) => {
   } catch {
     return response({ error: "invalid_payload" }, 400);
   }
-  const eventType = payload.event?.trim();
-  const externalEventId = payload.uuid?.trim();
-  const externalMonitorId = payload.monitoramento?.id;
+  const raw = payload as Record<string, unknown>;
+  const nestedData = (raw.data && typeof raw.data === "object" ? raw.data : {}) as Record<string, unknown>;
+  const eventType = (payload.event ?? raw.event_type ?? nestedData.event ?? nestedData.event_type as string ?? "").trim();
+  const externalEventId = (payload.uuid ?? raw.event_id ?? raw.id ?? nestedData.uuid ?? nestedData.event_id as string ?? "").trim();
+  const externalMonitorId = payload.monitoramento?.id ?? raw.monitoramento_id ?? nestedData.monitoramento_id ?? (nestedData.monitoramento as Record<string, unknown>)?.id;
   if (!eventType || !externalEventId || externalMonitorId == null) {
     return response({ error: "invalid_payload" }, 400);
   }

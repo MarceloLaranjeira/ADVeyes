@@ -12,7 +12,7 @@ import {
   ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
   Briefcase, Users, KanbanSquare, Calendar, Gavel, CheckSquare,
   Sparkles, Bell,
-  AlertTriangle, Activity,
+  AlertTriangle, Activity as ActivityIcon,
 } from "lucide-react";
 const IconProcessos = Briefcase;
 const IconClientes = Users;
@@ -24,7 +24,7 @@ const IconHoras = Clock;
 const IconHorusIA = Sparkles;
 const IconBell = Bell;
 const IconAlerta = AlertTriangle;
-const IconSistema = Activity;
+const IconSistema = ActivityIcon;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";

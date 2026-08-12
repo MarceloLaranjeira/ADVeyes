@@ -33,13 +33,13 @@ describe("normalizeOperationalCalendar", () => {
         tipo: "Audiência de instrução",
         data_hora: "2026-08-11T14:00:00",
         observacoes: null,
-        responsavel_id: "user-3",
+        user_id: "user-3",
         processo_id: "process-2",
         status: "agendada",
         local: null,
         vara: "2ª Vara",
         processos: { numero: "0000000-00.2026.8.04.0001", cliente_nome: "Cliente" },
-      } as CalendarHearing],
+      } as unknown as CalendarHearing],
     );
 
     expect(items.map(item => item.sourceType)).toEqual(["task", "event", "hearing"]);
@@ -50,6 +50,7 @@ describe("normalizeOperationalCalendar", () => {
       processId: "process-1",
     });
     expect(items[2]).toMatchObject({
+      assigneeId: "user-3",
       processNumber: "0000000-00.2026.8.04.0001",
       location: "2ª Vara",
     });

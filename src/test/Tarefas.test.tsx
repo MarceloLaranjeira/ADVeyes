@@ -46,6 +46,8 @@ const task: ActivityWithUserState = {
   assignee: null,
   estimated_hours: null,
   tags: null,
+  source_id: null,
+  source_type: null,
   userState: null,
 };
 

@@ -29,6 +29,8 @@ const activity: Activity = {
   assignee: null,
   estimated_hours: null,
   tags: null,
+  source_id: null,
+  source_type: null,
 };
 
 describe("activitiesService", () => {

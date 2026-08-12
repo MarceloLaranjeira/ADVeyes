@@ -1,5 +1,6 @@
 const ESCAVADOR_API_BASE = "https://api.escavador.com/api/v2";
 const MAX_DISCOVERY_PAGES = 20;
+const MAX_PROCESS_DETAIL_PAGES = 20;
 
 export interface EscavadorLawyer {
   nome: string;
@@ -40,6 +41,43 @@ interface EscavadorLawyerProcessesResponse {
   links?: { next?: string | null };
 }
 
+export interface EscavadorMovementItem {
+  id: number | string;
+  data?: string | null;
+  tipo?: string | null;
+  tipo_publicacao?: string | null;
+  conteudo?: string | null;
+  texto_categoria?: string | null;
+  fonte?: {
+    fonte_id?: number | string | null;
+    nome?: string | null;
+    tipo?: string | null;
+    sigla?: string | null;
+    grau?: number | string | null;
+    grau_formatado?: string | null;
+    sistema?: string | null;
+  } | null;
+  [key: string]: unknown;
+}
+
+export interface EscavadorPublicDocumentItem {
+  id: number | string;
+  titulo?: string | null;
+  descricao?: string | null;
+  data?: string | null;
+  tipo?: string | null;
+  extensao_arquivo?: string | null;
+  quantidade_paginas?: number | null;
+  key?: string | null;
+  links?: { api?: string | null } | null;
+  [key: string]: unknown;
+}
+
+interface EscavadorPaginatedResponse<T> {
+  items?: T[];
+  links?: { next?: string | null };
+}
+
 export class EscavadorApiError extends Error {
   constructor(
     public readonly status: number,
@@ -68,6 +106,19 @@ function safeNextUrl(next: string | null | undefined): string | null {
   return parsed.toString();
 }
 
+function unwrapPayload<T>(payload: unknown): T {
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const obj = payload as Record<string, unknown>;
+    if (obj.resposta && typeof obj.resposta === "object") {
+      return obj.resposta as T;
+    }
+    if (obj.data && typeof obj.data === "object") {
+      return obj.data as T;
+    }
+  }
+  return payload as T;
+}
+
 async function getJson<T>(token: string, url: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
@@ -82,7 +133,119 @@ async function getJson<T>(token: string, url: string): Promise<T> {
       errorCodeForStatus(response.status),
     );
   }
-  return await response.json() as T;
+  const raw = await response.json();
+  return unwrapPayload<T>(raw);
+}
+
+async function fetchPaginated<T>(input: {
+  token: string;
+  initialUrl: string;
+}): Promise<{ items: T[]; pages: number }> {
+  let next: string | null = input.initialUrl;
+  let page = 0;
+  const items: T[] = [];
+
+  while (next && page < MAX_PROCESS_DETAIL_PAGES) {
+    const raw = await getJson<unknown>(input.token, next);
+    const payload = unwrapPayload<EscavadorPaginatedResponse<T>>(raw);
+    const pageItems = payload.items ?? (raw as Record<string, unknown>)?.items ?? [];
+    if (Array.isArray(pageItems)) {
+      items.push(...pageItems);
+    }
+    next = safeNextUrl(payload.links?.next ?? (raw as Record<string, unknown>)?.links?.next as string);
+    page += 1;
+  }
+  // Se o limite de páginas for atingido, preserva os itens obtidos até o momento sem derrubar o ciclo.
+  return { items, pages: page };
+}
+
+export interface EscavadorProcessSummary {
+  numero_cnj: string;
+  conteudo: string;
+  resumo?: string;
+  texto?: string;
+  atualizado_em: string | null;
+  [key: string]: unknown;
+}
+
+export interface EscavadorSummaryJob {
+  id: number | string;
+  status: "PENDENTE" | "FINALIZADO" | "ERRO" | string;
+  numero_cnj?: string;
+  criado_em?: string | null;
+  concluido_em?: string | null;
+  [key: string]: unknown;
+}
+
+export async function requestEscavadorProcessSummary(input: {
+  token: string;
+  processNumber: string;
+}): Promise<EscavadorSummaryJob> {
+  const number = encodeURIComponent(input.processNumber);
+  const response = await fetch(
+    `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}/ia/resumo/solicitar-atualizacao`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${input.token}`,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new EscavadorApiError(response.status, errorCodeForStatus(response.status));
+  }
+  const raw = await response.json();
+  const unwrapped = unwrapPayload<EscavadorSummaryJob>(raw);
+  return {
+    id: unwrapped.id ?? (raw as Record<string, unknown>)?.id ?? (raw as Record<string, unknown>)?.solicitacao_id ?? "",
+    status: unwrapped.status ?? (raw as Record<string, unknown>)?.status ?? "PENDENTE",
+    ...unwrapped,
+  };
+}
+
+export async function fetchEscavadorProcessSummaryStatus(input: {
+  token: string;
+  processNumber: string;
+  requestId: string;
+}): Promise<EscavadorSummaryJob> {
+  const number = encodeURIComponent(input.processNumber);
+  const requestId = encodeURIComponent(input.requestId);
+  const raw = await getJson<unknown>(
+    input.token,
+    `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}/ia/resumo/status?id=${requestId}`,
+  );
+  const unwrapped = unwrapPayload<EscavadorSummaryJob>(raw);
+  return {
+    id: unwrapped.id ?? (raw as Record<string, unknown>)?.id ?? requestId,
+    status: unwrapped.status ?? (raw as Record<string, unknown>)?.status ?? "PENDENTE",
+    ...unwrapped,
+  };
+}
+
+export async function fetchEscavadorProcessSummary(input: {
+  token: string;
+  processNumber: string;
+}): Promise<EscavadorProcessSummary> {
+  const number = encodeURIComponent(input.processNumber);
+  const raw = await getJson<unknown>(
+    input.token,
+    `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}/ia/resumo`,
+  );
+  const unwrapped = unwrapPayload<EscavadorProcessSummary>(raw);
+  const conteudo = unwrapped.conteudo ??
+    unwrapped.resumo ??
+    unwrapped.texto ??
+    ((raw as Record<string, unknown>)?.conteudo as string) ??
+    ((raw as Record<string, unknown>)?.resumo as string) ??
+    "";
+  return {
+    numero_cnj: unwrapped.numero_cnj ?? input.processNumber,
+    conteudo,
+    atualizado_em: unwrapped.atualizado_em ?? null,
+    ...unwrapped,
+  };
 }
 
 /** Capa complementar V2; inclui envolvidos e audiências por fonte. */
@@ -95,6 +258,30 @@ export function fetchEscavadorProcessCover(input: {
     input.token,
     `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}`,
   );
+}
+
+/** Movimentações completas, seguindo o cursor oficial sem expor o PAT. */
+export function fetchEscavadorProcessMovements(input: {
+  token: string;
+  processNumber: string;
+}): Promise<{ items: EscavadorMovementItem[]; pages: number }> {
+  const number = encodeURIComponent(input.processNumber);
+  return fetchPaginated<EscavadorMovementItem>({
+    token: input.token,
+    initialUrl: `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}/movimentacoes?limit=100&ordem=desc`,
+  });
+}
+
+/** Metadados dos documentos públicos disponíveis para o processo. */
+export function fetchEscavadorPublicDocuments(input: {
+  token: string;
+  processNumber: string;
+}): Promise<{ items: EscavadorPublicDocumentItem[]; pages: number }> {
+  const number = encodeURIComponent(input.processNumber);
+  return fetchPaginated<EscavadorPublicDocumentItem>({
+    token: input.token,
+    initialUrl: `${ESCAVADOR_API_BASE}/processos/numero_cnj/${number}/documentos-publicos?limit=100`,
+  });
 }
 
 export async function discoverLawyerProcesses(input: {
@@ -122,6 +309,14 @@ export async function discoverLawyerProcesses(input: {
       },
     });
 
+    if (response.status === 404) {
+      return {
+        lawyer: null,
+        processes: [],
+        pages: 0,
+      };
+    }
+
     if (!response.ok) {
       throw new EscavadorApiError(
         response.status,
@@ -129,20 +324,18 @@ export async function discoverLawyerProcesses(input: {
       );
     }
 
-    const payload = await response.json() as EscavadorLawyerProcessesResponse;
-    lawyer ??= payload.advogado_encontrado ?? null;
-    for (const process of payload.items ?? []) {
+    const raw = await response.json();
+    const payload = unwrapPayload<EscavadorLawyerProcessesResponse>(raw);
+    lawyer ??= payload.advogado_encontrado ?? (raw as Record<string, unknown>)?.advogado_encontrado as EscavadorLawyer ?? null;
+    const items = payload.items ?? (raw as Record<string, unknown>)?.items as EscavadorProcessItem[] ?? [];
+    for (const process of items) {
       if (typeof process.numero_cnj === "string") {
         processes.set(process.numero_cnj, process);
       }
     }
 
-    next = safeNextUrl(payload.links?.next);
+    next = safeNextUrl(payload.links?.next ?? (raw as Record<string, unknown>)?.links?.next as string);
     page += 1;
-  }
-
-  if (next) {
-    throw new EscavadorApiError(502, "escavador_pagination_limit");
   }
 
   return {
@@ -158,6 +351,7 @@ interface EscavadorMonitorResponse {
   frequencia?: string;
   status?: string;
   documentos_publicos?: boolean;
+  [key: string]: unknown;
 }
 
 export async function createProcessMonitor(input: {
@@ -189,5 +383,12 @@ export async function createProcessMonitor(input: {
     );
   }
 
-  return await response.json() as EscavadorMonitorResponse;
+  const raw = await response.json();
+  const unwrapped = unwrapPayload<EscavadorMonitorResponse>(raw);
+  const monitorId = unwrapped.id ?? (raw as Record<string, unknown>)?.id ?? (raw as Record<string, unknown>)?.monitoramento_id ?? "";
+  return {
+    id: monitorId,
+    ...unwrapped,
+  };
 }
+

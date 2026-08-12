@@ -27,6 +27,11 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
 import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
+import {
+  generateOpenAITts,
+  OPENAI_TTS_VOICES,
+  playAudioBlob,
+} from "@/services/openai-tts";
 
 // ─── Importar Processos Manualmente ─────────────────────────────────────────
 const ImportarProcessos = () => {
@@ -226,12 +231,13 @@ const Configuracoes = () => {
     toast({ title: "Prompt personalizado salvo!", description: "O Horus usará essas instruções em todas as conversas." });
   };
 
-  // TTS Settings (persisted in sessionStorage for security — keys cleared when tab closes)
-  const [ttsProvider, setTtsProvider] = useState(() => sessionStorage.getItem("horus_tts_provider") || "browser");
+  // TTS Settings. OpenAI uses the server secret; third-party keys remain session-only.
+  const [ttsProvider, setTtsProvider] = useState(() => sessionStorage.getItem("horus_tts_provider") || "openai");
   const [ttsApiKey, setTtsApiKey] = useState(() => sessionStorage.getItem("horus_tts_key") || "");
-  const [ttsVoice, setTtsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "nova");
+  const [ttsVoice, setTtsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "marin");
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => sessionStorage.getItem("horus_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
   const [ttsEnabled, setTtsEnabled] = useState(() => sessionStorage.getItem("horus_tts_enabled") !== "false");
+  const [testingTts, setTestingTts] = useState(false);
 
   const saveTtsSettings = () => {
     sessionStorage.setItem("horus_tts_provider", ttsProvider);
@@ -248,12 +254,29 @@ const Configuracoes = () => {
     toast({ title: "Configurações de voz salvas!" });
   };
 
-  const testTts = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const u = new SpeechSynthesisUtterance("Horus online. Sistema de voz funcionando perfeitamente.");
-      u.lang = "pt-BR";
-      u.rate = 1.05;
-      window.speechSynthesis.speak(u);
+  const testTts = async () => {
+    if (ttsProvider !== "openai") {
+      toast({
+        title: "Selecione OpenAI TTS",
+        description: "O teste real desta tela usa as vozes OpenAI do servidor.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setTestingTts(true);
+    try {
+      const blob = await generateOpenAITts(
+        "Hórus online. A voz da OpenAI está funcionando corretamente.",
+        ttsVoice,
+      );
+      playAudioBlob(blob, () => setTestingTts(false));
+    } catch (error) {
+      setTestingTts(false);
+      toast({
+        title: "Falha ao testar a voz OpenAI",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -484,7 +507,7 @@ const Configuracoes = () => {
                         <SelectItem value="openai">
                           <div>
                             <div className="font-medium">OpenAI TTS</div>
-                            <div className="text-xs text-muted-foreground">Alloy, Nova, Echo — requer API Key</div>
+                            <div className="text-xs text-muted-foreground">13 vozes oficiais — chave protegida no servidor</div>
                           </div>
                         </SelectItem>
                         <SelectItem value="google">
@@ -497,10 +520,10 @@ const Configuracoes = () => {
                     </Select>
                   </div>
 
-                  {ttsProvider !== "browser" && (
+                  {ttsProvider !== "browser" && ttsProvider !== "openai" && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">
-                        API Key — {ttsProvider === "elevenlabs" ? "ElevenLabs" : ttsProvider === "openai" ? "OpenAI" : "Google Cloud"}
+                        API Key — {ttsProvider === "elevenlabs" ? "ElevenLabs" : "Google Cloud"}
                       </Label>
                       <Input
                         type="password"
@@ -508,13 +531,11 @@ const Configuracoes = () => {
                         onChange={(e) => setTtsApiKey(e.target.value)}
                         placeholder={
                           ttsProvider === "elevenlabs" ? "sk-..." :
-                          ttsProvider === "openai" ? "sk-..." :
                           "AIza..."
                         }
                       />
                       <p className="text-xs text-muted-foreground">
                         {ttsProvider === "elevenlabs" && "Obtenha sua chave em elevenlabs.io — a chave é armazenada localmente no navegador"}
-                        {ttsProvider === "openai" && "Obtenha sua chave em platform.openai.com — a chave é armazenada localmente no navegador"}
                         {ttsProvider === "google" && "Habilite a API Cloud TTS em console.cloud.google.com — a chave é armazenada localmente"}
                       </p>
                     </div>
@@ -526,11 +547,17 @@ const Configuracoes = () => {
                       <Select value={ttsVoice} onValueChange={setTtsVoice}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {["alloy", "nova", "echo", "fable", "onyx", "shimmer"].map(v => (
-                            <SelectItem key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</SelectItem>
+                          {OPENAI_TTS_VOICES.map(v => (
+                            <SelectItem key={v} value={v}>
+                              {v.charAt(0).toUpperCase() + v.slice(1)}
+                              {(v === "marin" || v === "cedar") ? " — recomendada" : ""}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Áudio gerado por inteligência artificial. A chave da OpenAI fica protegida no servidor.
+                      </p>
                     </div>
                   )}
 
@@ -563,8 +590,9 @@ const Configuracoes = () => {
                   <Button onClick={saveTtsSettings} className="gap-2">
                     <Zap className="w-4 h-4" /> Salvar Configurações
                   </Button>
-                  <Button variant="outline" onClick={testTts} className="gap-2">
-                    <Volume2 className="w-4 h-4" /> Testar Voz
+                  <Button variant="outline" onClick={testTts} disabled={testingTts} className="gap-2">
+                    {testingTts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                    {testingTts ? "Gerando voz..." : "Testar Voz OpenAI"}
                   </Button>
                 </div>
               </CardContent>

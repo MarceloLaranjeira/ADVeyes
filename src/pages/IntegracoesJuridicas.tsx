@@ -5,7 +5,24 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,9 +35,7 @@ import {
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import {
-  LegalIntegrationError,
   legalIntegrationService,
-  PartialConfirmationError,
   type LegalOverview,
 } from "@/services/legal-integration";
 import {
@@ -29,27 +44,14 @@ import {
 } from "@/services/platform-admin";
 import {
   AlertTriangle,
-  CheckCircle2,
   Database,
   KeyRound,
   Newspaper,
+  Pencil,
   RefreshCw,
   Scale,
+  Trash2,
 } from "lucide-react";
-
-/** Traduz a falha da busca automática sem esconder a causa. */
-function discoveryErrorMessage(code: string): string {
-  const reasons: Record<string, string> = {
-    datajud_request_failed:
-      "O DataJud não respondeu a tempo. Tente novamente em alguns minutos.",
-    datajud_unauthorized: "A chave do DataJud foi recusada.",
-    datajud_rate_limited: "O limite de consultas do DataJud foi atingido.",
-    datajud_court_not_supported:
-      "O DataJud não cobre os tribunais dessa seccional.",
-  };
-  return reasons[code] ??
-    "A busca automática falhou, mas a OAB continua cadastrada.";
-}
 
 export default function IntegracoesJuridicas() {
   const { currentTenant } = useTenant();
@@ -57,25 +59,33 @@ export default function IntegracoesJuridicas() {
   const [overview, setOverview] = useState<LegalOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
-  const [progress, setProgress] = useState<{ confirmed: number; total: number } | null>(null);
   const [professionalId, setProfessionalId] = useState("");
   const [oabNumber, setOabNumber] = useState("");
   const [oabState, setOabState] = useState("AM");
-  const [frequency, setFrequency] = useState<"DIARIA" | "SEMANAL">("DIARIA");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [editingRegistration, setEditingRegistration] = useState<
+    LegalOverview["registrations"][number] | null
+  >(null);
+  const [editProfessionalId, setEditProfessionalId] = useState("");
+  const [editOabNumber, setEditOabNumber] = useState("");
+  const [editOabState, setEditOabState] = useState("AM");
+  const [deletingRegistration, setDeletingRegistration] = useState<
+    LegalOverview["registrations"][number] | null
+  >(null);
   const [platformStatus, setPlatformStatus] =
     useState<PlatformIntegrationStatus | null>(null);
   const [escavadorToken, setEscavadorToken] = useState("");
   const isPlatformAccess = currentTenant?.accessMode === "platform";
+  const tenantId = currentTenant?.tenantId;
+  const accessMode = currentTenant?.accessMode;
 
   const load = useCallback(async () => {
-    if (!currentTenant) return;
+    if (!tenantId) return;
     setLoading(true);
     try {
       setOverview(
-        await legalIntegrationService.overview(currentTenant.tenantId),
+        await legalIntegrationService.overview(tenantId),
       );
-      if (currentTenant.accessMode === "platform") {
+      if (accessMode === "platform") {
         setPlatformStatus(await platformAdmin.integrationStatus());
       } else {
         setPlatformStatus(null);
@@ -89,7 +99,7 @@ export default function IntegracoesJuridicas() {
     } finally {
       setLoading(false);
     }
-  }, [currentTenant, toast]);
+  }, [accessMode, tenantId, toast]);
 
   const saveEscavadorToken = async () => {
     if (!isPlatformAccess || escavadorToken.trim().length < 16) return;
@@ -119,127 +129,126 @@ export default function IntegracoesJuridicas() {
     void load();
   }, [load]);
 
-  // A descoberta por OAB traz centenas de candidatos. Sem paginação, revisar
-  // exige rolar a lista inteira até o rodapé para chegar ao botão de confirmar.
-  const PAGE_SIZE = 25;
-
   const candidates = useMemo(
     () => overview?.discoveries.filter((item) => item.state === "candidate") ?? [],
     [overview],
   );
-
-  const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(candidates.length / PAGE_SIZE));
-
-  // Confirmar remove candidatos da lista. Sem isto, quem estava na última
-  // página ficaria olhando para o vazio.
-  useEffect(() => {
-    if (page > pageCount - 1) setPage(pageCount - 1);
-  }, [page, pageCount]);
-
-  const pageItems = useMemo(
-    () => candidates.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
-    [candidates, page],
+  const activeProfessionals = useMemo(
+    () => (overview?.professionals ?? []).filter((item) => item.ativo),
+    [overview],
   );
-
-  // A seleção atravessa páginas de propósito: dá para marcar alguns aqui,
-  // avançar, marcar mais, e confirmar tudo de uma vez.
-  const pageIds = pageItems.map((item) => item.id);
-  const allOnPageSelected = pageIds.length > 0 &&
-    pageIds.every((id) => selected.includes(id));
-
-  const togglePage = () => {
-    setSelected((current) =>
-      allOnPageSelected
-        ? current.filter((id) => !pageIds.includes(id))
-        : [...new Set([...current, ...pageIds])]
-    );
-  };
+  const activeRegistrations = useMemo(
+    () => (overview?.registrations ?? []).filter((item) =>
+      item.status !== "disabled" && item.status !== "invalid"
+    ),
+    [overview],
+  );
+  const selectedProfessionalId = activeProfessionals.some(
+      (item) => item.id === professionalId,
+    )
+    ? professionalId
+    : activeProfessionals.length === 1
+    ? activeProfessionals[0].id
+    : "";
+  const professionalById = useMemo(
+    () => new Map((overview?.professionals ?? []).map((item) => [item.id, item])),
+    [overview],
+  );
+  const sourcesByRegistration = useMemo(() => {
+    const grouped = new Map<string, NonNullable<LegalOverview["sources"]>>();
+    for (const source of overview?.sources ?? []) {
+      if (!source.lawyer_registration_id) continue;
+      const items = grouped.get(source.lawyer_registration_id) ?? [];
+      items.push(source);
+      grouped.set(source.lawyer_registration_id, items);
+    }
+    return grouped;
+  }, [overview]);
 
   const discover = async () => {
-    if (!currentTenant || !professionalId || !oabNumber.trim()) return;
+    if (!currentTenant || !selectedProfessionalId || !oabNumber.trim()) return;
     setWorking(true);
     try {
-      const result = await legalIntegrationService.discover({
+      await legalIntegrationService.register({
         tenantId: currentTenant.tenantId,
-        professionalId,
+        professionalId: selectedProfessionalId,
         oabNumber,
         oabState,
       });
-      if (result.discoveryError) {
-        // O cadastro foi salvo; apenas a busca automática não completou.
-        toast({
-          title: "OAB salva, mas a busca não completou",
-          description: discoveryErrorMessage(result.discoveryError),
-        });
-      } else {
-        toast({
-          title: "Consulta concluída",
-          description: `${result.totalCandidates ?? 0} processo(s) candidato(s) encontrado(s).`,
-        });
-      }
+      toast({
+        title: "OAB salva e sincronização ativada",
+        description:
+          "A consulta continuará no servidor. Os processos encontrados serão importados automaticamente.",
+      });
     } catch (error) {
-      if (
-        error instanceof LegalIntegrationError &&
-        error.code === "integration_not_configured"
-      ) {
-        toast({
-          title: "OAB salva",
-          description: "A consulta será liberada assim que o token do Escavador chegar.",
-        });
-      } else {
-        toast({
-          title: "Não foi possível consultar",
-          description: error instanceof Error ? error.message : "Tente novamente.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Não foi possível salvar a OAB",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       await load();
       setWorking(false);
     }
   };
 
-  const confirm = async () => {
-    if (!currentTenant || selected.length === 0) return;
+  const openEdit = (registration: LegalOverview["registrations"][number]) => {
+    setEditingRegistration(registration);
+    setEditProfessionalId(registration.professional_id);
+    setEditOabNumber(registration.oab_number);
+    setEditOabState(registration.oab_state);
+  };
+
+  const saveEdit = async () => {
+    if (!currentTenant || !editingRegistration) return;
     setWorking(true);
-    setProgress(null);
     try {
-      const result = await legalIntegrationService.confirmInBatches(
-        currentTenant.tenantId,
-        selected,
-        frequency,
-        (confirmed, total) => setProgress({ confirmed, total }),
-      );
-      toast({
-        title: `${result.confirmed} processo(s) confirmado(s)`,
-        description: result.providerConfigured
-          ? "Os monitoramentos foram enviados ao Escavador."
-          : "Os monitoramentos ficaram na fila aguardando o token.",
+      await legalIntegrationService.updateRegistration({
+        tenantId: currentTenant.tenantId,
+        registrationId: editingRegistration.id,
+        professionalId: editProfessionalId,
+        oabNumber: editOabNumber,
+        oabState: editOabState,
       });
-      setSelected([]);
+      setEditingRegistration(null);
+      toast({
+        title: "OAB atualizada",
+        description: "As fontes foram atualizadas e a sincronização foi agendada.",
+      });
       await load();
     } catch (error) {
-      // Falha no meio de um lote não apaga o que já entrou.
-      if (error instanceof PartialConfirmationError) {
-        toast({
-          title: `${error.confirmed} de ${error.total} confirmados`,
-          description:
-            `${error.message} Recarregue e confirme os restantes.`,
-          variant: "destructive",
-        });
-        setSelected([]);
-        await load();
-      } else {
-        toast({
-          title: "Não foi possível confirmar",
-          description: error instanceof Error ? error.message : "Tente novamente.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Não foi possível editar a OAB",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setWorking(false);
-      setProgress(null);
+    }
+  };
+
+  const disableRegistration = async () => {
+    if (!currentTenant || !deletingRegistration) return;
+    setWorking(true);
+    try {
+      await legalIntegrationService.disableRegistration(
+        currentTenant.tenantId,
+        deletingRegistration.id,
+      );
+      setDeletingRegistration(null);
+      toast({
+        title: "OAB excluída do monitoramento",
+        description: "Os processos e todo o histórico importado foram preservados.",
+      });
+      await load();
+    } catch (error) {
+      toast({
+        title: "Não foi possível excluir a OAB",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setWorking(false);
     }
   };
 
@@ -392,11 +401,12 @@ export default function IntegracoesJuridicas() {
           <CardContent className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2 md:col-span-2">
               <Label>Profissional</Label>
-              <Select value={professionalId} onValueChange={setProfessionalId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <Select value={selectedProfessionalId} onValueChange={setProfessionalId}>
+                <SelectTrigger disabled={!overview?.access.canMutate}>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
                 <SelectContent>
-                  {(overview?.professionals ?? []).filter((item) => item.ativo)
-                    .map((item) => (
+                  {activeProfessionals.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
                         {item.nome}
                       </SelectItem>
@@ -408,6 +418,7 @@ export default function IntegracoesJuridicas() {
               <Label>Número da OAB</Label>
               <Input
                 inputMode="numeric"
+                disabled={!overview?.access.canMutate}
                 value={oabNumber}
                 onChange={(event) => setOabNumber(event.target.value.replace(/\D/g, ""))}
                 placeholder="12345"
@@ -417,6 +428,7 @@ export default function IntegracoesJuridicas() {
               <Label>UF</Label>
               <Input
                 value={oabState}
+                disabled={!overview?.access.canMutate}
                 maxLength={2}
                 onChange={(event) => setOabState(event.target.value.toUpperCase())}
               />
@@ -424,10 +436,17 @@ export default function IntegracoesJuridicas() {
             <div className="md:col-span-4 flex justify-end">
               <Button
                 onClick={() => void discover()}
-                disabled={working || !professionalId || !oabNumber || oabState.length !== 2}
+                disabled={
+                  working || !overview?.access.canMutate || !selectedProfessionalId ||
+                  !oabNumber || oabState.length !== 2
+                }
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                {overview?.providerConfigured ? "Buscar processos" : "Salvar OAB"}
+                {working
+                  ? "Salvando e agendando..."
+                  : overview?.providerConfigured
+                    ? "Salvar OAB e sincronizar"
+                    : "Salvar OAB"}
               </Button>
             </div>
           </CardContent>
@@ -435,133 +454,227 @@ export default function IntegracoesJuridicas() {
 
         <Card>
           <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-lg">Processos candidatos</CardTitle>
-            <div className="flex items-center gap-2">
-              {selected.length > 0 && (
-                <Badge>{selected.length} selecionado(s)</Badge>
-              )}
-              <Badge variant="secondary">{candidates.length} pendente(s)</Badge>
-            </div>
+            <CardTitle className="text-lg">OABs monitoradas</CardTitle>
+            <Badge variant="secondary">
+              {activeRegistrations.length} inscrição(ões)
+            </Badge>
           </CardHeader>
           <CardContent className="space-y-3">
-            {candidates.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-b pb-3">
-                <Button variant="outline" size="sm" onClick={togglePage}>
-                  {allOnPageSelected
-                    ? "Desmarcar esta página"
-                    : `Marcar os ${pageIds.length} desta página`}
-                </Button>
-                {selected.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelected([])}
-                  >
-                    Limpar seleção
-                  </Button>
-                )}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {page * PAGE_SIZE + 1}–
-                  {Math.min((page + 1) * PAGE_SIZE, candidates.length)} de{" "}
-                  {candidates.length}
-                </span>
-              </div>
-            )}
-
             {loading ? (
               <p className="text-sm text-muted-foreground">Carregando...</p>
-            ) : candidates.length === 0 ? (
+            ) : activeRegistrations.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum processo aguardando confirmação.
+                Nenhuma OAB cadastrada neste escopo.
               </p>
-            ) : pageItems.map((candidate) => (
-              <label
-                key={candidate.id}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border p-4"
-              >
-                <Checkbox
-                  checked={selected.includes(candidate.id)}
-                  onCheckedChange={(checked) =>
-                    setSelected((current) =>
-                      checked
-                        ? [...current, candidate.id]
-                        : current.filter((id) => id !== candidate.id)
-                    )}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{candidate.numero_cnj}</span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    {candidate.title_active_party ?? "Parte ativa não informada"} ×{" "}
-                    {candidate.title_passive_party ?? "parte passiva não informada"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {[candidate.tribunal, candidate.court_unit].filter(Boolean).join(" · ")}
-                  </span>
-                </span>
-              </label>
-            ))}
-
-            {pageCount > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((current) => current - 1)}
-                >
-                  Anterior
-                </Button>
-                <span className="min-w-24 text-center text-sm text-muted-foreground">
-                  Página {page + 1} de {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pageCount - 1}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Próxima
-                </Button>
-              </div>
-            )}
+            ) : activeRegistrations.map((registration) => {
+              const professional = professionalById.get(registration.professional_id);
+              const currentReference = `${registration.oab_number}/${registration.oab_state}`;
+              const sources = (sourcesByRegistration.get(registration.id) ?? [])
+                .filter((source) => source.reference === currentReference);
+              const latestSuccess = sources.reduce<string | null>(
+                (latest, source) => !source.last_success_at ||
+                    (latest && latest >= source.last_success_at)
+                  ? latest
+                  : source.last_success_at,
+                null,
+              ) ?? registration.last_discovery_at;
+              return (
+                <div key={registration.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+                  <div>
+                    <p className="font-medium">
+                      OAB {registration.oab_number}/{registration.oab_state}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {professional?.nome ?? registration.verified_name ?? "Profissional"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {sources.map((source) => (
+                        <Badge
+                          key={source.id}
+                          variant="outline"
+                          className={source.active && !source.last_error_code
+                            ? "border-emerald-300 text-emerald-800"
+                            : source.active && source.last_error_code === "integration_not_configured"
+                              ? "border-slate-300 text-slate-700"
+                              : source.active && source.last_error_code === "escavador_insufficient_balance"
+                                ? "border-amber-400 bg-amber-50 text-amber-900 font-medium"
+                                : source.active
+                                  ? "border-amber-300 text-amber-800"
+                                  : "border-red-300 text-red-800"}
+                        >
+                          {source.provider.toUpperCase()}: {source.last_error_code === "integration_not_configured"
+                            ? "não configurado"
+                            : source.last_error_code === "escavador_insufficient_balance"
+                              ? "saldo insuficiente"
+                              : source.last_error_code === "escavador_rate_limited"
+                                ? "limite de chamadas"
+                                : source.last_error_code
+                                  ? "retentativa"
+                                  : source.last_success_at
+                                    ? "sincronizado"
+                                    : "aguardando"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 text-right">
+                    <Badge variant={registration.status === "verified" ? "secondary" : "outline"}>
+                      {registration.status === "verified" ? "Verificada" : "Sincronização ativa"}
+                    </Badge>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {latestSuccess
+                        ? `Último sucesso: ${new Date(latestSuccess).toLocaleString("pt-BR")}`
+                        : "Aguardando primeira descoberta"}
+                    </p>
+                    <div className="flex flex-wrap justify-end gap-2 mt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={working}
+                        onClick={() => {
+                          if (overview?.access && !overview.access.canMutate) {
+                            toast({
+                              title: "Modo leitura (Conta Geral)",
+                              description: "Clique em 'Ativar suporte por 30 minutos' no topo da tela para habilitar a edição.",
+                              variant: "default",
+                            });
+                            return;
+                          }
+                          openEdit(registration);
+                        }}
+                        aria-label={`Editar OAB ${currentReference}`}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" /> Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={working}
+                        className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => {
+                          if (overview?.access && !overview.access.canMutate) {
+                            toast({
+                              title: "Modo leitura (Conta Geral)",
+                              description: "Clique em 'Ativar suporte por 30 minutos' no topo da tela para habilitar a exclusão.",
+                              variant: "default",
+                            });
+                            return;
+                          }
+                          setDeletingRegistration(registration);
+                        }}
+                        aria-label={`Excluir OAB ${currentReference}`}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
 
             {candidates.length > 0 && (
-              <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="w-48 space-y-2">
-                  <Label>Frequência</Label>
-                  <Select
-                    value={frequency}
-                    onValueChange={(value: "DIARIA" | "SEMANAL") => setFrequency(value)}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DIARIA">Diária</SelectItem>
-                      <SelectItem value="SEMANAL">Semanal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  onClick={() => void confirm()}
-                  disabled={working || selected.length === 0}
-                >
-                  {working && progress
-                    ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Confirmando {progress.confirmed} de {progress.total}…
-                      </>
-                    )
-                    : (
-                      <>
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Confirmar selecionados ({selected.length})
-                      </>
-                    )}
-                </Button>
-              </div>
+              <Alert>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <AlertTitle>Importação automática em andamento</AlertTitle>
+                <AlertDescription>
+                  {candidates.length} processo(s) descoberto(s) ainda estão na fila.
+                  Não é necessário selecionar ou confirmar; o servidor continuará sozinho.
+                </AlertDescription>
+              </Alert>
             )}
           </CardContent>
         </Card>
+
+        <Dialog
+          open={Boolean(editingRegistration)}
+          onOpenChange={(open) => !open && !working && setEditingRegistration(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar OAB</DialogTitle>
+              <DialogDescription>
+                A alteração atualizará o perfil e agendará nova sincronização.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="space-y-2">
+                <Label>Profissional</Label>
+                <Select value={editProfessionalId} onValueChange={setEditProfessionalId}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {activeProfessionals.map((professional) => (
+                      <SelectItem key={professional.id} value={professional.id}>
+                        {professional.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[1fr_120px]">
+                <div className="space-y-2">
+                  <Label>Número da OAB</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={editOabNumber}
+                    onChange={(event) => setEditOabNumber(event.target.value.replace(/\D/g, ""))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>UF</Label>
+                  <Input
+                    maxLength={2}
+                    value={editOabState}
+                    onChange={(event) => setEditOabState(event.target.value.toUpperCase())}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" disabled={working} onClick={() => setEditingRegistration(null)}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={working || !editProfessionalId || !editOabNumber || editOabState.length !== 2}
+                onClick={() => void saveEdit()}
+              >
+                {working && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog
+          open={Boolean(deletingRegistration)}
+          onOpenChange={(open) => !open && !working && setDeletingRegistration(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir esta OAB do monitoramento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A OAB {deletingRegistration?.oab_number}/{deletingRegistration?.oab_state}
+                {" "}será desativada. Os processos, partes, andamentos, documentos e
+                demais dados já importados serão preservados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={working}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={working}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void disableRegistration();
+                }}
+              >
+                {working && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                Excluir OAB
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );

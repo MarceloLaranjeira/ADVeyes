@@ -53,7 +53,7 @@ export function normalizeOperationalCalendar(
       date: hearing.data_hora,
       title: hearing.tipo,
       description: hearing.observacoes,
-      assigneeId: hearing.responsavel_id,
+      assigneeId: hearing.user_id,
       processId: hearing.processo_id,
       processNumber: hearing.processos?.numero ?? null,
       status: hearing.status,

@@ -275,8 +275,8 @@ const Publicacoes = () => {
         variant: "destructive",
       });
     } else {
-      setPublicacoes(publicationsResult.data ?? []);
-      setMovimentos(movementsResult.data ?? []);
+      setPublicacoes((publicationsResult.data ?? []) as Publicacao[]);
+      setMovimentos((movementsResult.data ?? []) as Movimento[]);
       setProcessos(
         new Map(
           (processesResult.data ?? []).map((process: Processo) => [
@@ -285,8 +285,8 @@ const Publicacoes = () => {
           ]),
         ),
       );
-      setSyncRuns(runsResult.data ?? []);
-      setSyncSources(sourcesResult.data ?? []);
+      setSyncRuns((runsResult.data ?? []) as SyncRun[]);
+      setSyncSources((sourcesResult.data ?? []) as SyncSource[]);
       setTaskByPublication(new Map(
         (linksResult.data ?? []).map((link: {
           publication_id: string;
@@ -501,10 +501,14 @@ const Publicacoes = () => {
 
   const syncPanel = useMemo(() => {
     const active = syncSources.filter((source) => source.active);
-    const nextRun = active
+    const nowIso = new Date().toISOString();
+    const upcomingRuns = active
       .map((source) => source.next_sync_at)
-      .sort()
-      .at(0) ?? null;
+      .filter((value): value is string => Boolean(value) && value > nowIso)
+      .sort();
+    const nextRun = upcomingRuns.at(0) ??
+      active.map((source) => source.next_sync_at).filter(Boolean).sort().at(-1) ??
+      null;
     const lastSuccess = syncSources
       .map((source) => source.last_success_at)
       .filter((value): value is string => Boolean(value))

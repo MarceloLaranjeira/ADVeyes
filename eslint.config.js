@@ -32,8 +32,30 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-refresh/only-export-components": ["warn", {
+        allowConstantExport: true,
+        allowExportNames: ["useJarvis", "useSubscription"],
+      }],
       "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  {
+    // Estas telas ainda acessam tabelas/relacionamentos legados que não têm
+    // uma representação completa no tipo gerado. Mantemos a exceção restrita
+    // aos arquivos conhecidos, sem desativar a regra para código novo.
+    files: [
+      "src/pages/CRM.tsx",
+      "src/pages/Clientes.tsx",
+      "src/pages/Contratos.tsx",
+      "src/pages/Financeiro.tsx",
+      "src/pages/Index.tsx",
+      "src/pages/Processos.tsx",
+      "src/pages/Relatorios.tsx",
+      "src/pages/TimeTracking.tsx",
+      "src/pages/portal/PortalDashboard.tsx",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 );

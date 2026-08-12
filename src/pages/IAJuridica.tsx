@@ -12,6 +12,7 @@ import {
   getAuthenticatedFunctionHeaders,
   getFunctionUrl,
 } from "@/integrations/supabase/client";
+import { generateOpenAITts } from "@/services/openai-tts";
 
 type Msg = { role: "user" | "assistant"; content: string; timestamp?: number };
 type TtsProvider = "browser" | "elevenlabs" | "openai" | "google";
@@ -43,8 +44,6 @@ const modes = [
   { value: "triagem", label: "Triagem de Leads", icon: UserCheck, desc: "Qualificação de clientes potenciais" },
 ];
 
-const openaiVoices = ["alloy", "nova", "echo", "fable", "onyx", "shimmer"];
-
 const ttsProviderLabels: Record<string, string> = {
   browser: "Navegador",
   elevenlabs: "ElevenLabs",
@@ -58,6 +57,8 @@ class HorusTTS {
   private apiKey: string;
   private voice: string;
   private synth: SpeechSynthesis | null;
+  private audio: HTMLAudioElement | null = null;
+  private audioUrl: string | null = null;
 
   constructor(provider: TtsProvider, apiKey: string, voice = "nova") {
     this.provider = provider;
@@ -68,6 +69,10 @@ class HorusTTS {
 
   stop() {
     if (this.synth) this.synth.cancel();
+    this.audio?.pause();
+    this.audio = null;
+    if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
+    this.audioUrl = null;
   }
 
   async speak(text: string, onEnd?: () => void): Promise<void> {
@@ -77,7 +82,7 @@ class HorusTTS {
 
     if (this.provider === "browser") return this.speakBrowser(clean, onEnd);
     if (this.provider === "elevenlabs" && this.apiKey) return this.speakElevenLabs(clean, onEnd);
-    if (this.provider === "openai" && this.apiKey) return this.speakOpenAI(clean, onEnd);
+    if (this.provider === "openai") return this.speakOpenAI(clean, onEnd);
     if (this.provider === "google" && this.apiKey) return this.speakGoogle(clean, onEnd);
     return this.speakBrowser(clean, onEnd);
   }
@@ -118,21 +123,25 @@ class HorusTTS {
   }
 
   private async speakOpenAI(text: string, onEnd?: () => void): Promise<void> {
-    try {
-      const resp = await fetch("https://api.openai.com/v1/audio/speech", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "tts-1", input: text, voice: this.voice || "nova", response_format: "mp3" }),
+    const chunks = text.match(/[\s\S]{1,3800}(?:\s|$)/g) ?? [text];
+    for (const chunk of chunks) {
+      const blob = await generateOpenAITts(chunk.trim(), this.voice || "marin");
+      await new Promise<void>((resolve, reject) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        this.audio = audio;
+        this.audioUrl = url;
+        const release = () => {
+          if (this.audioUrl === url) this.audioUrl = null;
+          if (this.audio === audio) this.audio = null;
+          URL.revokeObjectURL(url);
+        };
+        audio.onended = () => { release(); resolve(); };
+        audio.onerror = () => { release(); reject(new Error("Falha ao reproduzir a voz OpenAI.")); };
+        void audio.play().catch((error) => { release(); reject(error); });
       });
-      if (!resp.ok) throw new Error("OpenAI TTS error");
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.onended = () => { URL.revokeObjectURL(url); onEnd?.(); };
-      audio.play();
-    } catch {
-      this.speakBrowser(text, onEnd);
     }
+    onEnd?.();
   }
 
   private async speakGoogle(text: string, onEnd?: () => void): Promise<void> {
@@ -166,9 +175,9 @@ const IAJuridica = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [ttsEnabled, setTtsEnabled] = useState(() => sessionStorage.getItem("horus_tts_enabled") !== "false");
-  const [ttsProvider] = useState<TtsProvider>(() => (sessionStorage.getItem("horus_tts_provider") as TtsProvider) || "browser");
+  const [ttsProvider] = useState<TtsProvider>(() => (sessionStorage.getItem("horus_tts_provider") as TtsProvider) || "openai");
   const [ttsApiKey] = useState(() => sessionStorage.getItem("horus_tts_key") || "");
-  const [ttsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "nova");
+  const [ttsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "marin");
   const [showSettings, setShowSettings] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [showModePanel, setShowModePanel] = useState(false);
@@ -254,7 +263,11 @@ const IAJuridica = () => {
         toast({ title: "Créditos insuficientes", variant: "destructive" });
         setIsLoading(false); setVoiceState("idle"); return;
       }
-      if (!resp.ok || !resp.body) throw new Error("Falha ao conectar com Horus");
+      if (!resp.ok) {
+        const failure = await resp.json().catch(() => null) as { error?: string } | null;
+        throw new Error(failure?.error || "Falha ao conectar com Horus");
+      }
+      if (!resp.body) throw new Error("Horus não retornou conteúdo");
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -347,7 +360,7 @@ const IAJuridica = () => {
             </button>
 
             <button
-              onClick={() => { setTtsEnabled(v => !v); ttsRef.current?.stop(); localStorage.setItem("horus_tts_enabled", String(!ttsEnabled)); }}
+              onClick={() => { setTtsEnabled(v => !v); ttsRef.current?.stop(); sessionStorage.setItem("horus_tts_enabled", String(!ttsEnabled)); }}
               className={`p-1.5 rounded-lg border transition-all ${ttsEnabled ? "border-primary/30 bg-primary/5 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
               title={ttsEnabled ? "Desligar voz" : "Ligar voz"}
             >

@@ -8,6 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
+
+type Processo = Database["public"]["Tables"]["processos"]["Row"];
 
 const areas = ["Penal", "Cível", "Família", "Execução Penal", "Recurso", "Trabalhista"];
 const statuses = ["Em andamento", "Aguardando audiência", "Sentença proferida", "Recurso interposto", "Arquivado"];
@@ -16,7 +19,7 @@ interface ProcessoFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  editData?: Record<string, any>;
+  editData?: Partial<Processo>;
 }
 
 export const ProcessoForm = ({ open, onOpenChange, onSuccess, editData }: ProcessoFormProps) => {

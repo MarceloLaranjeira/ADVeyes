@@ -48,12 +48,22 @@ export async function ingestProcessMetadata(
   },
 ): Promise<void> {
   const metadata = input.metadata;
+  const { data: current } = await admin
+    .from("processos")
+    .select("vara, area, data_ajuizamento")
+    .eq("tenant_id", input.tenantId)
+    .eq("id", input.processId)
+    .maybeSingle();
+
   const { error } = await admin.from("processos").update({
     tribunal: metadata.tribunal,
     class_code: metadata.classCode,
     class_name: metadata.className,
+    area: current?.area || metadata.className || undefined,
     subjects: metadata.subjects,
     adjudicating_body: metadata.adjudicatingBody,
+    vara: current?.vara || metadata.adjudicatingBody || undefined,
+    data_ajuizamento: current?.data_ajuizamento || metadata.filedAt || undefined,
     procedural_system: metadata.proceduralSystem,
     court_level: metadata.courtLevel,
     public_secrecy_level: metadata.publicSecrecyLevel,
@@ -125,6 +135,7 @@ export async function ingestProcessParties(
         : party.internalClassification,
       classification_locked: locked,
       related_lawyers: party.relatedLawyers,
+      contact_data: party.contact,
       provider: party.provider,
       external_id: party.externalId,
       identity_hash: identityHash,
@@ -176,34 +187,49 @@ export async function reconcileProcessContacts(
 
   const { data: parties, error: partiesError } = await admin
     .from("process_parties")
-    .select("id, contact_id, display_name, normalized_name, person_type, document_hash, internal_classification, provider, external_id, source_references")
+    .select("id, contact_id, display_name, normalized_name, person_type, document_hash, internal_classification, provider, external_id, source_references, contact_data")
     .eq("tenant_id", input.tenantId)
     .eq("process_id", input.processId);
   if (partiesError) throw partiesError;
-  const unlinked = (parties ?? []).filter((party) => !party.contact_id);
-  if (!unlinked.length) return { linked: 0, created: 0 };
+  const processParties = parties ?? [];
+  if (!processParties.length) return { linked: 0, created: 0 };
 
-  const names = [...new Set(unlinked.map((party) => String(party.normalized_name)))];
+  const names = [...new Set(processParties.map((party) => String(party.normalized_name)))];
   const { data: contacts, error: contactsError } = await admin
     .from("clientes")
-    .select("id, normalized_name, person_type, document_hash")
+    .select("id, normalized_name, person_type, document_hash, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
     .eq("tenant_id", input.tenantId)
     .in("normalized_name", names);
   if (contactsError) throw contactsError;
 
-  const byCanonicalKey = new Map<string, { id: string; document_hash: string | null }>();
+  interface ContactRow {
+    id: string;
+    document_hash: string | null;
+    telefone: string | null;
+    email: string | null;
+    endereco: string | null;
+    relationship_type: string;
+    classification_locked: boolean;
+    source_metadata: Record<string, unknown> | null;
+  }
+  const byCanonicalKey = new Map<string, ContactRow>();
+  const byId = new Map<string, ContactRow>();
   for (const contact of contacts ?? []) {
+    const typed = contact as ContactRow;
     byCanonicalKey.set(
       `${contact.normalized_name}|${contact.person_type ?? "desconhecido"}`,
-      contact as { id: string; document_hash: string | null },
+      typed,
     );
+    byId.set(contact.id, typed);
   }
 
   let linked = 0;
   let created = 0;
-  for (const party of unlinked) {
+  for (const party of processParties) {
     const key = `${party.normalized_name}|${party.person_type}`;
-    let contact = byCanonicalKey.get(key);
+    let contact = party.contact_id
+      ? byId.get(party.contact_id)
+      : byCanonicalKey.get(key);
     if (contact?.document_hash && party.document_hash &&
       contact.document_hash !== party.document_hash) {
       contact = undefined;
@@ -222,26 +248,69 @@ export async function reconcileProcessContacts(
           source_provider: party.provider,
           external_id: null,
           document_hash: party.document_hash,
+          telefone: party.contact_data?.phone ?? null,
+          email: party.contact_data?.email ?? null,
+          endereco: party.contact_data?.address ?? null,
           classification_locked: false,
           source_metadata: {
             process_ids: [input.processId],
             source_references: party.source_references ?? {},
           },
         })
-        .select("id, document_hash")
+        .select("id, document_hash, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
         .single();
       if (insertError) throw insertError;
-      contact = inserted as { id: string; document_hash: string | null };
+      contact = inserted as ContactRow;
       byCanonicalKey.set(key, contact);
+      byId.set(contact.id, contact);
       created += 1;
     }
 
-    const { error: linkError } = await admin.from("process_parties")
-      .update({ contact_id: contact.id })
+    const metadata = contact.source_metadata &&
+        typeof contact.source_metadata === "object"
+      ? contact.source_metadata
+      : {};
+    const currentProcessIds = Array.isArray(metadata.process_ids)
+      ? metadata.process_ids.filter((value): value is string => typeof value === "string")
+      : [];
+    const contactData = party.contact_data && typeof party.contact_data === "object"
+      ? party.contact_data as { phone?: string | null; email?: string | null; address?: string | null }
+      : {};
+    const patch = {
+      telefone: contact.telefone || contactData.phone || null,
+      email: contact.email || contactData.email || null,
+      endereco: contact.endereco || contactData.address || null,
+      relationship_type: contact.classification_locked
+        ? contact.relationship_type
+        : party.internal_classification,
+      source_metadata: {
+        ...metadata,
+        process_ids: [...new Set([...currentProcessIds, input.processId])],
+        source_references: {
+          ...(metadata.source_references && typeof metadata.source_references === "object"
+            ? metadata.source_references as Record<string, unknown>
+            : {}),
+          ...(party.source_references ?? {}),
+        },
+      },
+    };
+    const { error: enrichmentError } = await admin.from("clientes")
+      .update(patch)
       .eq("tenant_id", input.tenantId)
-      .eq("id", party.id);
-    if (linkError) throw linkError;
-    linked += 1;
+      .eq("id", contact.id);
+    if (enrichmentError) throw enrichmentError;
+    contact = { ...contact, ...patch };
+    byCanonicalKey.set(key, contact);
+    byId.set(contact.id, contact);
+
+    if (!party.contact_id) {
+      const { error: linkError } = await admin.from("process_parties")
+        .update({ contact_id: contact.id })
+        .eq("tenant_id", input.tenantId)
+        .eq("id", party.id);
+      if (linkError) throw linkError;
+      linked += 1;
+    }
   }
 
   return { linked, created };
@@ -368,7 +437,7 @@ export async function ingestMovements(
     .maybeSingle();
   if (processError) throw processError;
 
-  const rows = await Promise.all(input.movements
+  const normalizedRows = await Promise.all(input.movements
     .filter((movement) => movement.externalId)
     .map(async (movement) => ({
       tenant_id: input.tenantId,
@@ -408,6 +477,14 @@ export async function ingestMovements(
       provider_payload: movement.payload,
     })));
 
+  // O DataJud pode repetir o mesmo movimento dentro da própria resposta.
+  // O Postgres rejeita duas linhas com a mesma chave em um único UPSERT
+  // (SQLSTATE 21000), então consolidamos o lote antes de persistir. A última
+  // ocorrência é mantida por normalmente carregar os complementos mais ricos.
+  const rows = [...new Map(
+    normalizedRows.map((row) => [row.external_id, row]),
+  ).values()];
+
   if (!rows.length) {
     return {
       received: input.movements.length,
@@ -417,14 +494,22 @@ export async function ingestMovements(
     };
   }
 
-  const { data: existingRows, error: existingError } = await admin
-    .from("process_movements")
-    .select("external_id")
-    .eq("tenant_id", input.tenantId)
-    .eq("process_id", input.processId)
-    .eq("provider", input.provider)
-    .in("external_id", rows.map((row) => row.external_id));
-  if (existingError) throw existingError;
+  // Um processo volumoso pode trazer centenas de IDs. Enviar todos em um
+  // único filtro `in` excede o limite de URL do PostgREST e fazia a fonte
+  // entrar em retentativa. Consultas curtas mantêm a ingestão idempotente.
+  const existingRows: Array<{ external_id: string }> = [];
+  const externalIds = rows.map((row) => row.external_id);
+  for (let offset = 0; offset < externalIds.length; offset += 100) {
+    const { data: batch, error: existingError } = await admin
+      .from("process_movements")
+      .select("external_id")
+      .eq("tenant_id", input.tenantId)
+      .eq("process_id", input.processId)
+      .eq("provider", input.provider)
+      .in("external_id", externalIds.slice(offset, offset + 100));
+    if (existingError) throw existingError;
+    existingRows.push(...((batch ?? []) as Array<{ external_id: string }>));
+  }
   const existingIds = new Set(
     (existingRows ?? []).map((row) => row.external_id as string),
   );
