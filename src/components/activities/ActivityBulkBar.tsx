@@ -1,0 +1,13 @@
+import { Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ActivityPriority, ActivityStatus, ActivityTeamMember } from "@/types/activities";
+
+export type BulkAction = { kind: "status"; value: ActivityStatus } | { kind: "priority"; value: ActivityPriority } | { kind: "assignee"; value: string | null } | { kind: "due"; value: string | null } | { kind: "read" } | { kind: "delete" };
+
+export function ActivityBulkBar({ count, members, busy, onAction, onClear }: { count: number; members: ActivityTeamMember[]; busy: boolean; onAction: (action: BulkAction) => void; onClear: () => void }) {
+  if (!count) return null;
+  return <div className="sticky bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur" role="toolbar" aria-label="Ações em lote"><strong className="mr-2 text-sm">{count} selecionada(s)</strong><Select onValueChange={value => onAction({ kind: "status", value: value as ActivityStatus })}><SelectTrigger className="w-40"><SelectValue placeholder="Mudar status" /></SelectTrigger><SelectContent><SelectItem value="pendente">A Fazer</SelectItem><SelectItem value="em_andamento">Fazendo</SelectItem><SelectItem value="concluída">Concluída</SelectItem></SelectContent></Select><Select onValueChange={value => onAction({ kind: "priority", value: value as ActivityPriority })}><SelectTrigger className="w-40"><SelectValue placeholder="Prioridade" /></SelectTrigger><SelectContent><SelectItem value="alta">Alta</SelectItem><SelectItem value="média">Média</SelectItem><SelectItem value="baixa">Baixa</SelectItem></SelectContent></Select><Select onValueChange={value => onAction({ kind: "assignee", value: value === "none" ? null : value })}><SelectTrigger className="w-44"><SelectValue placeholder="Reatribuir" /></SelectTrigger><SelectContent><SelectItem value="none">Sem responsável</SelectItem>{members.map(member => <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>)}</SelectContent></Select><Input type="date" className="w-40" aria-label="Alterar prazo em lote" onChange={event => event.target.value && onAction({ kind: "due", value: event.target.value })} /><Button variant="outline" disabled={busy} onClick={() => onAction({ kind: "read" })}>Marcar lidas</Button><Button variant="destructive" disabled={busy} onClick={() => onAction({ kind: "delete" })}><Trash2 className="mr-2 h-4 w-4" />Excluir</Button><Button variant="ghost" size="icon" onClick={onClear} aria-label="Limpar seleção"><X className="h-4 w-4" /></Button></div>;
+}
+

@@ -1,7 +1,7 @@
 # ADVeyes — Atividades operacionais superiores
 
 Data: 13 de agosto de 2026  
-Status: aprovado em conversa; aguardando revisão do documento
+Status: aprovado e implementado
 
 ## Objetivo
 
@@ -323,4 +323,3 @@ confirmação do banco.
 - edição colaborativa em tempo real de descrição;
 - reestruturação geral de Processos, Intimações ou CRM;
 - cópia da identidade visual, textos ou ativos da ADVBOX.
-

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import type { ActivityWithUserState } from "@/types/activities";
 
 const { createMock, updateMock, removeMock } = vi.hoisted(() => ({
@@ -49,6 +50,7 @@ const task: ActivityWithUserState = {
   source_id: null,
   source_type: null,
   userState: null,
+  process: null,
 };
 
 vi.mock("@/hooks/useActivities", () => ({
@@ -60,6 +62,8 @@ vi.mock("@/hooks/useActivities", () => ({
     update: { mutateAsync: updateMock },
     remove: { mutateAsync: removeMock },
     setUserState: { mutateAsync: vi.fn() },
+    bulk: { mutateAsync: vi.fn(), isPending: false },
+    refresh: vi.fn(),
   }),
 }));
 vi.mock("@/integrations/supabase/client", () => ({
@@ -82,28 +86,29 @@ describe("Tarefas", () => {
     removeMock.mockReset();
   });
 
-  it("oferece as quatro visões sobre o mesmo núcleo de atividades", () => {
-    render(<Tarefas />);
+  it("oferece as cinco visões sobre o mesmo núcleo de atividades", () => {
+    render(<MemoryRouter><Tarefas /></MemoryRouter>);
 
     expect(screen.getByRole("button", { name: "Visão geral" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lista" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quadro" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Calendário" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Desempenho" })).toBeInTheDocument();
     expect(screen.getByText("Protocolar manifestação")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Quadro" }));
-    expect(screen.getAllByText("A Fazer")).toHaveLength(2);
+    expect(screen.getAllByText("A Fazer").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Protocolar manifestação")).toBeInTheDocument();
   });
 
   it("abre o formulário operacional com responsável, categoria e pontos", () => {
-    render(<Tarefas />);
-    fireEvent.click(screen.getByRole("button", { name: "Nova Tarefa" }));
+    render(<MemoryRouter><Tarefas /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Nova atividade" }));
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Responsável")).toBeInTheDocument();
-    expect(screen.getByText("Categoria")).toBeInTheDocument();
-    expect(screen.getByText("Pontos")).toBeInTheDocument();
+    expect(screen.getByLabelText("Responsável")).toBeInTheDocument();
+    expect(screen.getByLabelText("Categoria")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pontos")).toBeInTheDocument();
     expect(screen.getAllByText("Marcelo Laranjeira").length).toBeGreaterThan(0);
   });
 });

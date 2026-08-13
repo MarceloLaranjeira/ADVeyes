@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { activitiesService } from "@/services/activities";
-import type { ActivityInsert, ActivityUpdate, ActivityWithUserState } from "@/types/activities";
+import type { ActivityBulkInput, ActivityInsert, ActivityUpdate, ActivityWithUserState } from "@/types/activities";
 
 export function useActivities(tenantId: string | null, userId: string | null) {
   const queryClient = useQueryClient();
@@ -76,6 +76,10 @@ export function useActivities(tenantId: string | null, userId: string | null) {
     },
     onSettled: refresh,
   });
+  const bulk = useMutation({
+    mutationFn: (input: ActivityBulkInput) => activitiesService.bulk(tenantId!, userId!, input),
+    onSettled: refresh,
+  });
 
   return {
     activities: query.data ?? [],
@@ -86,5 +90,6 @@ export function useActivities(tenantId: string | null, userId: string | null) {
     update,
     remove,
     setUserState,
+    bulk,
   };
 }

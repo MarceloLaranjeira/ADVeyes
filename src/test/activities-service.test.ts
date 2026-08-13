@@ -63,6 +63,34 @@ describe("activitiesService", () => {
     expect(result[0].userState?.favorita).toBe(true);
   });
 
+  it("carrega o contexto do processo em consulta separada e restrita ao tenant", async () => {
+    const linkedActivity = { ...activity, processo_id: "process-1" };
+    const taskOrder = vi.fn().mockResolvedValue({ data: [linkedActivity], error: null });
+    const taskTenant = vi.fn().mockReturnValue({ order: taskOrder });
+    const stateUser = vi.fn().mockResolvedValue({ data: [], error: null });
+    const stateTenant = vi.fn().mockReturnValue({ eq: stateUser });
+    const processIds = vi.fn().mockResolvedValue({
+      data: [{ id: "process-1", numero: "0001234-56.2026.8.04.0001", cliente_id: "client-1", cliente_nome: "Cliente Exemplo" }],
+      error: null,
+    });
+    const processTenant = vi.fn().mockReturnValue({ in: processIds });
+
+    fromMock
+      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ eq: taskTenant }) })
+      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ eq: stateTenant }) })
+      .mockReturnValueOnce({ select: vi.fn().mockReturnValue({ eq: processTenant }) });
+
+    const result = await activitiesService.list("tenant-1", "user-1");
+
+    expect(processTenant).toHaveBeenCalledWith("tenant_id", "tenant-1");
+    expect(processIds).toHaveBeenCalledWith("id", ["process-1"]);
+    expect(result[0].process).toEqual(expect.objectContaining({
+      id: "process-1",
+      number: "0001234-56.2026.8.04.0001",
+      clientName: "Cliente Exemplo",
+    }));
+  });
+
   it("sempre restringe atualização e exclusão ao tenant selecionado", async () => {
     const updateId = vi.fn().mockResolvedValue({ error: null });
     const updateTenant = vi.fn().mockReturnValue({ eq: updateId });
@@ -97,5 +125,21 @@ describe("activitiesService", () => {
       expect.objectContaining({ favorita: true, user_id: "user-1" }),
       { onConflict: "tenant_id,tarefa_id,user_id" },
     );
+  });
+
+  it("separa sucessos e falhas em operações em lote", async () => {
+    const updateId = vi.fn()
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: { message: "acesso negado" } });
+    const updateTenant = vi.fn().mockReturnValue({ eq: updateId });
+    fromMock.mockReturnValue({ update: vi.fn().mockReturnValue({ eq: updateTenant }) });
+
+    const result = await activitiesService.bulk("tenant-1", "user-1", {
+      ids: ["task-1", "task-2"],
+      update: { prioridade: "alta" },
+    });
+
+    expect(result.succeeded).toEqual(["task-1"]);
+    expect(result.failed).toEqual([{ id: "task-2", message: "acesso negado" }]);
   });
 });

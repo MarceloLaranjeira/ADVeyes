@@ -7,6 +7,14 @@ export type ActivityUserState = Database["public"]["Tables"]["tarefa_user_state"
 
 export interface ActivityWithUserState extends Activity {
   userState: ActivityUserState | null;
+  process: ActivityProcess | null;
+}
+
+export interface ActivityProcess {
+  id: string;
+  number: string;
+  clientId: string | null;
+  clientName: string | null;
 }
 
 export interface ActivityTeamMember {
@@ -53,4 +61,30 @@ export interface ActivityFilters {
   due: ActivityDueKind | "all";
   favoritesOnly: boolean;
   unreadOnly: boolean;
+  category: string | null;
+}
+
+export type ActivityView = "overview" | "list" | "kanban" | "calendar" | "performance";
+export type ActivityScope = "mine" | "office";
+export type ActivitySort = "due_asc" | "due_desc" | "priority" | "newest" | "oldest" | "title" | "points";
+
+export interface ActivityRouteState {
+  view: ActivityView;
+  scope: ActivityScope;
+  filters: ActivityFilters;
+  sort: ActivitySort;
+  page: number;
+  pageSize: number;
+}
+
+export interface ActivityBulkInput {
+  ids: string[];
+  update?: ActivityUpdate;
+  markReadAt?: string;
+  remove?: boolean;
+}
+
+export interface ActivityBulkResult {
+  succeeded: string[];
+  failed: Array<{ id: string; message: string }>;
 }
