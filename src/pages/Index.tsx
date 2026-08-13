@@ -27,6 +27,7 @@ const IconAlerta = AlertTriangle;
 const IconSistema = ActivityIcon;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { calculateActivityMetrics } from "@/lib/activity-status";
@@ -205,7 +206,19 @@ const Index = () => {
     <AppLayout>
       <div className="animate-fade-in">
         <OnboardingResumeBanner />
-        <TrialBanner />
+        {/* ADVBOX Navigation Tabs */}
+        <div className="mb-4">
+          <Tabs defaultValue="visao_geral" className="w-full">
+            <TabsList className="bg-muted/50 flex-wrap h-auto gap-1">
+              <TabsTrigger value="visao_geral" className="text-xs">Visão Geral</TabsTrigger>
+              <TabsTrigger value="lista" className="text-xs" onClick={() => navigate("/tarefas?view=lista")}>Lista</TabsTrigger>
+              <TabsTrigger value="quadro" className="text-xs" onClick={() => navigate("/tarefas?view=kanban")}>Quadro</TabsTrigger>
+              <TabsTrigger value="desempenho" className="text-xs" onClick={() => navigate("/relatorios")}>Desempenho</TabsTrigger>
+              <TabsTrigger value="configuracoes" className="text-xs" onClick={() => navigate("/configuracoes")}>Configurações</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
         {/* Header - Astrea greeting */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">

@@ -291,10 +291,12 @@ const Configuracoes = () => {
         <Tabs defaultValue="geral" className="max-w-4xl">
           <TabsList className="mb-6 bg-muted/50 flex-wrap h-auto gap-1">
             <TabsTrigger value="geral" className="gap-2 text-xs"><Palette className="w-3.5 h-3.5" /> Geral</TabsTrigger>
-            <TabsTrigger value="voz" className="gap-2 text-xs"><Volume2 className="w-3.5 h-3.5" /> Voz & IA</TabsTrigger>
-            <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> Tribunais</TabsTrigger>
+            <TabsTrigger value="usuarios" className="gap-2 text-xs"><User className="w-3.5 h-3.5" /> Usuários & Equipe</TabsTrigger>
+            <TabsTrigger value="voz" className="gap-2 text-xs"><Bot className="w-3.5 h-3.5" /> IA & Prompt</TabsTrigger>
+            <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> OABs & Monitoramento</TabsTrigger>
+            <TabsTrigger value="tarefas" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
             <TabsTrigger value="integracoes" className="gap-2 text-xs">
-              <Zap className="w-3.5 h-3.5" /> Integrações
+              <Zap className="w-3.5 h-3.5" /> Integrações & API
               {planData?.status === "trial" && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 ml-0.5" />}
             </TabsTrigger>
             <TabsTrigger value="notificacoes" className="gap-2 text-xs"><Bell className="w-3.5 h-3.5" /> Notificações</TabsTrigger>
@@ -352,6 +354,81 @@ const Configuracoes = () => {
                   <h3 className="font-semibold font-serif">Importar Processos Manualmente</h3>
                 </div>
                 <ImportarProcessos />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === USUÁRIOS & EQUIPE === */}
+          <TabsContent value="usuarios" className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-primary" />
+                    <div>
+                      <h3 className="font-semibold font-serif">Gestão de Usuários e Colaboradores</h3>
+                      <p className="text-xs text-muted-foreground">Configuração de perfis, níveis de acesso e permissões da equipe</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/equipe")} className="gap-2">
+                    <User className="w-3.5 h-3.5" /> Abrir Gestão de Equipe
+                  </Button>
+                </div>
+                <div className="rounded-lg border p-4 bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between py-1">
+                    <div>
+                      <Label className="font-medium text-sm">Habilitar registro de acessos e auditoria</Label>
+                      <p className="text-xs text-muted-foreground">Registra cada acesso, alteração de processo e ação realizada no sistema</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-t pt-3">
+                    <div>
+                      <Label className="font-medium text-sm">Permissão de acesso financeiro por perfil</Label>
+                      <p className="text-xs text-muted-foreground">Restringe visualização de honorários e receitas apenas para administradores</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === TAREFAS & WORKFLOWS === */}
+          <TabsContent value="tarefas" className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="w-5 h-5 text-primary" />
+                    <div>
+                      <h3 className="font-semibold font-serif">Tarefas, Metas e Workflows</h3>
+                      <p className="text-xs text-muted-foreground">Pontuação de produtividade (TaskScore), categorias e fluxos de trabalho</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/tarefas")} className="gap-2">
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> Ir para Tarefas
+                  </Button>
+                </div>
+                <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-semibold">Meta Semanal por Colaborador (Pontos)</Label>
+                      <Input type="number" defaultValue="50" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold">Pontos por Tarefa Concluída</Label>
+                      <Input type="number" defaultValue="1" className="mt-1" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <div>
+                      <Label className="font-medium text-sm">Criar tarefa automática para novas intimações</Label>
+                      <p className="text-xs text-muted-foreground">Gera tarefa pendente em /tarefas para toda publicação oficial do DJEN/PJe</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

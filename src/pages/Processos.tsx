@@ -29,8 +29,10 @@ interface Processo {
   numero: string;
   cliente_nome?: string;
   area?: string;
+  class_name?: string;
   status?: string;
   vara?: string;
+  adjudicating_body?: string;
   advogado?: string;
   percentual_exito?: number;
   polo_ativo?: string;
@@ -553,10 +555,10 @@ const Processos = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/40">
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Número</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Cliente</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Área</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vara/Câmara</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Número CNJ</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Partes / Envolvidos</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Classe / Área</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vara / Órgão Julgador</th>
                 <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Advogado</th>
                 <th className="text-right p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
@@ -572,11 +574,19 @@ const Processos = () => {
                   className="hover:bg-muted/20 transition-colors cursor-pointer"
                   onClick={() => navigate(`/processos/${p.id}`)}
                 >
-                  <td className="p-4 text-sm font-mono text-primary">{p.numero}</td>
-                  <td className="p-4 text-sm font-medium">{p.cliente_nome}</td>
-                  <td className="p-4"><AreaBadge area={p.area} /></td>
-                  <td className="p-4 text-sm text-muted-foreground">{p.vara || "—"}</td>
-                  <td className="p-4 text-sm">{p.status}</td>
+                  <td className="p-4 text-sm font-mono text-primary font-semibold">{p.numero}</td>
+                  <td className="p-4 text-sm max-w-[260px]">
+                    <p className="font-medium text-foreground truncate">{p.cliente_nome || p.polo_ativo || "Cliente não identificado"}</p>
+                    {p.polo_passivo && (
+                      <p className="text-xs text-muted-foreground truncate">vs. {p.polo_passivo}</p>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <p className="text-xs font-medium text-foreground mb-1">{p.class_name || p.area || "Cível"}</p>
+                    <AreaBadge area={p.area || "Cível"} />
+                  </td>
+                  <td className="p-4 text-sm text-muted-foreground max-w-[200px] truncate">{p.adjudicating_body || p.vara || "—"}</td>
+                  <td className="p-4 text-sm"><Badge variant="outline">{p.status || "Em andamento"}</Badge></td>
                   <td className="p-4 text-sm text-muted-foreground">{p.advogado || "—"}</td>
                   <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
