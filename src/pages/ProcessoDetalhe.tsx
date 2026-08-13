@@ -32,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
-import { exportProcessosPDF } from "@/lib/pdf-export";
+import { exportProcessoDetalhadoPDF, exportProcessosPDF } from "@/lib/pdf-export";
 import { buildProcessTimeline, isSafeExternalUrl } from "@/lib/process-timeline";
 
 // As tabelas jurídicas ainda não estão nos tipos gerados do Supabase.
@@ -250,7 +250,19 @@ const ProcessoDetalhe = () => {
             <p className="mt-2 text-sm text-muted-foreground">{processo.cliente_nome || "Cliente não identificado"} · {processo.vara || processo.adjudicating_body || "Vara não informada"}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => exportProcessosPDF([processo as any])}><Download className="h-4 w-4" /> Relatório</Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => exportProcessoDetalhadoPDF({
+                tenantName: currentTenant?.name,
+                processo: processo as any,
+                parties: collections.parties as any,
+                movements: collections.movements as any,
+                publications: collections.publications as any,
+              })}
+            >
+              <Download className="h-4 w-4" /> Relatório
+            </Button>
             <Button className="gap-2" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Editar processo</Button>
           </div>
         </div>
