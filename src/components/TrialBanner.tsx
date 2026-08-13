@@ -40,7 +40,7 @@ export function TrialBanner() {
   if (status === "trial" && trialDaysLeft <= 3) {
     return (
       <div className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-400">
+        <div className="flex items-center gap-2 text-sm text-yellow-700">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>
             {trialDaysLeft <= 0

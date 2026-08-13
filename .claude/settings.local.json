@@ -8,7 +8,11 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "mcp__claude_ai_Supabase__get_logs",
-      "WebFetch(domain:skills.sh)"
+      "WebFetch(domain:skills.sh)",
+      "Bash(npx supabase functions deploy:*)",
+      "PowerShell(npx supabase functions deploy:*)",
+      "Bash(npx supabase functions list:*)",
+      "PowerShell(npx supabase functions list:*)"
     ]
   }
 }

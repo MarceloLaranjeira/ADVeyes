@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -212,7 +213,6 @@ const Financeiro = () => {
     fetchData();
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const formatPct = (v: number) => `${v}%`;
 
   return (
@@ -244,12 +244,12 @@ const Financeiro = () => {
             <p className="text-lg font-bold">{formatCurrency(totalReceita)}</p>
           </CardContent></Card>
           <Card className="col-span-1"><CardContent className="p-4">
-            <div className="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center mb-2"><CheckCircle2 className="w-4 h-4 text-green-600" /></div>
+            <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center mb-2"><CheckCircle2 className="w-4 h-4 text-green-600" /></div>
             <p className="text-xs text-muted-foreground">Recebido</p>
             <p className="text-lg font-bold text-green-600">{formatCurrency(totalRecebido)}</p>
           </CardContent></Card>
           <Card className="col-span-1"><CardContent className="p-4">
-            <div className="w-9 h-9 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center mb-2"><Clock className="w-4 h-4 text-yellow-600" /></div>
+            <div className="w-9 h-9 rounded-lg bg-yellow-50 flex items-center justify-center mb-2"><Clock className="w-4 h-4 text-yellow-600" /></div>
             <p className="text-xs text-muted-foreground">A Receber</p>
             <p className="text-lg font-bold text-yellow-600">{formatCurrency(totalPendente)}</p>
           </CardContent></Card>
@@ -259,13 +259,13 @@ const Financeiro = () => {
             <p className="text-lg font-bold text-destructive">{formatCurrency(totalAtrasado)}</p>
           </CardContent></Card>
           <Card className="col-span-1"><CardContent className="p-4">
-            <div className="w-9 h-9 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-2"><TrendingDown className="w-4 h-4 text-red-500" /></div>
+            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center mb-2"><TrendingDown className="w-4 h-4 text-red-500" /></div>
             <p className="text-xs text-muted-foreground">Total Despesas</p>
             <p className="text-lg font-bold text-red-600">{formatCurrency(totalDespesas)}</p>
           </CardContent></Card>
-          <Card className={`col-span-1 ${resultadoLiquido >= 0 ? "border-green-200 dark:border-green-800" : "border-red-200 dark:border-red-800"}`}>
+          <Card className={`col-span-1 ${resultadoLiquido >= 0 ? "border-green-200" : "border-red-200"}`}>
             <CardContent className="p-4">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 ${resultadoLiquido >= 0 ? "bg-green-50 dark:bg-green-950/30" : "bg-red-50 dark:bg-red-950/30"}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 ${resultadoLiquido >= 0 ? "bg-green-50" : "bg-red-50"}`}>
                 <Wallet className={`w-4 h-4 ${resultadoLiquido >= 0 ? "text-green-600" : "text-red-600"}`} />
               </div>
               <p className="text-xs text-muted-foreground">Resultado Líquido</p>
@@ -435,7 +435,7 @@ const Financeiro = () => {
                       <td className="p-3 text-sm font-medium">{formatCurrency(Number(r.valor))}</td>
                       <td className="p-3 text-sm text-muted-foreground">{r.data_vencimento || "—"}</td>
                       <td className="p-3">
-                        <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${r.status === "pago" ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400" : r.status === "atrasado" ? "bg-destructive/10 text-destructive" : "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400"}`}>{r.status}</span>
+                        <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${r.status === "pago" ? "bg-green-50 text-green-700" : r.status === "atrasado" ? "bg-destructive/10 text-destructive" : "bg-yellow-50 text-yellow-700"}`}>{r.status}</span>
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1">
@@ -489,7 +489,7 @@ const Financeiro = () => {
                       <td className="p-3 text-sm font-medium text-red-600">{formatCurrency(Number(d.valor))}</td>
                       <td className="p-3 text-sm text-muted-foreground">{new Date(d.data_competencia + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                       <td className="p-3">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${d.status === "pago" ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-yellow-50 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400"}`}>{d.status}</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${d.status === "pago" ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"}`}>{d.status}</span>
                       </td>
                       <td className="p-3 text-sm text-muted-foreground">{d.recorrente ? "Sim" : "Não"}</td>
                     </tr>

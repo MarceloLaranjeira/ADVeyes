@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import type { NotificacaoHorus } from "@/services/horus/types";
+import type { Notificacao } from "@/types/notificacoes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
 
 export const NotificationPanel = () => {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<NotificacaoHorus[]>([]);
+  const [notifications, setNotifications] = useState<Notificacao[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
 
@@ -31,7 +31,7 @@ export const NotificationPanel = () => {
   }, []);
 
   // Receber novas notificações via Supabase Realtime
-  const handleNova = useCallback((n: NotificacaoHorus) => {
+  const handleNova = useCallback((n: Notificacao) => {
     setNotifications(prev => {
       if (prev.some(p => p.id === n.id)) return prev;
       const updated = [n, ...prev];
@@ -47,7 +47,7 @@ export const NotificationPanel = () => {
     try {
       const stored = localStorage.getItem("adveyes_notifications");
       if (stored) {
-        const loaded: NotificacaoHorus[] = JSON.parse(stored);
+        const loaded: Notificacao[] = JSON.parse(stored);
         setNotifications(loaded);
         setUnreadCount(loaded.filter(n => !n.lida).length);
       }
@@ -95,13 +95,13 @@ export const NotificationPanel = () => {
   const getUrgencyColor = (urgencia: string) => {
     switch (urgencia) {
       case "CRITICA":
-        return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900";
+        return "bg-red-50 border-red-200";
       case "ALTA":
-        return "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900";
+        return "bg-orange-50 border-orange-200";
       case "MEDIA":
-        return "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900";
+        return "bg-blue-50 border-blue-200";
       default:
-        return "bg-gray-50 dark:bg-gray-950/20 border-gray-200 dark:border-gray-900";
+        return "bg-gray-50 border-gray-200";
     }
   };
 

@@ -88,6 +88,39 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+/**
+ * Registra o service worker e garante que uma versão nova chegue ao usuário.
+ *
+ * O registro morava dentro do hook de push, que só roda quando o navegador
+ * suporta Notification e PushManager — e nunca pedia atualização. O resultado
+ * era o usuário continuar com o pacote antigo depois de um deploy: a correção
+ * estava publicada e a tela não mudava.
+ *
+ * `update()` obriga o navegador a buscar o `sw.js` em vez de esperar a própria
+ * heurística. E `controllerchange` avisa que uma versão nova assumiu: a página
+ * carregada ainda tem o JS e o CSS velhos na memória, então recarregar é o que
+ * faz a correção aparecer. A guarda evita laço se a troca acontecer de novo.
+ */
+const registrarServiceWorker = () => {
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker
+    .register("/sw.js")
+    .then((registration) => registration.update())
+    .catch(() => {
+      // Sem service worker o app funciona; só perde o modo offline.
+    });
+
+  let recarregando = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (recarregando) return;
+    recarregando = true;
+    window.location.reload();
+  });
+};
+
+registrarServiceWorker();
+
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <App />

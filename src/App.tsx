@@ -34,6 +34,9 @@ import Equipe from "./pages/Equipe";
 import Contratos from "./pages/Contratos";
 import Checkout from "./pages/Checkout";
 import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import CadastroConcluir from "./pages/CadastroConcluir";
+import Onboarding from "./pages/Onboarding";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import PortalLogin from "./pages/portal/PortalLogin";
@@ -46,11 +49,12 @@ import PlatformAdmin from "./pages/PlatformAdmin";
 import IntegracoesJuridicas from "./pages/IntegracoesJuridicas";
 import { AuthenticatedRoute } from "@/components/auth/AuthenticatedRoute";
 import { PlatformAdminRoute } from "@/components/auth/PlatformAdminRoute";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+  <ThemeProvider>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
@@ -68,52 +72,60 @@ const App = () => (
                     <Route path="/privacidade" element={<PoliticaPrivacidade />} />
                     <Route path="/termos" element={<TermosUso />} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/cadastro" element={<Cadastro />} />
+                    <Route
+                      path="/cadastro/concluir"
+                      element={<AuthenticatedRoute><CadastroConcluir /></AuthenticatedRoute>}
+                    />
+                    <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/convite/aceitar" element={<ConviteAceite />} />
                     {/* Portal do Cliente (public, token-based) */}
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
-                    {/* Protected lawyer routes */}
+                    {/* A conta geral existe acima dos escritórios: o dono da
+                        plataforma pode administrá-la mesmo sem membership/OAB. */}
                     <Route
-                      path="/"
-                      element={<AuthenticatedRoute><HomeEntry /></AuthenticatedRoute>}
-                    />
-                    <Route
-                      path="/admin"
                       element={
                         <AuthenticatedRoute>
                           <PlatformAdminRoute>
-                            <PlatformAdmin />
+                            <AppLayout />
                           </PlatformAdminRoute>
                         </AuthenticatedRoute>
                       }
-                    />
-                    <Route path="/processos" element={<ProtectedRoute><Processos /></ProtectedRoute>} />
-                    <Route path="/processos/:id" element={<ProtectedRoute><ProcessoDetalhe /></ProtectedRoute>} />
-                    <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
-                    <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
-                    <Route path="/tarefas" element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />
-                    <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
-                    <Route path="/busca" element={<ProtectedRoute><BuscaJurisprudencia /></ProtectedRoute>} />
-                    {/* Jurisprudência abria a mesma busca processual.
-                        O endereço antigo continua válido para não quebrar
-                        links salvos pelos usuários. */}
-                    <Route path="/jurisprudencia" element={<Navigate to="/busca" replace />} />
-                    <Route path="/integracoes-juridicas" element={<ProtectedRoute><IntegracoesJuridicas /></ProtectedRoute>} />
-                    <Route path="/audiencias" element={<ProtectedRoute><Audiencias /></ProtectedRoute>} />
-                    <Route path="/financeiro" element={<ProtectedRoute><Financeiro /></ProtectedRoute>} />
-                    <Route path="/publicacoes" element={<ProtectedRoute><Publicacoes /></ProtectedRoute>} />
-                    <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
-                    <Route path="/ia-juridica" element={<ProtectedRoute><IAJuridica /></ProtectedRoute>} />
-                    <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
-                    <Route path="/portal-cliente" element={<ProtectedRoute><PortalCliente /></ProtectedRoute>} />
-                    <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
-                    {/* Novos módulos */}
-                    <Route path="/time-tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
-                    <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
-                    <Route path="/equipe" element={<ProtectedRoute><Equipe /></ProtectedRoute>} />
-                    <Route path="/contratos" element={<ProtectedRoute><Contratos /></ProtectedRoute>} />
-                    <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                    >
+                      <Route path="/admin" element={<PlatformAdmin />} />
+                    </Route>
+                    {/* Protected lawyer routes */}
+                    <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                      <Route path="/" element={<HomeEntry />} />
+                      <Route path="/processos" element={<Processos />} />
+                      <Route path="/processos/:id" element={<ProcessoDetalhe />} />
+                      <Route path="/clientes" element={<Clientes />} />
+                      <Route path="/agenda" element={<Agenda />} />
+                      <Route path="/tarefas" element={<Tarefas />} />
+                      <Route path="/documentos" element={<Documentos />} />
+                      <Route path="/busca" element={<BuscaJurisprudencia />} />
+                      {/* Jurisprudência abria a mesma busca processual.
+                          O endereço antigo continua válido para não quebrar
+                          links salvos pelos usuários. */}
+                      <Route path="/jurisprudencia" element={<Navigate to="/busca" replace />} />
+                      <Route path="/integracoes-juridicas" element={<IntegracoesJuridicas />} />
+                      <Route path="/audiencias" element={<Audiencias />} />
+                      <Route path="/financeiro" element={<Financeiro />} />
+                      <Route path="/publicacoes" element={<Publicacoes />} />
+                      <Route path="/relatorios" element={<Relatorios />} />
+                      <Route path="/ia-juridica" element={<IAJuridica />} />
+                      <Route path="/whatsapp" element={<WhatsApp />} />
+                      <Route path="/portal-cliente" element={<PortalCliente />} />
+                      <Route path="/configuracoes" element={<Configuracoes />} />
+                      {/* Novos módulos */}
+                      <Route path="/time-tracking" element={<TimeTracking />} />
+                      <Route path="/crm" element={<CRM />} />
+                      <Route path="/equipe" element={<Equipe />} />
+                      <Route path="/contratos" element={<Contratos />} />
+                      <Route path="/checkout" element={<Checkout />} />
+                    </Route>
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   </JarvisProvider>

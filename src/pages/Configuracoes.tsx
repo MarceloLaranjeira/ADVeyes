@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  User, Bell, Shield, Palette, Moon, Sun, Plus, Pencil, Trash2,
+  User, Bell, Shield, Palette,
   Key, CheckCircle, XCircle, Volume2, Mic, Zap, Bot, RefreshCw,
   CreditCard, Crown, Clock, Star, ArrowRight, Link2, Link2Off,
   SlidersHorizontal, RefreshCcw, Loader2,
@@ -19,154 +19,19 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useTheme } from "@/components/theme/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
-
-type TribunalCredencial = Tables<"tribunal_credenciais">;
-
-// ─── Perfil do Advogado + OAB Sync ──────────────────────────────────────────
-const PERFIL_KEY = "lexia_perfil_advogado";
-
-const PerfilAdvogadoForm = () => {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const [form, setForm] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(PERFIL_KEY) || "{}"); } catch { return {}; }
-  });
-  const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(() => localStorage.getItem("adveyes_last_oab_sync"));
-
-  const sincronizarOAB = async (oab: string, seccional: string) => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("oab-sync", {
-        body: {
-          oab_numero: oab,
-          seccional,
-          nome_advogado: form.nome || "",
-        },
-      });
-
-      if (error) throw error;
-
-      const agora = new Date().toLocaleString("pt-BR");
-      localStorage.setItem("adveyes_last_oab_sync", agora);
-      setLastSync(agora);
-
-      if ((data?.novos ?? 0) > 0 || (data?.atualizados ?? 0) > 0) {
-        toast({
-          title: "🦅 Horus concluiu a descoberta!",
-          description: `${data.novos} novo(s) e ${data.atualizados} atualizado(s) de ${data.sincronizados} processos encontrados.`,
-        });
-      } else {
-        toast({
-          title: "🦅 Horus concluiu a varredura",
-          description: data?.message ?? "Nenhum processo encontrado vinculado a essa OAB.",
-        });
-      }
-    } catch (e) {
-      toast({ title: "Erro no sync OAB", description: (e as Error).message, variant: "destructive" });
-    }
-    setSyncing(false);
-  };
-
-  const salvar = async () => {
-    localStorage.setItem(PERFIL_KEY, JSON.stringify(form));
-    if (form.numero_oab && form.seccional) {
-      const valor = `${form.numero_oab}/${form.seccional}`.toUpperCase();
-      const perfis = JSON.parse(localStorage.getItem("lexia_perfis_monitorados") || "[]");
-      const jaExiste = perfis.some((p: { tipo: string; valor: string }) => p.tipo === "oab" && p.valor === valor);
-      if (!jaExiste) {
-        perfis.unshift({ id: "perfil-principal", tipo: "oab", valor, tribunais: [], criadoEm: new Date().toISOString() });
-        localStorage.setItem("lexia_perfis_monitorados", JSON.stringify(perfis));
-      }
-      // Auto-trigger OAB sync
-      await sincronizarOAB(form.numero_oab, form.seccional);
-    } else {
-      toast({ title: "Perfil salvo!" });
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Número OAB</Label>
-          <Input
-            placeholder="Ex: 10099"
-            value={form.numero_oab || ""}
-            onChange={(e) => setForm({ ...form, numero_oab: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Seccional (Estado)</Label>
-          <Input
-            placeholder="Ex: AM"
-            maxLength={2}
-            value={form.seccional || ""}
-            onChange={(e) => setForm({ ...form, seccional: e.target.value.toUpperCase() })}
-          />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">CPF</Label>
-        <Input
-          placeholder="000.000.000-00"
-          value={form.cpf || ""}
-          onChange={(e) => setForm({ ...form, cpf: e.target.value })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Nome completo</Label>
-        <Input
-          placeholder="Dr. Nome do Advogado"
-          value={form.nome || ""}
-          onChange={(e) => setForm({ ...form, nome: e.target.value })}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">E-mail</Label>
-        <Input
-          type="email"
-          placeholder="seu@email.com"
-          value={form.email || ""}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-      </div>
-      <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-        <strong>🦅 Horus</strong> consulta as fontes judiciais configuradas para localizar processos vinculados à sua OAB. A cobertura depende dos dados disponibilizados por cada tribunal.
-      </p>
-      <div className="flex flex-wrap gap-2 items-center">
-        <Button onClick={salvar} disabled={syncing} className="gap-2">
-          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          {syncing ? "🦅 Horus buscando processos..." : "🦅 Salvar & Descobrir Processos"}
-        </Button>
-        {form.numero_oab && form.seccional && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={syncing}
-            onClick={() => sincronizarOAB(form.numero_oab, form.seccional)}
-            className="gap-2"
-          >
-            <RefreshCcw className="w-3.5 h-3.5" /> 🦅 Redescobrir Processos
-          </Button>
-        )}
-        {lastSync && (
-          <span className="text-xs text-muted-foreground">Último sync: {lastSync}</span>
-        )}
-      </div>
-    </div>
-  );
-};
+import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
+import {
+  generateOpenAITts,
+  OPENAI_TTS_VOICES,
+  playAudioBlob,
+} from "@/services/openai-tts";
 
 // ─── Importar Processos Manualmente ─────────────────────────────────────────
 const ImportarProcessos = () => {
@@ -242,63 +107,8 @@ const ImportarProcessos = () => {
   );
 };
 
-const tribunaisDisponiveis = [
-  // Superiores
-  { id: "stf", nome: "STF - Supremo Tribunal Federal" },
-  { id: "stj", nome: "STJ - Superior Tribunal de Justiça" },
-  { id: "tst", nome: "TST - Tribunal Superior do Trabalho" },
-  { id: "stm", nome: "STM - Superior Tribunal Militar" },
-  { id: "tse", nome: "TSE - Tribunal Superior Eleitoral" },
-  // TRFs
-  { id: "trf1", nome: "TRF1 - Tribunal Regional Federal da 1ª Região" },
-  { id: "trf2", nome: "TRF2 - Tribunal Regional Federal da 2ª Região" },
-  { id: "trf3", nome: "TRF3 - Tribunal Regional Federal da 3ª Região" },
-  { id: "trf4", nome: "TRF4 - Tribunal Regional Federal da 4ª Região" },
-  { id: "trf5", nome: "TRF5 - Tribunal Regional Federal da 5ª Região" },
-  { id: "trf6", nome: "TRF6 - Tribunal Regional Federal da 6ª Região" },
-  // Estaduais
-  { id: "tjac", nome: "TJAC - Tribunal de Justiça do Acre" },
-  { id: "tjal", nome: "TJAL - Tribunal de Justiça de Alagoas" },
-  { id: "tjam", nome: "TJAM - Tribunal de Justiça do Amazonas" },
-  { id: "tjap", nome: "TJAP - Tribunal de Justiça do Amapá" },
-  { id: "tjba", nome: "TJBA - Tribunal de Justiça da Bahia" },
-  { id: "tjce", nome: "TJCE - Tribunal de Justiça do Ceará" },
-  { id: "tjdft", nome: "TJDFT - Tribunal de Justiça do DF e Territórios" },
-  { id: "tjes", nome: "TJES - Tribunal de Justiça do Espírito Santo" },
-  { id: "tjgo", nome: "TJGO - Tribunal de Justiça de Goiás" },
-  { id: "tjma", nome: "TJMA - Tribunal de Justiça do Maranhão" },
-  { id: "tjmg", nome: "TJMG - Tribunal de Justiça de Minas Gerais" },
-  { id: "tjms", nome: "TJMS - Tribunal de Justiça de Mato Grosso do Sul" },
-  { id: "tjmt", nome: "TJMT - Tribunal de Justiça de Mato Grosso" },
-  { id: "tjpa", nome: "TJPA - Tribunal de Justiça do Pará" },
-  { id: "tjpb", nome: "TJPB - Tribunal de Justiça da Paraíba" },
-  { id: "tjpe", nome: "TJPE - Tribunal de Justiça de Pernambuco" },
-  { id: "tjpi", nome: "TJPI - Tribunal de Justiça do Piauí" },
-  { id: "tjpr", nome: "TJPR - Tribunal de Justiça do Paraná" },
-  { id: "tjrj", nome: "TJRJ - Tribunal de Justiça do Rio de Janeiro" },
-  { id: "tjrn", nome: "TJRN - Tribunal de Justiça do Rio Grande do Norte" },
-  { id: "tjro", nome: "TJRO - Tribunal de Justiça de Rondônia" },
-  { id: "tjrr", nome: "TJRR - Tribunal de Justiça de Roraima" },
-  { id: "tjrs", nome: "TJRS - Tribunal de Justiça do Rio Grande do Sul" },
-  { id: "tjsc", nome: "TJSC - Tribunal de Justiça de Santa Catarina" },
-  { id: "tjse", nome: "TJSE - Tribunal de Justiça de Sergipe" },
-  { id: "tjsp", nome: "TJSP - Tribunal de Justiça de São Paulo" },
-  { id: "tjto", nome: "TJTO - Tribunal de Justiça do Tocantins" },
-  // TRTs
-  ...Array.from({ length: 24 }, (_, i) => ({
-    id: `trt${i + 1}`,
-    nome: `TRT${i + 1} - Tribunal Regional do Trabalho da ${i + 1}ª Região`,
-  })),
-  // Sistemas especiais
-  { id: "seeu", nome: "SEEU - Sistema Eletrônico de Execução Unificado" },
-  { id: "projudi", nome: "Projudi - Processo Judicial Digital" },
-];
-
-const emptyForm = { tribunal: "", token_acesso: "", numero_oab: "", seccional_oab: "", cpf: "" };
-
 const Configuracoes = () => {
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const {
     subscription,
@@ -307,12 +117,6 @@ const Configuracoes = () => {
     trialDaysLeft,
   } = useSubscription();
   const { toast } = useToast();
-  const [credenciais, setCredenciais] = useState<TribunalCredencial[]>([]);
-  const [showCredForm, setShowCredForm] = useState(false);
-  const [editCred, setEditCred] = useState<TribunalCredencial | null>(null);
-  const [deleteCred, setDeleteCred] = useState<string | null>(null);
-  const [credForm, setCredForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
 
   // Google Calendar state
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
@@ -427,12 +231,13 @@ const Configuracoes = () => {
     toast({ title: "Prompt personalizado salvo!", description: "O Horus usará essas instruções em todas as conversas." });
   };
 
-  // TTS Settings (persisted in sessionStorage for security — keys cleared when tab closes)
-  const [ttsProvider, setTtsProvider] = useState(() => sessionStorage.getItem("horus_tts_provider") || "browser");
+  // TTS Settings. OpenAI uses the server secret; third-party keys remain session-only.
+  const [ttsProvider, setTtsProvider] = useState(() => sessionStorage.getItem("horus_tts_provider") || "openai");
   const [ttsApiKey, setTtsApiKey] = useState(() => sessionStorage.getItem("horus_tts_key") || "");
-  const [ttsVoice, setTtsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "nova");
+  const [ttsVoice, setTtsVoice] = useState(() => sessionStorage.getItem("horus_tts_voice") || "marin");
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(() => sessionStorage.getItem("horus_11labs_voice") || "21m00Tcm4TlvDq8ikWAM");
   const [ttsEnabled, setTtsEnabled] = useState(() => sessionStorage.getItem("horus_tts_enabled") !== "false");
+  const [testingTts, setTestingTts] = useState(false);
 
   const saveTtsSettings = () => {
     sessionStorage.setItem("horus_tts_provider", ttsProvider);
@@ -449,62 +254,30 @@ const Configuracoes = () => {
     toast({ title: "Configurações de voz salvas!" });
   };
 
-  const testTts = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const u = new SpeechSynthesisUtterance("Horus online. Sistema de voz funcionando perfeitamente.");
-      u.lang = "pt-BR";
-      u.rate = 1.05;
-      window.speechSynthesis.speak(u);
+  const testTts = async () => {
+    if (ttsProvider !== "openai") {
+      toast({
+        title: "Selecione OpenAI TTS",
+        description: "O teste real desta tela usa as vozes OpenAI do servidor.",
+        variant: "destructive",
+      });
+      return;
     }
-  };
-
-  const fetchCredenciais = async () => {
-    const { data } = await supabase.from("tribunal_credenciais").select("*").order("created_at");
-    if (data) setCredenciais(data);
-  };
-
-  useEffect(() => { fetchCredenciais(); }, []);
-
-  const openNewCred = () => { setEditCred(null); setCredForm(emptyForm); setShowCredForm(true); };
-  const openEditCred = (c: TribunalCredencial) => {
-    setEditCred(c);
-    setCredForm({ tribunal: (c.tribunal as string) || "", token_acesso: (c.token_acesso as string) || "", numero_oab: (c.numero_oab as string) || "", seccional_oab: (c.seccional_oab as string) || "", cpf: (c.cpf as string) || "" });
-    setShowCredForm(true);
-  };
-
-  const handleCredSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!credForm.tribunal) { toast({ title: "Selecione o tribunal", variant: "destructive" }); return; }
-    setLoading(true);
-    const tribunalInfo = tribunaisDisponiveis.find(t => t.id === credForm.tribunal);
-    const payload = {
-      ...credForm,
-      user_id: user!.id,
-      nome_tribunal: tribunalInfo?.nome || credForm.tribunal,
-      tipo_autenticacao: "token",
-      ativo: true,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = editCred
-      ? await supabase.from("tribunal_credenciais").update(payload).eq("id", editCred.id)
-      : await supabase.from("tribunal_credenciais").insert(payload);
-    if (error) {
-      if (error.code === "23505") toast({ title: "Credencial já existe para este tribunal", variant: "destructive" });
-      else toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: editCred ? "Credencial atualizada!" : "Credencial cadastrada!" });
-      setShowCredForm(false);
-      fetchCredenciais();
+    setTestingTts(true);
+    try {
+      const blob = await generateOpenAITts(
+        "Hórus online. A voz da OpenAI está funcionando corretamente.",
+        ttsVoice,
+      );
+      playAudioBlob(blob, () => setTestingTts(false));
+    } catch (error) {
+      setTestingTts(false);
+      toast({
+        title: "Falha ao testar a voz OpenAI",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
     }
-    setLoading(false);
-  };
-
-  const handleDeleteCred = async () => {
-    if (!deleteCred) return;
-    await supabase.from("tribunal_credenciais").delete().eq("id", deleteCred);
-    toast({ title: "Credencial removida!" });
-    setDeleteCred(null);
-    fetchCredenciais();
   };
 
   return (
@@ -518,10 +291,12 @@ const Configuracoes = () => {
         <Tabs defaultValue="geral" className="max-w-4xl">
           <TabsList className="mb-6 bg-muted/50 flex-wrap h-auto gap-1">
             <TabsTrigger value="geral" className="gap-2 text-xs"><Palette className="w-3.5 h-3.5" /> Geral</TabsTrigger>
-            <TabsTrigger value="voz" className="gap-2 text-xs"><Volume2 className="w-3.5 h-3.5" /> Voz & IA</TabsTrigger>
-            <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> Tribunais</TabsTrigger>
+            <TabsTrigger value="usuarios" className="gap-2 text-xs"><User className="w-3.5 h-3.5" /> Usuários & Equipe</TabsTrigger>
+            <TabsTrigger value="voz" className="gap-2 text-xs"><Bot className="w-3.5 h-3.5" /> IA & Prompt</TabsTrigger>
+            <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> OABs & Monitoramento</TabsTrigger>
+            <TabsTrigger value="tarefas" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
             <TabsTrigger value="integracoes" className="gap-2 text-xs">
-              <Zap className="w-3.5 h-3.5" /> Integrações
+              <Zap className="w-3.5 h-3.5" /> Integrações & API
               {planData?.status === "trial" && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 ml-0.5" />}
             </TabsTrigger>
             <TabsTrigger value="notificacoes" className="gap-2 text-xs"><Bell className="w-3.5 h-3.5" /> Notificações</TabsTrigger>
@@ -536,16 +311,12 @@ const Configuracoes = () => {
                   <Palette className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Aparência</h3>
                 </div>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <Label className="text-sm font-medium">Tema do Sistema</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Alterne entre tema claro e escuro</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Sun className="w-4 h-4 text-muted-foreground" />
-                    <Switch checked={theme === "dark"} onCheckedChange={(c) => setTheme(c ? "dark" : "light")} />
-                    <Moon className="w-4 h-4 text-muted-foreground" />
-                  </div>
+                <div className="py-2">
+                  <Label className="text-sm font-medium">Paleta institucional</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Marfim e latão sobre navy. Paleta única — a mesma em todas as
+                    telas, para que documento impresso e tela combinem.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -556,10 +327,22 @@ const Configuracoes = () => {
                   <User className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Perfil do Advogado</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-sm text-muted-foreground">
                   Usuário: <span className="font-medium text-foreground">{user?.email}</span>
                 </p>
-                <PerfilAdvogadoForm />
+                <p className="mt-4 text-sm text-muted-foreground">
+                  O cadastro de OAB e a descoberta de processos ficam em
+                  Integrações jurídicas, onde os dados pertencem ao escritório
+                  e valem para toda a equipe.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 gap-2"
+                  onClick={() => navigate("/integracoes-juridicas")}
+                >
+                  <Link2 className="w-3.5 h-3.5" /> Abrir Integrações jurídicas
+                </Button>
               </CardContent>
             </Card>
 
@@ -571,6 +354,81 @@ const Configuracoes = () => {
                   <h3 className="font-semibold font-serif">Importar Processos Manualmente</h3>
                 </div>
                 <ImportarProcessos />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === USUÁRIOS & EQUIPE === */}
+          <TabsContent value="usuarios" className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-primary" />
+                    <div>
+                      <h3 className="font-semibold font-serif">Gestão de Usuários e Colaboradores</h3>
+                      <p className="text-xs text-muted-foreground">Configuração de perfis, níveis de acesso e permissões da equipe</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/equipe")} className="gap-2">
+                    <User className="w-3.5 h-3.5" /> Abrir Gestão de Equipe
+                  </Button>
+                </div>
+                <div className="rounded-lg border p-4 bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between py-1">
+                    <div>
+                      <Label className="font-medium text-sm">Habilitar registro de acessos e auditoria</Label>
+                      <p className="text-xs text-muted-foreground">Registra cada acesso, alteração de processo e ação realizada no sistema</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-t pt-3">
+                    <div>
+                      <Label className="font-medium text-sm">Permissão de acesso financeiro por perfil</Label>
+                      <p className="text-xs text-muted-foreground">Restringe visualização de honorários e receitas apenas para administradores</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* === TAREFAS & WORKFLOWS === */}
+          <TabsContent value="tarefas" className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="w-5 h-5 text-primary" />
+                    <div>
+                      <h3 className="font-semibold font-serif">Tarefas, Metas e Workflows</h3>
+                      <p className="text-xs text-muted-foreground">Pontuação de produtividade (TaskScore), categorias e fluxos de trabalho</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/tarefas")} className="gap-2">
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> Ir para Tarefas
+                  </Button>
+                </div>
+                <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-semibold">Meta Semanal por Colaborador (Pontos)</Label>
+                      <Input type="number" defaultValue="50" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold">Pontos por Tarefa Concluída</Label>
+                      <Input type="number" defaultValue="1" className="mt-1" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <div>
+                      <Label className="font-medium text-sm">Criar tarefa automática para novas intimações</Label>
+                      <p className="text-xs text-muted-foreground">Gera tarefa pendente em /tarefas para toda publicação oficial do DJEN/PJe</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -624,37 +482,56 @@ const Configuracoes = () => {
                 <div className="flex items-center gap-3 mb-4">
                   <Bot className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold font-serif">Horus — Assistente de IA Jurídica</h3>
-                  <span className="text-xs bg-green-500/10 text-green-600 border border-green-500/20 px-2 py-0.5 rounded-full ml-auto">Ativo</span>
+                  {/* Dizia "Ativo" fixo, mesmo com o chat fora do ar. */}
+                  <span className="text-xs bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 rounded-full ml-auto">
+                    Parcial
+                  </span>
                 </div>
 
                 <div className="space-y-3 mb-4">
+                  {/*
+                    Este painel descrevia três provedores e três modelos que o
+                    sistema não usa. Descrição errada de infraestrutura custa
+                    caro: leva a configurar a chave errada e a achar que uma
+                    funcionalidade existe. Aqui fica o que o código faz hoje.
+                  */}
                   <div className="rounded-lg border p-3 bg-muted/30">
-                    <p className="text-xs font-semibold text-foreground mb-1">Como funciona o Horus</p>
+                    <p className="text-xs font-semibold text-foreground mb-1">O que está no ar</p>
                     <p className="text-xs text-muted-foreground">
-                      O Horus é uma IA treinada para o direito brasileiro. Ele consulta legislação, analisa peças processuais,
-                      gera petições e responde perguntas sobre jurisprudência. O modelo é executado via API Gemini (Google)
-                      diretamente pelo servidor Supabase Edge Function <code className="bg-muted px-1 rounded">chat</code>.
+                      <strong>Criação de peças</strong> funciona: roda na Edge Function{" "}
+                      <code className="bg-muted px-1 rounded">legal-draft-piece</code>, com o modelo{" "}
+                      <code className="bg-muted px-1 rounded">gpt-5.6-sol</code> da OpenAI. O material vem
+                      do banco — processo, andamentos e publicações — e a peça volta como minuta para
+                      revisão. Nada é gravado sem o advogado aprovar.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-warning/40 p-3 bg-warning/5">
+                    <p className="text-xs font-semibold text-foreground mb-1">
+                      Chat do Horus — fora do ar
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      A Edge Function <code className="bg-muted px-1 rounded">chat</code> aponta para o
+                      gateway da Lovable e depende de{" "}
+                      <code className="bg-muted px-1 rounded">LOVABLE_API_KEY</code>, que não está
+                      configurada. Enquanto não for migrada para o mesmo caminho da criação de peças,
+                      o chat responde erro.
                     </p>
                   </div>
 
                   <div className="rounded-lg border p-3 bg-muted/30">
-                    <p className="text-xs font-semibold text-foreground mb-2">Configuração da API de IA (backend)</p>
+                    <p className="text-xs font-semibold text-foreground mb-2">Chave de IA (backend)</p>
                     <p className="text-xs text-muted-foreground mb-2">
-                      A chave de API do modelo de linguagem deve ser configurada como <strong>Secret</strong> no
-                      painel Supabase do projeto, na seção <strong>Edge Functions → Secrets</strong>.
-                      Nunca exponha essas chaves no frontend.
+                      Configurada como <strong>Secret</strong> no painel Supabase, em{" "}
+                      <strong>Edge Functions → Secrets</strong>. Nunca no frontend.
                     </p>
-                    <div className="space-y-1.5">
-                      {[
-                        { secret: "GEMINI_API_KEY", desc: "Google AI Studio — model: gemini-1.5-pro", link: "aistudio.google.com" },
-                        { secret: "OPENAI_API_KEY", desc: "OpenAI Platform — model: gpt-4o", link: "platform.openai.com" },
-                        { secret: "ANTHROPIC_API_KEY", desc: "Anthropic Console — model: claude-3-5-sonnet", link: "console.anthropic.com" },
-                      ].map((item) => (
-                        <div key={item.secret} className="flex items-start gap-2 text-xs">
-                          <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono shrink-0">{item.secret}</code>
-                          <span className="text-muted-foreground">{item.desc} — <span className="italic">{item.link}</span></span>
-                        </div>
-                      ))}
+                    <div className="flex items-start gap-2 text-xs">
+                      <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono shrink-0">
+                        OPENAI_API_KEY
+                      </code>
+                      <span className="text-muted-foreground">
+                        Único provedor implementado — <span className="italic">platform.openai.com</span>
+                      </span>
                     </div>
                   </div>
 
@@ -707,7 +584,7 @@ const Configuracoes = () => {
                         <SelectItem value="openai">
                           <div>
                             <div className="font-medium">OpenAI TTS</div>
-                            <div className="text-xs text-muted-foreground">Alloy, Nova, Echo — requer API Key</div>
+                            <div className="text-xs text-muted-foreground">13 vozes oficiais — chave protegida no servidor</div>
                           </div>
                         </SelectItem>
                         <SelectItem value="google">
@@ -720,10 +597,10 @@ const Configuracoes = () => {
                     </Select>
                   </div>
 
-                  {ttsProvider !== "browser" && (
+                  {ttsProvider !== "browser" && ttsProvider !== "openai" && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">
-                        API Key — {ttsProvider === "elevenlabs" ? "ElevenLabs" : ttsProvider === "openai" ? "OpenAI" : "Google Cloud"}
+                        API Key — {ttsProvider === "elevenlabs" ? "ElevenLabs" : "Google Cloud"}
                       </Label>
                       <Input
                         type="password"
@@ -731,13 +608,11 @@ const Configuracoes = () => {
                         onChange={(e) => setTtsApiKey(e.target.value)}
                         placeholder={
                           ttsProvider === "elevenlabs" ? "sk-..." :
-                          ttsProvider === "openai" ? "sk-..." :
                           "AIza..."
                         }
                       />
                       <p className="text-xs text-muted-foreground">
                         {ttsProvider === "elevenlabs" && "Obtenha sua chave em elevenlabs.io — a chave é armazenada localmente no navegador"}
-                        {ttsProvider === "openai" && "Obtenha sua chave em platform.openai.com — a chave é armazenada localmente no navegador"}
                         {ttsProvider === "google" && "Habilite a API Cloud TTS em console.cloud.google.com — a chave é armazenada localmente"}
                       </p>
                     </div>
@@ -749,11 +624,17 @@ const Configuracoes = () => {
                       <Select value={ttsVoice} onValueChange={setTtsVoice}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {["alloy", "nova", "echo", "fable", "onyx", "shimmer"].map(v => (
-                            <SelectItem key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</SelectItem>
+                          {OPENAI_TTS_VOICES.map(v => (
+                            <SelectItem key={v} value={v}>
+                              {v.charAt(0).toUpperCase() + v.slice(1)}
+                              {(v === "marin" || v === "cedar") ? " — recomendada" : ""}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Áudio gerado por inteligência artificial. A chave da OpenAI fica protegida no servidor.
+                      </p>
                     </div>
                   )}
 
@@ -786,8 +667,9 @@ const Configuracoes = () => {
                   <Button onClick={saveTtsSettings} className="gap-2">
                     <Zap className="w-4 h-4" /> Salvar Configurações
                   </Button>
-                  <Button variant="outline" onClick={testTts} className="gap-2">
-                    <Volume2 className="w-4 h-4" /> Testar Voz
+                  <Button variant="outline" onClick={testTts} disabled={testingTts} className="gap-2">
+                    {testingTts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                    {testingTts ? "Gerando voz..." : "Testar Voz OpenAI"}
                   </Button>
                 </div>
               </CardContent>
@@ -798,58 +680,33 @@ const Configuracoes = () => {
           <TabsContent value="tribunais" className="space-y-4">
             <Card>
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Key className="w-5 h-5 text-primary" />
-                    <h3 className="font-semibold font-serif">Credenciais dos Tribunais</h3>
+                <div className="flex items-center gap-3 mb-4">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold font-serif">Integração jurídica segura</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Processos e andamentos são consultados no DataJud/CNJ; publicações e intimações,
+                  no DJEN/CNJ. Quando disponível, o Escavador complementa partes e documentos públicos.
+                  Nenhuma dessas consultas exige que o escritório envie token pessoal de tribunal.
+                </p>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border bg-muted/20 p-4">
+                    <p className="text-sm font-semibold">Consultas e monitoramento</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      São executados no servidor com fontes públicas e credenciais globais protegidas.
+                    </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchCredenciais} className="gap-1">
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button size="sm" onClick={openNewCred} className="gap-1">
-                      <Plus className="w-3.5 h-3.5" /> Adicionar
-                    </Button>
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                    <p className="text-sm font-semibold">Protocolo e assinatura</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      A3, PIN e certificado ficam no computador do advogado. O protocolo é concluído
+                      exclusivamente no portal ou aplicativo oficial do tribunal.
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Configure tokens de acesso e dados da OAB para integração com todos os tribunais, PJe, SEEU e Projudi.
-                  A API DataJud (CNJ) já está ativa para consulta pública — as credenciais habilitam peticionamento e funcionalidades avançadas.
-                </p>
-
-                {credenciais.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl border-dashed">
-                    <Key className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    Nenhuma credencial configurada. Adicione seus tokens para habilitar peticionamento eletrônico.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {credenciais.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between p-3 rounded-xl border hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          {c.ativo
-                            ? <CheckCircle className="w-4 h-4 text-[hsl(var(--success))]" />
-                            : <XCircle className="w-4 h-4 text-destructive" />}
-                          <div>
-                            <p className="text-sm font-medium">{c.nome_tribunal}</p>
-                            <div className="flex gap-3 text-xs text-muted-foreground">
-                              {c.numero_oab && <span>OAB: {c.numero_oab}/{c.seccional_oab}</span>}
-                              <span>Token: {c.token_acesso ? "••••••" + c.token_acesso.slice(-4) : "Não definido"}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditCred(c)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteCred(c.id)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <Button variant="outline" className="mt-5 gap-2" onClick={() => navigate("/integracoes-juridicas")}>
+                  <Key className="w-4 h-4" /> Ver cobertura das fontes jurídicas
+                </Button>
               </CardContent>
             </Card>
 
@@ -879,13 +736,12 @@ const Configuracoes = () => {
                 <div className="mb-5 rounded-lg border border-blue-500/20 p-4 bg-blue-500/5">
                   <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">SEEU — Sistema Eletrônico de Execução Unificado</p>
                   <p className="text-xs text-muted-foreground mb-2">
-                    O SEEU gerencia execuções penais em <strong>35+ estabelecimentos</strong>. A consulta é feita via DataJud (índice <code className="bg-muted px-1 rounded text-[10px]">api_seeu</code>).
-                    Para acesso avançado com peticionamento, configure:
+                    A consulta pública de processos e movimentos disponíveis é feita pelas fontes jurídicas integradas.
+                    Para protocolar, assinar ou consultar autos restritos, abra o SEEU oficial.
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
-                    <p>1. Acesse o portal SEEU e gere um token de acesso vinculado ao seu CPF/OAB.</p>
-                    <p>2. Cadastre-o acima em <strong>Credenciais → SEEU</strong> com número OAB e seccional AM.</p>
-                    <p>3. Após cadastro, o botão "Peticionar" ficará habilitado para processos SEEU.</p>
+                    <p>O certificado A1/A3, o PIN e qualquer dispositivo físico permanecem no computador do advogado.</p>
+                    <p>O ADVeyes não solicita nem armazena credenciais pessoais do SEEU.</p>
                   </div>
                 </div>
 
@@ -894,13 +750,12 @@ const Configuracoes = () => {
                   <p className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2">Projudi — Processo Judicial Digital</p>
                   <p className="text-xs text-muted-foreground mb-2">
                     O Projudi é usado pelo <strong>TJAM</strong>, TJPR, TJRR, TJRO e outros TJs. A consulta pública é feita via DataJud.
-                    Para peticionamento eletrônico no Projudi TJAM:
+                    O peticionamento eletrônico continua no portal oficial do tribunal:
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>1. Acesse <span className="italic">projudi.tjam.jus.br</span> e faça login com certificado digital A1/A3.</p>
-                    <p>2. Gere um token de sessão ou use as credenciais OAB/CPF do sistema.</p>
-                    <p>3. Cadastre-o acima em <strong>Credenciais → Projudi</strong>.</p>
-                    <p>4. Para outros TJs com Projudi, repita o processo com o índice correto de cada tribunal.</p>
+                    <p>2. Assine e envie a peça no ambiente oficial.</p>
+                    <p>3. Não copie token, PIN ou certificado para o ADVeyes.</p>
                   </div>
                 </div>
 
@@ -909,13 +764,12 @@ const Configuracoes = () => {
                   <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2">PJe — Processo Judicial Eletrônico (CNJ)</p>
                   <p className="text-xs text-muted-foreground mb-2">
                     O PJe é o sistema padrão de peticionamento do CNJ, usado pela maioria dos tribunais federais, TRTs e vários TJs.
-                    A integração usa o protocolo <strong>MNI (Message Negotiation Interface)</strong>.
+                    A consulta pública do ADVeyes não representa protocolo no PJe.
                   </p>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>1. Instale o software PJe ou acesse via navegador com certificado A1/A3.</p>
-                    <p>2. Obtenha o token JWT no portal do tribunal (ex: <span className="italic">pje.tjam.jus.br</span>, <span className="italic">pje.trf1.jus.br</span>).</p>
-                    <p>3. Cadastre o token em <strong>Credenciais → [Tribunal correspondente]</strong>.</p>
-                    <p>4. O sistema usará esse token para peticionamento via API MNI do PJe.</p>
+                    <p>2. Use o PJeOffice e o certificado apenas no ambiente oficial.</p>
+                    <p>3. O ADVeyes abre o portal, mas não recebe certificado, PIN ou token de sessão.</p>
                   </div>
                 </div>
 
@@ -943,9 +797,9 @@ const Configuracoes = () => {
                     { label: "TRFs 1-6", ok: true },
                     { label: "STF / STJ / TST / STM / TSE", ok: true },
                     { label: "Horus IA (Gemini)", ok: true },
-                    { label: "PJe / MNI (token necessário)", ok: false },
-                    { label: "Projudi AM (token necessário)", ok: false },
-                    { label: "SEEU Peticionamento (token necessário)", ok: false },
+                    { label: "PJe: protocolo no portal oficial", ok: false },
+                    { label: "Projudi: protocolo no portal oficial", ok: false },
+                    { label: "SEEU: protocolo no portal oficial", ok: false },
                   ].map((item) => (
                     <span
                       key={item.label}
@@ -1187,97 +1041,10 @@ const Configuracoes = () => {
 
           {/* === NOTIFICAÇÕES === */}
           <TabsContent value="notificacoes" className="space-y-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <Bell className="w-5 h-5 text-primary" />
-                  <h3 className="font-semibold font-serif">Notificações</h3>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { label: "Notificações por e-mail", desc: "Receba alertas por e-mail", checked: false },
-                    { label: "Alertas de prazos", desc: "Avisos antes do vencimento", checked: true },
-                    { label: "Novas publicações", desc: "DJe e publicações oficiais", checked: true },
-                    { label: "Movimentações processuais", desc: "Mudanças nos processos monitorados", checked: true },
-                    { label: "Audiências próximas", desc: "Lembrete 24h antes", checked: true },
-                    { label: "Vencimentos financeiros", desc: "Honorários e despesas", checked: true },
-                  ].map((n) => (
-                    <div key={n.label} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div>
-                        <Label className="text-sm font-medium">{n.label}</Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">{n.desc}</p>
-                      </div>
-                      <Switch defaultChecked={n.checked} />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <PreferenciasNotificacao />
           </TabsContent>
         </Tabs>
 
-        {/* Credential Form Dialog */}
-        <Dialog open={showCredForm} onOpenChange={setShowCredForm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editCred ? "Editar Credencial" : "Nova Credencial de Tribunal"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCredSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Tribunal / Sistema *</Label>
-                <Select value={credForm.tribunal} onValueChange={(v) => setCredForm({ ...credForm, tribunal: v })} disabled={!!editCred}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tribunal ou sistema" /></SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    {tribunaisDisponiveis.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Número OAB</Label>
-                  <Input value={credForm.numero_oab} onChange={(e) => setCredForm({ ...credForm, numero_oab: e.target.value })} placeholder="12345" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Seccional</Label>
-                  <Input value={credForm.seccional_oab} onChange={(e) => setCredForm({ ...credForm, seccional_oab: e.target.value })} placeholder="AM" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>CPF</Label>
-                <Input value={credForm.cpf} onChange={(e) => setCredForm({ ...credForm, cpf: e.target.value })} placeholder="000.000.000-00" />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  Token de Acesso / API Key
-                  <span className="text-[10px] font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Opcional</span>
-                </Label>
-                <Input type="password" value={credForm.token_acesso} onChange={(e) => setCredForm({ ...credForm, token_acesso: e.target.value })} placeholder="Cole aqui o token do tribunal (opcional)" />
-                <p className="text-xs text-muted-foreground">
-                  Token JWT para peticionamento eletrônico (PJe, SEEU, Projudi). Deixe em branco se quiser apenas monitorar publicações via DataJud/CNJ — isso funciona só com OAB ou CPF.
-                </p>
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setShowCredForm(false)}>Cancelar</Button>
-                <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editCred ? "Atualizar" : "Cadastrar"}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={!!deleteCred} onOpenChange={(o) => !o && setDeleteCred(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remover credencial?</AlertDialogTitle>
-              <AlertDialogDescription>Esta ação removerá a credencial do tribunal. Você poderá recadastrá-la depois.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteCred} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remover</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </AppLayout>
   );

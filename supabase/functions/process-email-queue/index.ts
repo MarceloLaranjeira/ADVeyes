@@ -121,13 +121,14 @@ Deno.serve(async (req) => {
     // messages not attempted when a 429 stops processing early.
     const messageIds = Array.from(
       new Set(
-        messages
-          .map((msg: any) =>
-            msg?.message?.message_id && typeof msg.message.message_id === 'string'
-              ? msg.message.message_id
-              : null
-          )
-          .filter((id: any): id is string => Boolean(id))
+        (messages as unknown[])
+          .map((msg) => {
+            if (!msg || typeof msg !== 'object' || !("message" in msg)) return null
+            const message = msg.message
+            if (!message || typeof message !== 'object' || !("message_id" in message)) return null
+            return typeof message.message_id === 'string' ? message.message_id : null
+          })
+          .filter((id): id is string => id !== null)
       )
     )
     const failedAttemptsByMessageId = new Map<string, number>()

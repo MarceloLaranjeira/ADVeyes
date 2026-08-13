@@ -2,6 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Navigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
@@ -14,8 +15,17 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     selectTenant,
     refresh,
   } = useTenant();
+  const {
+    isPlatformAdmin,
+    loading: platformAdminLoading,
+    error: platformAdminError,
+  } = usePlatformAdmin();
 
-  if (loading || (session && tenantLoading)) {
+  if (
+    loading ||
+    (session && tenantLoading) ||
+    (session && error === "no_membership" && platformAdminLoading)
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -26,6 +36,17 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (!session) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`);
     return <Navigate to={`/login?next=${next}`} replace />;
+  }
+
+  if (error === "no_membership" && isPlatformAdmin) {
+    // A Conta Geral pode percorrer os módulos antes do primeiro escritório
+    // existir. As páginas recebem `currentTenant = null` e exibem seus estados
+    // vazios; operações que exigem tenant continuam protegidas no backend.
+    return <>{children}</>;
+  }
+
+  if (error === "no_membership" && !platformAdminError) {
+    return <Navigate to="/cadastro/concluir" replace />;
   }
 
   if (error || !currentTenant) {
@@ -44,7 +65,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       },
       no_membership: {
         title: "Conta sem escritório",
-        description: "Peça ao administrador para adicionar sua conta a um escritório.",
+        description: "Conclua o cadastro para criar seu escritório.",
       },
       tenant_load_failed: {
         title: "Não foi possível carregar o escritório",

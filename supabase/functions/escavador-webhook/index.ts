@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  createPublicationHearingCandidates,
   ingestMovements,
   ingestPublications,
 } from "../_shared/legal-ingestion.ts";
@@ -83,9 +84,11 @@ Deno.serve(async (request) => {
   } catch {
     return response({ error: "invalid_payload" }, 400);
   }
-  const eventType = payload.event?.trim();
-  const externalEventId = payload.uuid?.trim();
-  const externalMonitorId = payload.monitoramento?.id;
+  const raw = payload as Record<string, unknown>;
+  const nestedData = (raw.data && typeof raw.data === "object" ? raw.data : {}) as Record<string, unknown>;
+  const eventType = (payload.event ?? raw.event_type ?? nestedData.event ?? nestedData.event_type as string ?? "").trim();
+  const externalEventId = (payload.uuid ?? raw.event_id ?? raw.id ?? nestedData.uuid ?? nestedData.event_id as string ?? "").trim();
+  const externalMonitorId = payload.monitoramento?.id ?? raw.monitoramento_id ?? nestedData.monitoramento_id ?? (nestedData.monitoramento as Record<string, unknown>)?.id;
   if (!eventType || !externalEventId || externalMonitorId == null) {
     return response({ error: "invalid_payload" }, 400);
   }
@@ -173,12 +176,16 @@ Deno.serve(async (request) => {
           fonte: movement.fonte ?? null,
         }, { receivedAt: callbackAt });
 
-        await ingestPublications(admin, {
+        const publicationResult = await ingestPublications(admin, {
           tenantId: monitor.tenant_id,
           provider: "escavador",
           fallbackUserId: process.user_id,
           publications: [normalized],
           defaultProcess: process,
+        });
+        await createPublicationHearingCandidates(admin, {
+          tenantId: monitor.tenant_id,
+          publicationIds: publicationResult.createdIds,
         });
       } else {
         await ingestMovements(admin, {
@@ -211,6 +218,13 @@ Deno.serve(async (request) => {
         }),
         sourceName: "Escavador",
         sourceUrl: document.links?.api ?? null,
+        tpuCode: null,
+        description: document.descricao ?? null,
+        complements: [],
+        notes: null,
+        documentType: document.titulo ?? null,
+        fullTextAvailable: false,
+        documentUrl: document.links?.api ?? null,
         payload: document as Record<string, unknown>,
       }],
     });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
 
 describe("ProcessoTimeline", () => {
-  it("exibe o resumo e permite abrir a íntegra do evento", () => {
+  it("exibe os andamentos em lista e permite abrir a íntegra", () => {
     render(
       <ProcessoTimeline
         events={[{
@@ -23,6 +23,8 @@ describe("ProcessoTimeline", () => {
     );
 
     expect(screen.getByText("Juntada de petição")).toBeInTheDocument();
+    expect(screen.getByRole("article")).toHaveClass("grid");
+    expect(screen.getByText("01 de agosto de 2026")).toBeInTheDocument();
     expect(screen.getByText("Resumo do andamento…")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /ver íntegra/i }));
     expect(screen.getByText("Conteúdo completo do andamento processual.")).toBeInTheDocument();

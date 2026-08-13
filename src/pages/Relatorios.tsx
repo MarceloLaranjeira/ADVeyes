@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,7 +125,6 @@ const Relatorios = () => {
   const totalRecebido = financeiro.filter((f) => f.status === "pago" && f.tipo === "honorario").reduce((s, f) => s + Number(f.valor), 0);
   const taxaReceivimento = totalReceita > 0 ? Math.round((totalRecebido / totalReceita) * 100) : 0;
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const formatPct = (v: number) => `${v}%`;
 
   return (

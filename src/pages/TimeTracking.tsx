@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -144,7 +145,6 @@ const TimeTracking = () => {
     fetchData();
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <AppLayout>
@@ -156,7 +156,7 @@ const TimeTracking = () => {
           </div>
           <div className="flex items-center gap-3">
             {timerRunning ? (
-              <div className="flex items-center gap-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-4 py-2 rounded-lg">
+              <div className="flex items-center gap-3 bg-red-50 border border-red-200 px-4 py-2 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                 <span className="font-mono text-lg font-bold text-red-600">{formatTimer(timerSeconds)}</span>
                 <Button size="sm" variant="destructive" onClick={stopTimer} className="gap-1">
@@ -181,15 +181,15 @@ const TimeTracking = () => {
             <div><p className="text-xs text-muted-foreground">Total de Horas</p><p className="text-2xl font-bold">{totalHoras.toFixed(1)}h</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center"><Timer className="w-5 h-5 text-blue-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center"><Timer className="w-5 h-5 text-blue-600" /></div>
             <div><p className="text-xs text-muted-foreground">Horas Faturáveis</p><p className="text-2xl font-bold text-blue-600">{totalFaturavel.toFixed(1)}h</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center"><DollarSign className="w-5 h-5 text-green-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><DollarSign className="w-5 h-5 text-green-600" /></div>
             <div><p className="text-xs text-muted-foreground">Valor a Faturar</p><p className="text-xl font-bold text-green-600">{formatCurrency(totalValor - totalFaturado)}</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-purple-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-purple-600" /></div>
             <div><p className="text-xs text-muted-foreground">Total Faturado</p><p className="text-xl font-bold text-purple-600">{formatCurrency(totalFaturado)}</p></div>
           </CardContent></Card>
         </div>
@@ -268,14 +268,14 @@ const TimeTracking = () => {
                     {e.valor_hora ? formatCurrency(Number(e.horas) * Number(e.valor_hora)) : "—"}
                   </td>
                   <td className="p-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${e.faturavel ? "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${e.faturavel ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
                       {e.faturavel ? "Sim" : "Não"}
                     </span>
                   </td>
                   <td className="p-3">
                     <button
                       onClick={() => marcarFaturado(e.id, !e.faturado)}
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors ${e.faturado ? "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400" : "bg-muted text-muted-foreground hover:bg-purple-50"}`}
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors ${e.faturado ? "bg-purple-100 text-purple-700" : "bg-muted text-muted-foreground hover:bg-purple-50"}`}
                     >
                       {e.faturado ? <><CheckCircle2 className="w-3 h-3 inline mr-1" />Sim</> : "Marcar"}
                     </button>

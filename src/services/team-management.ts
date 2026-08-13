@@ -26,6 +26,8 @@ const messages: Record<string, string> = {
   invalid_profile: "Confira os dados do perfil.",
   owner_required_for_subscription:
     "Somente o proprietário pode liberar a alteração do plano.",
+  pilot_seat_limit:
+    "Durante o teste gratuito, o escritório pode ter o proprietário e mais uma pessoa.",
   operation_failed: "Não foi possível concluir a operação.",
 };
 

@@ -7,12 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
+
+type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
 
 interface ClienteFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  editData?: Record<string, any>;
+  editData?: Partial<Cliente>;
 }
 
 export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: ClienteFormProps) => {

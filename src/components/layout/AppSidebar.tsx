@@ -70,7 +70,10 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const { isPlatformAdmin } = usePlatformAdmin();
 
   return (
-    <aside className="h-full w-60 bg-white border-r border-border flex flex-col">
+    // A régua é navy nos tokens desde sempre (`--sidebar-background`), mas
+    // estava com `bg-white` fixo aqui — o token nunca chegava a valer. Navy
+    // separa navegação de conteúdo sem precisar de borda ou sombra.
+    <aside className="h-full w-60 bg-sidebar border-r border-sidebar-border flex flex-col">
       <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
         {isPlatformAdmin && (
           <div className="mb-5">
@@ -82,8 +85,8 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 location.pathname === "/admin"
-                  ? "bg-primary text-primary-foreground font-bold"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground font-medium"
+                  ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
               }`}
             >
               <ShieldCheck className="h-[18px] w-[18px]" />
@@ -94,7 +97,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         {sections.map((section, idx) => (
           <div key={idx} className={idx === 0 ? "" : "mt-5"}>
             {section.label && (
-              <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
+              <p className="px-3 mb-1.5 text-[10px] font-bold text-sidebar-foreground/50 tracking-widest uppercase">
                 {section.label}
               </p>
             )}
@@ -109,14 +112,16 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                     onClick={onClose}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive
-                        ? "bg-secondary text-foreground font-bold"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground font-medium"
+                        ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
                     }`}
                   >
                     <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={isActive ? 2.25 : 2} />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.badge ? (
-                      <span className="bg-destructive text-white text-[10px] font-bold px-1.5 py-px rounded">
+                      // Vermelho de prazo é fechado demais para ler sobre
+                      // navy; o latão cumpre o papel de chamar atenção.
+                      <span className="bg-gold text-[hsl(var(--navy))] text-[10px] font-bold px-1.5 py-px rounded">
                         {item.badge}
                       </span>
                     ) : null}
@@ -129,10 +134,10 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       </nav>
 
       {/* Footer: status tribunais */}
-      <div className="p-3 border-t border-border">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/60">
-          <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" />
-          <span className="text-xs text-muted-foreground flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
+      <div className="p-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent/60">
+          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+          <span className="text-xs text-sidebar-foreground/70 flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
         </div>
       </div>
     </aside>

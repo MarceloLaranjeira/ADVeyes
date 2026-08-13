@@ -23,6 +23,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { PropostaPrazoCard } from "@/components/processos/PropostaPrazoCard";
+import {
+  deadlineService,
+  DeadlineError,
+  type PropostaPrazo,
+} from "@/services/deadline";
 import {
   AlertTriangle,
   Bell,
@@ -37,10 +43,11 @@ import {
   Search,
   Scale,
   ShieldCheck,
+  ListChecks,
 } from "lucide-react";
 import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
@@ -175,12 +182,16 @@ const Publicacoes = () => {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
   const [processos, setProcessos] = useState<Map<string, Processo>>(new Map());
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [syncSources, setSyncSources] = useState<SyncSource[]>([]);
+  const [taskByPublication, setTaskByPublication] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
@@ -195,6 +206,11 @@ const Publicacoes = () => {
     title: "",
   });
   const [savingReview, setSavingReview] = useState(false);
+  // Proposta calculada pelo motor de prazos. Ela pré-preenche o formulário,
+  // mas quem confirma continua sendo o advogado — a proposta nunca grava.
+  const [proposta, setProposta] = useState<PropostaPrazo | null>(null);
+  const [calculando, setCalculando] = useState(false);
+  const [erroCalculo, setErroCalculo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!currentTenant) return;
@@ -206,22 +222,23 @@ const Publicacoes = () => {
       processesResult,
       runsResult,
       sourcesResult,
+      linksResult,
     ] = await Promise.all([
-        (supabase as any)
+        supabase
           .from("publicacoes")
           .select("*")
           .eq("tenant_id", tenantId)
           .order("data_publicacao", { ascending: false }),
-        (supabase as any)
+        supabase
           .from("process_movements")
           .select("*")
           .eq("tenant_id", tenantId)
           .order("occurred_at", { ascending: false }),
-        (supabase as any)
+        supabase
           .from("processos")
           .select("id, numero, cliente_nome")
           .eq("tenant_id", tenantId),
-        (supabase as any)
+        supabase
           .from("legal_sync_runs")
           .select(
             "id, provider, sync_kind, status, records_created, started_at, finished_at, error_code",
@@ -229,20 +246,28 @@ const Publicacoes = () => {
           .eq("tenant_id", tenantId)
           .order("started_at", { ascending: false })
           .limit(8),
-        (supabase as any)
+        supabase
           .from("legal_sync_sources")
           .select(
             "id, source_kind, provider, reference, active, next_sync_at, last_success_at, failure_count, last_error_code, paused_reason",
           )
           .eq("tenant_id", tenantId)
           .order("next_sync_at", { ascending: true }),
+        // A migration desta entrega ainda não integra o arquivo de tipos
+        // gerado; o acesso permanece tipado no resultado logo abaixo.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("publication_task_links")
+          .select("publication_id, task_id")
+          .eq("tenant_id", tenantId),
       ]);
 
     const firstError = publicationsResult.error ??
       movementsResult.error ??
       processesResult.error ??
       runsResult.error ??
-      sourcesResult.error;
+      sourcesResult.error ??
+      linksResult.error;
     if (firstError) {
       toast({
         title: "Não foi possível carregar o acompanhamento jurídico",
@@ -250,8 +275,8 @@ const Publicacoes = () => {
         variant: "destructive",
       });
     } else {
-      setPublicacoes(publicationsResult.data ?? []);
-      setMovimentos(movementsResult.data ?? []);
+      setPublicacoes((publicationsResult.data ?? []) as Publicacao[]);
+      setMovimentos((movementsResult.data ?? []) as Movimento[]);
       setProcessos(
         new Map(
           (processesResult.data ?? []).map((process: Processo) => [
@@ -260,8 +285,14 @@ const Publicacoes = () => {
           ]),
         ),
       );
-      setSyncRuns(runsResult.data ?? []);
-      setSyncSources(sourcesResult.data ?? []);
+      setSyncRuns((runsResult.data ?? []) as SyncRun[]);
+      setSyncSources((sourcesResult.data ?? []) as SyncSource[]);
+      setTaskByPublication(new Map(
+        (linksResult.data ?? []).map((link: {
+          publication_id: string;
+          task_id: string;
+        }) => [link.publication_id, link.task_id]),
+      ));
     }
     setLoading(false);
   }, [currentTenant, toast]);
@@ -269,6 +300,11 @@ const Publicacoes = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const publicationId = searchParams.get("publication");
+    if (publicationId) setExpandedId(publicationId);
+  }, [searchParams]);
 
   const filteredPublications = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase("pt-BR");
@@ -359,7 +395,7 @@ const Publicacoes = () => {
 
   const markAsRead = async (publication: Publicacao) => {
     if (!currentTenant) return;
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("publicacoes")
       .update({ status: "lida" })
       .eq("tenant_id", currentTenant.tenantId)
@@ -375,6 +411,8 @@ const Publicacoes = () => {
 
   const openDeadlineReview = (publication: Publicacao) => {
     setReviewing(publication);
+    setProposta(null);
+    setErroCalculo(null);
     setReviewForm({
       deadline: publication.data_prazo
         ? publication.data_prazo.slice(0, 10)
@@ -384,6 +422,42 @@ const Publicacoes = () => {
       title:
         `Cumprir prazo — ${publication.numero_processo ?? publication.tribunal}`,
     });
+    void calcularPrazo(publication);
+  };
+
+  /**
+   * Pede a proposta ao motor de prazos e usa o resultado para pré-preencher o
+   * formulário. Falha de cálculo não bloqueia nada: o advogado continua com o
+   * preenchimento manual que sempre existiu.
+   */
+  const calcularPrazo = async (publication: Publicacao) => {
+    if (!currentTenant) return;
+    setCalculando(true);
+    setErroCalculo(null);
+    try {
+      const resultado = await deadlineService.compute({
+        tenantId: currentTenant.tenantId,
+        publicationId: publication.id,
+      });
+      setProposta(resultado);
+      setReviewForm((current) => ({
+        ...current,
+        deadline: resultado.vencimento,
+        days: String(resultado.dias),
+        reason: current.reason ||
+          `${resultado.fundamentoDoPrazo} ${resultado.fundamentos.join(" ")}`
+            .trim()
+            .slice(0, 500),
+      }));
+    } catch (error) {
+      setErroCalculo(
+        error instanceof DeadlineError
+          ? error.message
+          : "Não foi possível calcular o prazo agora.",
+      );
+    } finally {
+      setCalculando(false);
+    }
   };
 
   const submitReview = async (decision: "confirm" | "reject") => {
@@ -427,10 +501,14 @@ const Publicacoes = () => {
 
   const syncPanel = useMemo(() => {
     const active = syncSources.filter((source) => source.active);
-    const nextRun = active
+    const nowIso = new Date().toISOString();
+    const upcomingRuns = active
       .map((source) => source.next_sync_at)
-      .sort()
-      .at(0) ?? null;
+      .filter((value): value is string => Boolean(value) && value > nowIso)
+      .sort();
+    const nextRun = upcomingRuns.at(0) ??
+      active.map((source) => source.next_sync_at).filter(Boolean).sort().at(-1) ??
+      null;
     const lastSuccess = syncSources
       .map((source) => source.last_success_at)
       .filter((value): value is string => Boolean(value))
@@ -746,6 +824,30 @@ const Publicacoes = () => {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        {taskByPublication.has(publication.id) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(
+                              `/tarefas?task=${taskByPublication.get(publication.id)}`,
+                            )}
+                          >
+                            <ListChecks className="mr-2 h-4 w-4" />
+                            Abrir tarefa
+                          </Button>
+                        )}
+                        {publication.process_id && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(
+                              `/processos/${publication.process_id}`,
+                            )}
+                          >
+                            <Scale className="mr-2 h-4 w-4" />
+                            Abrir processo
+                          </Button>
+                        )}
                         {publication.possible_deadline &&
                           publication.review_status === "pending_review" && (
                             <Button
@@ -871,10 +973,40 @@ const Publicacoes = () => {
             <DialogTitle>Revisar possível prazo</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            O sistema apenas sinalizou um possível prazo. Confirme a data
-            somente após conferir a publicação original.
+            O sistema calcula uma proposta a partir do texto e do CPC. Confirme
+            a data somente após conferir a publicação original.
           </p>
-          <div className="grid gap-4 py-2">
+
+          {calculando && (
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Lendo a publicação e contando os dias úteis…
+            </div>
+          )}
+
+          {erroCalculo && !calculando && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-600"
+                aria-hidden="true"
+              />
+              <span>{erroCalculo} Preencha a data manualmente abaixo.</span>
+            </div>
+          )}
+
+          {proposta && !calculando && (
+            <PropostaPrazoCard
+              proposta={proposta}
+              isConfirming={savingReview}
+              onConfirmar={() => void submitReview("confirm")}
+              onAjustar={() => setProposta(null)}
+            />
+          )}
+
+          {/* Com a proposta na tela, os campos manuais ficam fora do caminho.
+              "Ajustar" limpa a proposta e devolve o preenchimento à mão, já
+              com os valores calculados dentro. */}
+          <div className={proposta ? "hidden" : "grid gap-4 py-2"}>
             <div className="grid gap-2">
               <Label htmlFor="deadline">Data limite confirmada</Label>
               <Input
@@ -936,17 +1068,21 @@ const Publicacoes = () => {
             >
               Não há prazo
             </Button>
-            <Button
-              disabled={savingReview ||
-                !reviewForm.reason.trim() ||
-                !reviewForm.deadline}
-              onClick={() => void submitReview("confirm")}
-            >
-              {savingReview && (
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Confirmar e criar tarefa
-            </Button>
+            {/* O cartão da proposta traz o próprio Confirmar. Manter os dois
+                na tela deixaria o advogado sem saber qual dos dois grava. */}
+            {!proposta && (
+              <Button
+                disabled={savingReview ||
+                  !reviewForm.reason.trim() ||
+                  !reviewForm.deadline}
+                onClick={() => void submitReview("confirm")}
+              >
+                {savingReview && (
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Confirmar e criar tarefa
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

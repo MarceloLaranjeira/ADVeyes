@@ -25,6 +25,9 @@ export interface OfficialMovementInput {
   source_name?: string | null;
   source_url?: string | null;
   movement_type?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  document_type?: string | null;
 }
 
 export interface PublicationInput {
@@ -81,13 +84,15 @@ export function buildProcessTimeline(input: {
   const events: ProcessTimelineEvent[] = [];
 
   for (const item of input.movements ?? []) {
-    const content = clean(item.content) || "Movimentação registrada sem descrição detalhada.";
+    const details = [clean(item.content), clean(item.description), clean(item.notes)]
+      .filter((value, index, values) => value && values.indexOf(value) === index);
+    const content = details.join("\n\n") || "Movimentação registrada sem descrição detalhada.";
     const fallback = item.movement_type === "DOCUMENTO" ? "Documento" : "Andamento";
     events.push({
       id: `movement:${item.id}`,
       kind: "movement",
       occurredAt: item.occurred_at ?? null,
-      title: clean(item.title) || fallback,
+      title: clean(item.title) || clean(item.document_type) || fallback,
       summary: summarizeTimelineText(content),
       content,
       provider: clean(item.provider) || "Fonte oficial",

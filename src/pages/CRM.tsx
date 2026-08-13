@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,12 +18,12 @@ import {
 } from "lucide-react";
 
 const statusFunil = [
-  { id: "novo", label: "Novo Lead", color: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800" },
-  { id: "contato", label: "Em Contato", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300", border: "border-yellow-200 dark:border-yellow-800" },
-  { id: "proposta", label: "Proposta Enviada", color: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300", border: "border-purple-200 dark:border-purple-800" },
-  { id: "negociacao", label: "Em Negociação", color: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300", border: "border-orange-200 dark:border-orange-800" },
-  { id: "convertido", label: "Convertido", color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300", border: "border-green-200 dark:border-green-800" },
-  { id: "perdido", label: "Perdido", color: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300", border: "border-red-200 dark:border-red-800" },
+  { id: "novo", label: "Novo Lead", color: "bg-blue-100 text-blue-700", border: "border-blue-200" },
+  { id: "contato", label: "Em Contato", color: "bg-yellow-100 text-yellow-700", border: "border-yellow-200" },
+  { id: "proposta", label: "Proposta Enviada", color: "bg-purple-100 text-purple-700", border: "border-purple-200" },
+  { id: "negociacao", label: "Em Negociação", color: "bg-orange-100 text-orange-700", border: "border-orange-200" },
+  { id: "convertido", label: "Convertido", color: "bg-green-100 text-green-700", border: "border-green-200" },
+  { id: "perdido", label: "Perdido", color: "bg-red-100 text-red-700", border: "border-red-200" },
 ];
 
 const origens = ["indicacao", "site", "instagram", "facebook", "google", "linkedin", "oab", "outro"];
@@ -142,7 +143,6 @@ const CRM = () => {
     return "text-green-600";
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <AppLayout>
@@ -168,15 +168,15 @@ const CRM = () => {
             <div><p className="text-xs text-muted-foreground">Total de Leads</p><p className="text-2xl font-bold">{leads.length}</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center"><UserCheck className="w-5 h-5 text-green-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><UserCheck className="w-5 h-5 text-green-600" /></div>
             <div><p className="text-xs text-muted-foreground">Convertidos</p><p className="text-2xl font-bold text-green-600">{totalConvertidos}</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-purple-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-purple-600" /></div>
             <div><p className="text-xs text-muted-foreground">Taxa de Conversão</p><p className="text-2xl font-bold text-purple-600">{taxaConversao}%</p></div>
           </CardContent></Card>
           <Card><CardContent className="p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center"><DollarSign className="w-5 h-5 text-yellow-600" /></div>
+            <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center"><DollarSign className="w-5 h-5 text-yellow-600" /></div>
             <div><p className="text-xs text-muted-foreground">Pipeline (R$)</p><p className="text-xl font-bold text-yellow-600">{formatCurrency(totalValorPipeline)}</p></div>
           </CardContent></Card>
         </div>
@@ -233,14 +233,14 @@ const CRM = () => {
                           {col.id !== "convertido" && (
                             <button
                               onClick={(ev) => { ev.stopPropagation(); convertToClient(lead); }}
-                              className="flex-1 text-[10px] bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 rounded px-1 py-1 hover:bg-green-100 transition-colors flex items-center justify-center gap-1"
+                              className="flex-1 text-[10px] bg-green-50 text-green-700 rounded px-1 py-1 hover:bg-green-100 transition-colors flex items-center justify-center gap-1"
                             >
                               <UserCheck className="w-3 h-3" /> Converter
                             </button>
                           )}
                           <button
                             onClick={(ev) => { ev.stopPropagation(); updateStatus(lead.id, "perdido"); }}
-                            className="flex-1 text-[10px] bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 rounded px-1 py-1 hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
+                            className="flex-1 text-[10px] bg-red-50 text-red-700 rounded px-1 py-1 hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
                           >
                             <XCircle className="w-3 h-3" /> Perder
                           </button>

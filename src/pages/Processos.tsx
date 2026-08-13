@@ -29,8 +29,10 @@ interface Processo {
   numero: string;
   cliente_nome?: string;
   area?: string;
+  class_name?: string;
   status?: string;
   vara?: string;
+  adjudicating_body?: string;
   advogado?: string;
   percentual_exito?: number;
   polo_ativo?: string;
@@ -453,31 +455,6 @@ const Processos = () => {
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo]     = useState("");
-  const [showSyncDialog, setShowSyncDialog] = useState(false);
-  const [syncOab, setSyncOab]               = useState("");
-  const [syncSeccional, setSyncSeccional]   = useState("");
-  const [syncing, setSyncing]               = useState(false);
-
-  const sincronizarOAB = async () => {
-    if (!syncOab || !syncSeccional) { toast({ title: "Informe OAB e seccional", variant: "destructive" }); return; }
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("oab-sync", {
-        body: { oab_numero: syncOab, seccional: syncSeccional },
-      });
-      if (error) throw error;
-      toast({
-        title: "Sincronização concluída",
-        description: data?.message ?? `${data?.novos ?? 0} novo(s) + ${data?.atualizados ?? 0} atualizado(s)`,
-      });
-      setShowSyncDialog(false);
-      fetchProcessos();
-    } catch (e) {
-      toast({ title: "Erro ao sincronizar", description: (e as Error).message, variant: "destructive" });
-    }
-    setSyncing(false);
-  };
-
   const fetchProcessos = useCallback(async () => {
     if (!currentTenant) return;
     const { data } = await (supabase as any)
@@ -525,7 +502,7 @@ const Processos = () => {
             <Button variant="outline" size="sm" onClick={() => exportProcessosPDF(filtered)} className="gap-1.5 h-9">
               <Download className="w-3.5 h-3.5" /> PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowSyncDialog(true)} className="gap-1.5 h-9">
+            <Button variant="outline" size="sm" onClick={() => navigate("/integracoes-juridicas")} className="gap-1.5 h-9">
               <RefreshCw className="w-3.5 h-3.5" /> Sincronizar OAB
             </Button>
             <button
@@ -578,10 +555,10 @@ const Processos = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/40">
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Número</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Cliente</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Área</th>
-                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vara/Câmara</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Número CNJ</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Partes / Envolvidos</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Classe / Área</th>
+                <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vara / Órgão Julgador</th>
                 <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Advogado</th>
                 <th className="text-right p-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Ações</th>
@@ -597,11 +574,19 @@ const Processos = () => {
                   className="hover:bg-muted/20 transition-colors cursor-pointer"
                   onClick={() => navigate(`/processos/${p.id}`)}
                 >
-                  <td className="p-4 text-sm font-mono text-primary">{p.numero}</td>
-                  <td className="p-4 text-sm font-medium">{p.cliente_nome}</td>
-                  <td className="p-4"><AreaBadge area={p.area} /></td>
-                  <td className="p-4 text-sm text-muted-foreground">{p.vara || "—"}</td>
-                  <td className="p-4 text-sm">{p.status}</td>
+                  <td className="p-4 text-sm font-mono text-primary font-semibold">{p.numero}</td>
+                  <td className="p-4 text-sm max-w-[260px]">
+                    <p className="font-medium text-foreground truncate">{p.cliente_nome || p.polo_ativo || "Cliente não identificado"}</p>
+                    {p.polo_passivo && (
+                      <p className="text-xs text-muted-foreground truncate">vs. {p.polo_passivo}</p>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <p className="text-xs font-medium text-foreground mb-1">{p.class_name || p.area || "Cível"}</p>
+                    <AreaBadge area={p.area || "Cível"} />
+                  </td>
+                  <td className="p-4 text-sm text-muted-foreground max-w-[200px] truncate">{p.adjudicating_body || p.vara || "—"}</td>
+                  <td className="p-4 text-sm"><Badge variant="outline">{p.status || "Em andamento"}</Badge></td>
                   <td className="p-4 text-sm text-muted-foreground">{p.advogado || "—"}</td>
                   <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
@@ -639,33 +624,6 @@ const Processos = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        {/* OAB Sync Dialog */}
-        <Dialog open={showSyncDialog} onOpenChange={o => !o && setShowSyncDialog(false)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Sincronizar processos via OAB</DialogTitle></DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              🦅 Horus irá buscar todos os processos vinculados à sua OAB em todos os tribunais da seccional.
-            </p>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <div className="space-y-1.5">
-                <Label>Número OAB</Label>
-                <Input placeholder="Ex: 12345" value={syncOab} onChange={e => setSyncOab(e.target.value.replace(/\D/g, ""))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Seccional</Label>
-                <Input placeholder="Ex: AM" maxLength={2} value={syncSeccional} onChange={e => setSyncSeccional(e.target.value.toUpperCase())} />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-2">
-              <Button variant="outline" onClick={() => setShowSyncDialog(false)}>Cancelar</Button>
-              <Button onClick={sincronizarOAB} disabled={syncing} className="gap-2">
-                {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                {syncing ? "Sincronizando..." : "Sincronizar"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         <Dialog open={!!honorarioProcesso} onOpenChange={o => !o && setHonorarioProcesso(null)}>
           <DialogContent className="max-w-lg">

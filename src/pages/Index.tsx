@@ -1,36 +1,37 @@
 import { useState, useEffect } from "react";
+import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { RecentProcesses } from "@/components/dashboard/RecentProcesses";
 import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
 import { DepthCard } from "@/components/dashboard/DepthCard";
+import { CompactWorkspaceCalendar } from "@/components/dashboard/CompactWorkspaceCalendar";
 import { TrialBanner } from "@/components/TrialBanner";
+import { OnboardingResumeBanner } from "@/components/onboarding/OnboardingResumeBanner";
 import {
   ArrowRight, TrendingUp, Clock, Receipt, Wallet, Target, CheckCircle2,
-  Briefcase, Users, KanbanSquare, Calendar, Gavel, Search, CheckSquare,
-  DollarSign, FolderOpen, BookOpen, BarChart3, Sparkles, Bell,
-  AlertTriangle, Activity,
+  Briefcase, Users, KanbanSquare, Calendar, Gavel, CheckSquare,
+  Sparkles, Bell,
+  AlertTriangle, Activity as ActivityIcon,
 } from "lucide-react";
 const IconProcessos = Briefcase;
 const IconClientes = Users;
 const IconLeads = KanbanSquare;
 const IconAgenda = Calendar;
 const IconAudiencias = Gavel;
-const IconBusca = Search;
 const IconTarefas = CheckSquare;
-const IconFinanceiro = DollarSign;
 const IconHoras = Clock;
-const IconDocumentos = FolderOpen;
-const IconJurisprudencia = BookOpen;
-const IconRelatorios = BarChart3;
 const IconHorusIA = Sparkles;
 const IconBell = Bell;
 const IconAlerta = AlertTriangle;
-const IconSistema = Activity;
+const IconSistema = ActivityIcon;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { calculateActivityMetrics } from "@/lib/activity-status";
+import type { Activity } from "@/types/activities";
 
 interface Prazo {
   tipo: string;
@@ -55,6 +56,11 @@ const Index = () => {
   const [horasMes, setHorasMes] = useState(0);
   const [metaMes, setMetaMes] = useState<Record<string, any> | null>(null);
   const [tarefasHoje, setTarefasHoje] = useState(0);
+  const [activitySummary, setActivitySummary] = useState({
+    pending: 0,
+    completedThisMonth: 0,
+    pointsThisMonth: 0,
+  });
   const [nomeAdvogado, setNomeAdvogado] = useState("");
   const [horusMetrics, setHorusMetrics] = useState({
     processosMonitorados: 0,
@@ -97,7 +103,8 @@ const Index = () => {
       tenantTable("metas_financeiras").select("*").eq("tenant_id", tenantId).eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).maybeSingle(),
       tenantTable("tarefas").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("data_limite", hoje).neq("status", "concluída"),
       tenantTable("processo_monitoramento").select("tribunal, ultima_verificacao, ativo").eq("tenant_id", tenantId).eq("ativo", true),
-    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes, monitoramento]) => {
+      tenantTable("tarefas").select("*").eq("tenant_id", tenantId),
+    ]).then(([proc, cli, doc, tarefas, aud, fin, notifs, allFin, leads, timeE, meta, tarefasHojeRes, monitoramento, activityRows]) => {
       const processRows = proc.data || [];
       setStats({ processos: processRows.length, clientes: cli.count || 0, documentos: doc.count || 0 });
       const areaCounts = processRows.reduce((counts: Record<string, number>, process: any) => {
@@ -150,6 +157,16 @@ const Index = () => {
       setHorasMes((timeE.data || []).reduce((s: number, e: any) => s + Number(e.horas), 0));
       setMetaMes(meta.data || null);
       setTarefasHoje(tarefasHojeRes.count || 0);
+      const allActivities = (activityRows.data ?? []) as Activity[];
+      const activityMetrics = calculateActivityMetrics(allActivities, now);
+      const completedThisMonth = allActivities.filter(activity =>
+        activity.concluida_em && activity.concluida_em >= inicioMes,
+      );
+      setActivitySummary({
+        pending: activityMetrics.pending + activityMetrics.inProgress,
+        completedThisMonth: completedThisMonth.length,
+        pointsThisMonth: completedThisMonth.reduce((total, activity) => total + activity.pontos, 0),
+      });
     });
   }, [currentTenant?.tenantId]);
 
@@ -184,23 +201,24 @@ const Index = () => {
     return "bg-card border-border";
   };
 
-  const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const quickActions = [
-    { label: "Busca Processual", icon: IconBusca, path: "/busca" },
-    { label: "Nova Tarefa", icon: IconTarefas, path: "/tarefas" },
-    { label: "Financeiro", icon: IconFinanceiro, path: "/financeiro" },
-    { label: "Controle Horas", icon: IconHoras, path: "/time-tracking" },
-    { label: "Novo Lead (CRM)", icon: IconLeads, path: "/crm" },
-    { label: "Documentos", icon: IconDocumentos, path: "/documentos" },
-    { label: "Jurisprudência", icon: IconJurisprudencia, path: "/jurisprudencia" },
-    { label: "Relatórios", icon: IconRelatorios, path: "/relatorios" },
-  ];
 
   return (
     <AppLayout>
       <div className="animate-fade-in">
-        <TrialBanner />
+        <OnboardingResumeBanner />
+        {/* ADVBOX Navigation Tabs */}
+        <div className="mb-4">
+          <Tabs defaultValue="visao_geral" className="w-full">
+            <TabsList className="bg-muted/50 flex-wrap h-auto gap-1">
+              <TabsTrigger value="visao_geral" className="text-xs">Visão Geral</TabsTrigger>
+              <TabsTrigger value="lista" className="text-xs" onClick={() => navigate("/tarefas?view=lista")}>Lista</TabsTrigger>
+              <TabsTrigger value="quadro" className="text-xs" onClick={() => navigate("/tarefas?view=kanban")}>Quadro</TabsTrigger>
+              <TabsTrigger value="desempenho" className="text-xs" onClick={() => navigate("/relatorios")}>Desempenho</TabsTrigger>
+              <TabsTrigger value="configuracoes" className="text-xs" onClick={() => navigate("/configuracoes")}>Configurações</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
         {/* Header - Astrea greeting */}
         <div className="mb-6">
           <div className="flex items-start justify-between mb-4">
@@ -264,7 +282,7 @@ const Index = () => {
         </div>
 
         {/* Row 1: Processos + Operacional */}
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 mb-4">
           <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/processos")}>
             <div className="flex items-start justify-between">
               <div>
@@ -343,6 +361,26 @@ const Index = () => {
                 <p className="text-[10px] text-muted-foreground mt-0.5">Tarefas</p>
               </div>
               <div className="p-2 rounded-lg bg-secondary"><CheckCircle2 className="w-4 h-4 text-muted-foreground" /></div>
+            </div>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pendentes</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{activitySummary.pending}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Atividades</p>
+              </div>
+              <div className="p-2 rounded-lg bg-secondary"><IconTarefas size={20} className="text-muted-foreground" /></div>
+            </div>
+          </DepthCard>
+          <DepthCard className="metric-card p-4" interactive onActivate={() => navigate("/tarefas")}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Taskscore</p>
+                <p className="text-3xl font-bold mt-1 leading-none" style={{fontFamily:"'Microsoft Sans Serif',sans-serif"}}>{activitySummary.pointsThisMonth}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{activitySummary.completedThisMonth} concluídas</p>
+              </div>
+              <div className="p-2 rounded-lg bg-secondary"><Target size={20} className="text-muted-foreground" /></div>
             </div>
           </DepthCard>
         </div>
@@ -458,32 +496,6 @@ const Index = () => {
           </Card>
         )}
 
-        {/* Quick Actions */}
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <IconSistema size={18} className="text-muted-foreground" />
-                <h3 className="font-serif font-semibold text-sm">Ações Rápidas</h3>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-              {quickActions.map((a) => (
-                <button
-                  key={a.path}
-                  onClick={() => navigate(a.path)}
-                  className="quick-action-card group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center group-hover:bg-secondary/70 group-hover:scale-105 transition-all">
-                    <a.icon className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  </div>
-                  <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight text-center">{a.label}</span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Horus AI Banner */}
         <Card
           className="mb-4 cursor-pointer overflow-hidden group transition-all duration-200"
@@ -569,6 +581,8 @@ const Index = () => {
 
           {/* Sidebar cards */}
           <div className="space-y-3">
+            <CompactWorkspaceCalendar tenantId={currentTenant?.tenantId ?? null} />
+
             {/* Notificações */}
             <Card className="cursor-pointer" onClick={() => navigate("/publicacoes")}>
               <CardContent className="p-3">
