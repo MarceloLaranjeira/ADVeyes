@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { normalizeOperationalCalendar } from "@/services/operational-calendar";
 import type {
-  CalendarEvent,
+  CalendarEventWithProcess,
   CalendarHearing,
-  CalendarTask,
+  CalendarTaskWithProcess,
 } from "@/types/operational-calendar";
 
 describe("normalizeOperationalCalendar", () => {
@@ -16,7 +16,8 @@ describe("normalizeOperationalCalendar", () => {
         data_inicio: "2026-08-10T09:00:00",
         local: "Escritório",
         user_id: "user-1",
-      } as CalendarEvent],
+        processos: null,
+      } as CalendarEventWithProcess],
       [{
         id: "task-1",
         titulo: "Protocolar manifestação",
@@ -27,7 +28,8 @@ describe("normalizeOperationalCalendar", () => {
         processo_id: "process-1",
         status: "pendente",
         prioridade: "alta",
-      } as CalendarTask],
+        processos: { numero: "0001", cliente_nome: "Cliente da tarefa" },
+      } as CalendarTaskWithProcess],
       [{
         id: "hearing-1",
         tipo: "Audiência de instrução",
@@ -48,6 +50,8 @@ describe("normalizeOperationalCalendar", () => {
       sourceId: "task-1",
       assigneeId: "user-2",
       processId: "process-1",
+      processNumber: "0001",
+      clientName: "Cliente da tarefa",
     });
     expect(items[2]).toMatchObject({
       assigneeId: "user-3",

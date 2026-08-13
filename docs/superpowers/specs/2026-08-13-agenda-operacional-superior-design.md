@@ -1,7 +1,7 @@
 # ADVeyes — Agenda operacional superior
 
 Data: 13 de agosto de 2026  
-Status: aprovado em conversa; aguardando revisão do documento
+Status: aprovado e implementado
 
 ## Objetivo
 
@@ -251,4 +251,3 @@ desconectar fará parte do aceite.
 - drag and drop de compromissos como único meio de reagendamento;
 - reestruturação geral de outros módulos;
 - cópia da identidade visual, dos textos ou dos ativos da ADVBOX.
-

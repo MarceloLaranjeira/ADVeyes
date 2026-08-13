@@ -1,730 +1,208 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { addDays, addMonths, addWeeks, format } from "date-fns";
+import { CalendarSync, Link2, Link2Off, RefreshCw, TriangleAlert } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { AgendaAttentionCenter } from "@/components/agenda/AgendaAttentionCenter";
+import { AgendaDetailSheet } from "@/components/agenda/AgendaDetailSheet";
+import { AgendaToolbar } from "@/components/agenda/AgendaToolbar";
+import { AgendaViews } from "@/components/agenda/AgendaViews";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useOperationalCalendar } from "@/hooks/useOperationalCalendar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Clock, MapPin, Trash2, Pencil, ChevronLeft, ChevronRight, CalendarDays, ListTodo, AlertCircle, RefreshCw, Link2, Link2Off } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format, isSameDay, addDays, startOfWeek, endOfWeek, addWeeks, subWeeks, isToday, isBefore } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { agendaRouteParams, agendaVisibleRange, filterOperationalCalendar, findCalendarConflicts, parseAgendaRoute } from "@/lib/agenda-calendar";
 import { googleCalendar } from "@/lib/google-calendar";
-import { Switch } from "@/components/ui/switch";
-import { parseAgendaDate } from "@/lib/compact-calendar";
+import type { CalendarEventWithProcess, OperationalCalendarFilters, OperationalCalendarItem, OperationalCalendarScope, OperationalCalendarView } from "@/types/operational-calendar";
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
-interface Evento {
-  id: string;
-  titulo: string;
-  descricao?: string | null;
-  tipo: string;
-  data_inicio: string;
-  local?: string | null;
-  google_event_id?: string | null;
+const eventTypes = ["audiência", "prazo", "reunião", "despacho", "outro"];
+
+interface EventForm {
+  title: string;
+  description: string;
+  type: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
 }
 
-interface Tarefa {
-  id: string;
-  titulo: string;
-  descricao?: string | null;
-  data_limite?: string | null;
-  status: string;
-  prioridade?: string;
-  google_event_id?: string | null;
+function emptyForm(date: Date): EventForm {
+  const startHour = date.getHours() >= 7 && date.getHours() <= 20 ? format(date, "HH:mm") : "09:00";
+  const end = new Date(date);
+  end.setHours(Number(startHour.slice(0, 2)) + 1, Number(startHour.slice(3)), 0, 0);
+  return { title: "", description: "", type: "reunião", date: format(date, "yyyy-MM-dd"), startTime: startHour, endTime: format(end, "HH:mm"), location: "" };
 }
 
-interface Audiencia {
-  id: string;
-  tipo: string;
-  data_hora: string;
-  vara?: string;
-  status?: string;
-  processos?: { numero?: string; cliente_nome?: string | null } | null;
-  google_event_id?: string | null;
+function AgendaLoading() {
+  return <div className="space-y-4"><Skeleton className="h-32 rounded-2xl" /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-20 rounded-xl" />)}</div><Skeleton className="h-[480px] rounded-2xl" /></div>;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const tipoOptions = ["audiência", "prazo", "reunião", "despacho", "outro"];
-
-const tipoColors: Record<string, { border: string; bg: string; dot: string }> = {
-  audiência: { border: "border-l-red-500",    bg: "bg-red-500/5",    dot: "bg-red-500"    },
-  prazo:     { border: "border-l-orange-500", bg: "bg-orange-500/5", dot: "bg-orange-500" },
-  reunião:   { border: "border-l-blue-500",   bg: "bg-blue-500/5",   dot: "bg-blue-500"   },
-  despacho:  { border: "border-l-primary",    bg: "bg-primary/5",    dot: "bg-primary"    },
-  outro:     { border: "border-l-muted-foreground", bg: "bg-muted/30", dot: "bg-muted-foreground" },
-};
-
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 7); // 7h–18h
-
-function fmtTime(dt: string) { return format(new Date(dt), "HH:mm"); }
-function fmtDateShort(d: Date) { return format(d, "dd/MM", { locale: ptBR }); }
-function fmtWeekDay(d: Date) { return format(d, "EEE", { locale: ptBR }); }
-
-// ─── Event Card ───────────────────────────────────────────────────────────────
-function EventCard({ evento, onEdit, onDelete, compact = false }: {
-  evento: Evento; onEdit: (e: Evento) => void; onDelete: (id: string) => void; compact?: boolean;
-}) {
-  const colors = tipoColors[evento.tipo] || tipoColors.outro;
-  return (
-    <div
-      className={`border border-l-4 ${colors.border} ${colors.bg} rounded-xl p-3 group hover:shadow-sm transition-shadow`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <Clock className="w-3 h-3 shrink-0" />
-            <span>{fmtTime(evento.data_inicio)}</span>
-            <span className="px-1.5 py-0.5 rounded bg-muted/60 text-[10px] uppercase font-medium">{evento.tipo}</span>
-          </div>
-          <p className="font-medium text-sm truncate">{evento.titulo}</p>
-          {!compact && evento.descricao && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{evento.descricao}</p>}
-          {!compact && evento.local && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-              <MapPin className="w-3 h-3 shrink-0" /> {evento.local}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
-          <button onClick={() => onEdit(evento)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button onClick={() => onDelete(evento.id)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Week View ────────────────────────────────────────────────────────────────
-function WeekView({ weekStart, eventos, onEdit, onDelete, onNewOnDay }: {
-  weekStart: Date; eventos: Evento[];
-  onEdit: (e: Evento) => void; onDelete: (id: string) => void;
-  onNewOnDay: (d: Date) => void;
-}) {
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      {/* Header */}
-      <div className="grid grid-cols-8 border-b">
-        <div className="p-3" />
-        {days.map(d => (
-          <div
-            key={d.toISOString()}
-            onClick={() => onNewOnDay(d)}
-            className={`p-3 text-center border-l cursor-pointer hover:bg-muted/30 transition-colors ${isToday(d) ? "bg-primary/5" : ""}`}
-          >
-            <p className="text-xs text-muted-foreground capitalize">{fmtWeekDay(d)}</p>
-            <p className={`text-lg font-bold mt-0.5 ${isToday(d) ? "text-primary" : ""}`}>{format(d, "d")}</p>
-            <p className="text-[10px] text-muted-foreground">{fmtDateShort(d)}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Hour rows */}
-      {HOURS.map(h => (
-        <div key={h} className="grid grid-cols-8 border-b last:border-0 min-h-[56px]">
-          <div className="p-2 text-right text-[11px] text-muted-foreground border-r pt-3 shrink-0">
-            {h.toString().padStart(2, "0")}:00
-          </div>
-          {days.map(d => {
-            const evts = eventos.filter(e => {
-              const ed = new Date(e.data_inicio);
-              return isSameDay(ed, d) && ed.getHours() === h;
-            });
-            return (
-              <div key={d.toISOString()} className={`border-l p-1 space-y-1 ${isToday(d) ? "bg-primary/3" : ""}`}>
-                {evts.map(e => {
-                  const c = tipoColors[e.tipo] || tipoColors.outro;
-                  return (
-                    <div key={e.id} className={`text-[10px] px-1.5 py-1 rounded border-l-2 ${c.border.replace("border-l-", "border-l-")} ${c.bg} cursor-pointer group`}
-                      onClick={() => onEdit(e)}>
-                      <span className="font-medium">{fmtTime(e.data_inicio)}</span>
-                      <span className="ml-1 truncate">{e.titulo}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-const Agenda = () => {
-  const [searchParams] = useSearchParams();
+export default function Agenda() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const {
-    data: operationalCalendar,
-    refetch: refetchOperationalCalendar,
-  } = useOperationalCalendar(currentTenant?.tenantId ?? null);
-  const [eventos, setEventos]       = useState<Evento[]>([]);
-  const [tarefas, setTarefas]       = useState<Tarefa[]>([]);
-  const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
-  const [gcalConnected, setGcalConnected] = useState(false);
-  const [gcalSyncing, setGcalSyncing] = useState(false);
-  const [syncToGcal, setSyncToGcal] = useState(true);
-  const initialDate = parseAgendaDate(searchParams.get("date")) ?? new Date();
-  const [selectedDate, setSelectedDate] = useState<Date>(initialDate);
-  const [weekStart, setWeekStart] = useState<Date>(startOfWeek(initialDate, { weekStartsOn: 1 }));
-  const [viewMode, setViewMode]   = useState<"mes" | "semana" | "dia">("mes");
-  const [activeTab, setActiveTab] = useState("compromissos");
-  const [showForm, setShowForm]   = useState(false);
-  const [editData, setEditData]   = useState<Evento | null>(null);
-  const [deleteId, setDeleteId]   = useState<string | null>(null);
-  const [loading, setLoading]     = useState(false);
-  const [showGcalDisconnectDialog, setShowGcalDisconnectDialog] = useState(false);
-  const [gcalDisconnecting, setGcalDisconnecting] = useState(false);
-  const [form, setForm] = useState({
-    titulo: "", descricao: "", tipo: "reunião", data_inicio: "", hora_inicio: "09:00", local: "",
-  });
-  const fetchAll = useCallback(async () => {
-    await refetchOperationalCalendar();
-  }, [refetchOperationalCalendar]);
+  const canSeeOffice = Boolean(currentTenant && (currentTenant.accessMode === "platform" || currentTenant.dataScope !== "assigned" || currentTenant.role === "owner" || currentTenant.role === "admin"));
+  const defaultScope: OperationalCalendarScope = canSeeOffice ? "office" : "mine";
+  const route = useMemo(() => parseAgendaRoute(searchParams, defaultScope), [defaultScope, searchParams]);
+  const scope: OperationalCalendarScope = canSeeOffice ? route.scope : "mine";
+  const range = useMemo(() => agendaVisibleRange(route.date, route.view), [route.date, route.view]);
+  const calendar = useOperationalCalendar(currentTenant?.tenantId ?? null, range, { scope, userId: user?.id });
+  const filteredItems = useMemo(() => filterOperationalCalendar(calendar.items, route.filters), [calendar.items, route.filters]);
+  const conflicts = useMemo(() => findCalendarConflicts(filteredItems), [filteredItems]);
+
+  const [selectedItem, setSelectedItem] = useState<OperationalCalendarItem | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEventWithProcess | null>(null);
+  const [deleteItem, setDeleteItem] = useState<OperationalCalendarItem | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<EventForm>(() => emptyForm(route.date));
+  const [saving, setSaving] = useState(false);
+  const [syncToGoogle, setSyncToGoogle] = useState(true);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleSyncing, setGoogleSyncing] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const updateRoute = useCallback((updates: Partial<typeof route>) => {
+    setSearchParams(agendaRouteParams({ ...route, ...updates }));
+  }, [route, setSearchParams]);
 
   useEffect(() => {
-    if (!operationalCalendar) return;
-    setEventos(operationalCalendar.events);
-    setTarefas(operationalCalendar.tasks);
-    setAudiencias(operationalCalendar.hearings);
-  }, [operationalCalendar]);
+    if (!canSeeOffice && route.scope !== "mine") updateRoute({ scope: "mine" });
+  }, [canSeeOffice, route.scope, updateRoute]);
 
   useEffect(() => {
     const oauthResult = googleCalendar.handleOAuthResult();
-    if (oauthResult?.connected) {
-      toast({ title: "Google Calendar conectado com sucesso!" });
-    }
-    void googleCalendar.getStatus()
-      .then((status) => {
-        setGcalConnected(
-          status.connected && status.connection?.status === "connected",
-        );
-      })
-      .catch(() => setGcalConnected(false));
+    if (oauthResult?.connected) toast({ title: "Google Calendar conectado" });
+    void googleCalendar.getStatus().then(status => setGoogleConnected(status.connected && status.connection?.status === "connected")).catch(() => setGoogleConnected(false));
   }, [toast]);
 
-  const handleGcalConnect = async () => {
-    try {
-      await googleCalendar.connect(`${window.location.origin}/agenda`);
-    } catch {
-      toast({
-        title: "Não foi possível conectar",
-        description: "Verifique a configuração do Google Calendar e tente novamente.",
-        variant: "destructive",
-      });
-    }
+  const changeFilters = (filters: OperationalCalendarFilters) => updateRoute({ filters });
+  const navigatePeriod = (direction: -1 | 1) => {
+    const date = route.view === "month" ? addMonths(route.date, direction) : route.view === "week" ? addWeeks(route.date, direction) : route.view === "list" ? addDays(route.date, direction * 30) : addDays(route.date, direction);
+    updateRoute({ date });
   };
 
-  const handleGcalDisconnect = async (deletarEventos: boolean) => {
-    setGcalDisconnecting(true);
-    try {
-      const result = await googleCalendar.disconnect(deletarEventos);
-      setGcalConnected(false);
-      setShowGcalDisconnectDialog(false);
-      toast({
-        title: "Google Calendar desconectado",
-        description: deletarEventos && result.failedRemovals > 0
-          ? `${result.failedRemovals} evento(s) podem precisar ser removidos manualmente.`
-          : undefined,
-      });
-      fetchAll();
-    } catch {
-      toast({ title: "Erro ao desconectar", description: "Tente novamente", variant: "destructive" });
-    } finally {
-      setGcalDisconnecting(false);
-    }
+  const openNew = (date = route.date) => {
+    setSelectedItem(null);
+    setEditingEvent(null);
+    setForm(emptyForm(date));
+    setFormOpen(true);
   };
 
-  const syncAllToGcal = async () => {
-    if (!gcalConnected) return;
-    setGcalSyncing(true);
-    try {
-      const result = await googleCalendar.syncNow();
-      toast({
-        title: `${result.completed} item(ns) sincronizado(s) com Google Calendar!`,
-        description: result.retried > 0
-          ? `${result.retried} item(ns) serão tentados novamente.`
-          : undefined,
-      });
-      await fetchAll();
-    } catch {
-      toast({
-        title: "Não foi possível sincronizar agora",
-        description: "Os itens permanecem na fila e serão tentados automaticamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setGcalSyncing(false);
-    }
+  const openEdit = (item: OperationalCalendarItem) => {
+    const event = calendar.events.find(candidate => candidate.id === item.sourceId);
+    if (!event) return;
+    const start = new Date(event.data_inicio);
+    const end = event.data_fim ? new Date(event.data_fim) : addDays(start, 0);
+    if (!event.data_fim) end.setHours(start.getHours() + 1);
+    setEditingEvent(event);
+    setForm({ title: event.titulo, description: event.descricao ?? "", type: event.tipo, date: format(start, "yyyy-MM-dd"), startTime: format(start, "HH:mm"), endTime: format(end, "HH:mm"), location: event.local ?? "" });
+    setSelectedItem(null);
+    setFormOpen(true);
   };
 
-  useEffect(() => {
-    if (editData) {
-      const d = new Date(editData.data_inicio);
-      setForm({ titulo: editData.titulo || "", descricao: editData.descricao || "", tipo: editData.tipo || "reunião", data_inicio: format(d, "yyyy-MM-dd"), hora_inicio: format(d, "HH:mm"), local: editData.local || "" });
-    } else {
-      setForm({ titulo: "", descricao: "", tipo: "reunião", data_inicio: format(selectedDate, "yyyy-MM-dd"), hora_inicio: "09:00", local: "" });
+  const saveEvent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user || !currentTenant || !form.title.trim()) return;
+    const start = `${form.date}T${form.startTime}:00`;
+    const end = `${form.date}T${form.endTime}:00`;
+    if (new Date(end).getTime() <= new Date(start).getTime()) {
+      toast({ title: "Horário inválido", description: "O término precisa ser posterior ao início.", variant: "destructive" });
+      return;
     }
-  }, [editData, showForm, selectedDate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.titulo.trim()) { toast({ title: "Título é obrigatório", variant: "destructive" }); return; }
-    setLoading(true);
-    const data_inicio = `${form.data_inicio}T${form.hora_inicio}:00`;
-    if (editData) {
-      const { error } = await supabase.from("eventos").update({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null }).eq("tenant_id", currentTenant!.tenantId).eq("id", editData.id);
-      if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-      else {
-        if (gcalConnected && editData.google_event_id) {
-          await googleCalendar.updateEvent(editData.google_event_id, {
-            titulo: `${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)} — ${form.titulo}`,
-            descricao: form.descricao,
-            data_inicio,
-            local: form.local,
-            colorId: "7",
-          });
+    setSaving(true);
+    const payload = { titulo: form.title.trim(), descricao: form.description.trim() || null, tipo: form.type, data_inicio: start, data_fim: end, local: form.location.trim() || null };
+    try {
+      if (editingEvent) {
+        const { error } = await supabase.from("eventos").update(payload).eq("tenant_id", currentTenant.tenantId).eq("id", editingEvent.id);
+        if (error) throw error;
+        toast({ title: "Compromisso atualizado" });
+        if (googleConnected && editingEvent.google_event_id) {
+          try { await googleCalendar.updateEvent(editingEvent.google_event_id, { titulo: form.title, descricao: form.description, data_inicio: start, data_fim: end, local: form.location, colorId: "7" }); }
+          catch { toast({ title: "Salvo no ADVeyes", description: "A atualização no Google Calendar ficou pendente.", variant: "destructive" }); }
         }
-        toast({ title: "Evento atualizado!" });
-        setShowForm(false);
-        fetchAll();
-      }
-    } else {
-      const { data: inserted, error } = await supabase.from("eventos").insert({ titulo: form.titulo, descricao: form.descricao || null, tipo: form.tipo, data_inicio, local: form.local || null, user_id: user!.id, tenant_id: currentTenant!.tenantId }).select().single();
-      if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-      else {
-        if (gcalConnected && syncToGcal && inserted) {
-          await googleCalendar.createEvent({
-            titulo: `${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)} — ${form.titulo}`,
-            descricao: form.descricao,
-            data_inicio,
-            local: form.local,
-            colorId: "7",
-          });
+      } else {
+        const { data, error } = await supabase.from("eventos").insert({ ...payload, user_id: user.id, tenant_id: currentTenant.tenantId }).select().single();
+        if (error) throw error;
+        toast({ title: "Compromisso criado" });
+        if (googleConnected && syncToGoogle && data) {
+          try { await googleCalendar.createEvent({ titulo: form.title, descricao: form.description, data_inicio: start, data_fim: end, local: form.location, colorId: "7" }); }
+          catch { toast({ title: "Salvo no ADVeyes", description: "A sincronização com o Google ficou pendente.", variant: "destructive" }); }
         }
-        toast({ title: gcalConnected && syncToGcal ? "Evento criado e sincronizado com Google!" : "Evento criado!" });
-        setShowForm(false);
-        fetchAll();
       }
-    }
-    setLoading(false);
+      setFormOpen(false);
+      await calendar.refetch();
+    } catch (error) {
+      toast({ title: "Não foi possível salvar", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    const evento = eventos.find(e => e.id === deleteId);
-    if (gcalConnected && evento?.google_event_id) {
-      await googleCalendar.deleteEvent(evento.google_event_id);
-    }
-    await supabase.from("eventos").delete().eq("tenant_id", currentTenant!.tenantId).eq("id", deleteId);
-    toast({ title: "Evento excluído!" });
-    setDeleteId(null);
-    fetchAll();
+  const confirmDelete = async () => {
+    if (!deleteItem || !currentTenant) return;
+    try {
+      const { error } = await supabase.from("eventos").delete().eq("tenant_id", currentTenant.tenantId).eq("id", deleteItem.sourceId);
+      if (error) throw error;
+      const event = calendar.events.find(candidate => candidate.id === deleteItem.sourceId);
+      if (googleConnected && event?.google_event_id) {
+        try { await googleCalendar.deleteEvent(event.google_event_id); }
+        catch { toast({ title: "Excluído do ADVeyes", description: "O evento pode precisar ser removido manualmente do Google.", variant: "destructive" }); }
+      }
+      setDeleteItem(null);
+      setSelectedItem(null);
+      toast({ title: "Compromisso excluído" });
+      await calendar.refetch();
+    } catch (error) { toast({ title: "Não foi possível excluir", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" }); }
   };
 
-  const openNewOnDay = (d: Date) => {
-    setEditData(null);
-    setSelectedDate(d);
-    setForm(f => ({ ...f, data_inicio: format(d, "yyyy-MM-dd") }));
-    setShowForm(true);
+  const connectGoogle = async () => {
+    try { await googleCalendar.connect(`${window.location.origin}/agenda?${agendaRouteParams({ ...route, scope }).toString()}`); }
+    catch { toast({ title: "Não foi possível conectar", description: "Verifique a configuração e tente novamente.", variant: "destructive" }); }
   };
 
-  const eventosNoDia  = eventos.filter(e => isSameDay(new Date(e.data_inicio), selectedDate));
-  const diasComEventos = eventos.map(e => new Date(e.data_inicio));
+  const syncGoogle = async () => {
+    setGoogleSyncing(true);
+    try { const result = await googleCalendar.syncNow(); toast({ title: `${result.completed} item(ns) sincronizado(s)`, description: result.retried ? `${result.retried} permanecem na fila.` : undefined }); await calendar.refetch(); }
+    catch { toast({ title: "Sincronização pendente", description: "Os itens continuarão na fila para nova tentativa.", variant: "destructive" }); }
+    finally { setGoogleSyncing(false); }
+  };
 
-  const prazosUrgentes = tarefas.filter(t => {
-    const dias = Math.ceil((new Date(t.data_limite).getTime() - Date.now()) / 86400000);
-    return dias <= 3;
-  });
-
-  const getDiasLabel = (d: string) => {
-    const dias = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
-    if (dias < 0) return { label: `${Math.abs(dias)}d atrasado`, cls: "text-destructive" };
-    if (dias === 0) return { label: "Hoje", cls: "text-destructive font-bold" };
-    if (dias === 1) return { label: "Amanhã", cls: "text-orange-500" };
-    return { label: `${dias} dias`, cls: "text-muted-foreground" };
+  const disconnectGoogle = async (removeEvents: boolean) => {
+    setDisconnecting(true);
+    try { await googleCalendar.disconnect(removeEvents); setGoogleConnected(false); setDisconnectOpen(false); toast({ title: "Google Calendar desconectado" }); }
+    catch { toast({ title: "Não foi possível desconectar", variant: "destructive" }); }
+    finally { setDisconnecting(false); }
   };
 
   return (
     <AppLayout>
-      <div className="animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-4xl font-bold font-serif tracking-tight">Agenda</h1>
-            <p className="text-muted-foreground text-sm mt-1">Compromissos, prazos e tarefas do escritório</p>
-          </div>
-          <Button onClick={() => { setEditData(null); setShowForm(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> Novo Evento
-          </Button>
-        </div>
+      <div className="animate-fade-in space-y-5">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="font-serif text-4xl font-bold tracking-tight">Agenda</h1><p className="mt-1 text-sm text-muted-foreground">Compromissos, prazos, tarefas e audiências em um só lugar.</p></div><div className="flex items-center gap-2">{googleConnected ? <><Button variant="outline" size="sm" onClick={syncGoogle} disabled={googleSyncing}><RefreshCw className={`mr-2 h-4 w-4 ${googleSyncing ? "animate-spin" : ""}`} />Sincronizar</Button><Button variant="ghost" size="sm" onClick={() => setDisconnectOpen(true)}><Link2Off className="mr-2 h-4 w-4" />Google conectado</Button></> : <Button variant="outline" size="sm" onClick={connectGoogle}><Link2 className="mr-2 h-4 w-4" />Conectar Google</Button>}</div></header>
 
-        {/* Google Calendar banner */}
-        <div className={`flex items-center gap-3 p-3.5 rounded-xl border mb-5 ${gcalConnected ? "bg-green-500/5 border-green-500/20" : "bg-muted/40 border-dashed"}`}>
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${gcalConnected ? "bg-green-500/10" : "bg-muted"}`}>
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-              <rect x="3" y="4" width="18" height="18" rx="2" stroke={gcalConnected ? "#22c55e" : "#94a3b8"} strokeWidth="2" fill="none"/>
-              <path d="M16 2v4M8 2v4M3 10h18" stroke={gcalConnected ? "#22c55e" : "#94a3b8"} strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="12" cy="16" r="2" fill={gcalConnected ? "#22c55e" : "#94a3b8"}/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">{gcalConnected ? "Google Calendar conectado" : "Conectar Google Calendar"}</p>
-            <p className="text-xs text-muted-foreground">{gcalConnected ? "Eventos sincronizados automaticamente" : "Sincronize compromissos com seu Google Calendar"}</p>
-          </div>
-          {gcalConnected ? (
-            <div className="flex gap-2 shrink-0">
-              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={syncAllToGcal} disabled={gcalSyncing}>
-                <RefreshCw className={`w-3 h-3 ${gcalSyncing ? "animate-spin" : ""}`} />
-                {gcalSyncing ? "Sincronizando..." : "Sincronizar tudo"}
-              </Button>
-              <Button size="sm" variant="ghost" className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive" onClick={() => setShowGcalDisconnectDialog(true)}>
-                <Link2Off className="w-3 h-3" /> Desconectar
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" className="gap-1.5 h-8 text-xs shrink-0" onClick={handleGcalConnect}>
-              <Link2 className="w-3 h-3" /> Conectar
-            </Button>
-          )}
-        </div>
+        <AgendaToolbar date={route.date} view={route.view} scope={scope} filters={route.filters} items={calendar.items} members={calendar.members} canSeeOffice={canSeeOffice} onNavigate={navigatePeriod} onToday={() => updateRoute({ date: new Date() })} onViewChange={(view: OperationalCalendarView) => updateRoute({ view })} onScopeChange={(nextScope: OperationalCalendarScope) => updateRoute({ scope: nextScope, filters: { ...route.filters, assigneeId: null } })} onFiltersChange={changeFilters} onNew={() => openNew()} />
 
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <Card className="border-none shadow-sm cursor-pointer" onClick={() => setActiveTab("compromissos")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <CalendarDays className="w-5 h-5 text-blue-500" />
-              <div><p className="text-xs text-muted-foreground">Compromissos</p><p className="text-2xl font-bold">{eventos.length}</p></div>
-            </CardContent>
-          </Card>
-          <Card className="border-none shadow-sm cursor-pointer" onClick={() => setActiveTab("tarefas")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <ListTodo className="w-5 h-5 text-green-500" />
-              <div><p className="text-xs text-muted-foreground">Tarefas pendentes</p><p className="text-2xl font-bold">{tarefas.length}</p></div>
-            </CardContent>
-          </Card>
-          <Card className={`border-none shadow-sm cursor-pointer ${prazosUrgentes.length > 0 ? "border-destructive/30" : ""}`} onClick={() => setActiveTab("prazos")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle className={`w-5 h-5 ${prazosUrgentes.length > 0 ? "text-destructive" : "text-orange-500"}`} />
-              <div>
-                <p className="text-xs text-muted-foreground">Prazos urgentes</p>
-                <p className={`text-2xl font-bold ${prazosUrgentes.length > 0 ? "text-destructive" : ""}`}>{prazosUrgentes.length}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* View mode toggle */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="flex rounded-lg border overflow-hidden">
-            {(["mes", "semana", "dia"] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => setViewMode(m)}
-                className={`px-4 py-1.5 text-xs font-medium capitalize transition-colors ${viewMode === m ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
-              >
-                {m === "mes" ? "Mês" : m === "semana" ? "Semana" : "Dia"}
-              </button>
-            ))}
-          </div>
-
-          {viewMode === "semana" && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekStart(subWeeks(weekStart, 1))}>
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm font-medium min-w-[180px] text-center">
-                {format(weekStart, "dd MMM", { locale: ptBR })} – {format(endOfWeek(weekStart, { weekStartsOn: 1 }), "dd MMM yyyy", { locale: ptBR })}
-              </span>
-              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
-                Hoje
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Semana view */}
-        {viewMode === "semana" && (
-          <WeekView
-            weekStart={weekStart}
-            eventos={eventos}
-            onEdit={e => { setEditData(e); setShowForm(true); }}
-            onDelete={setDeleteId}
-            onNewOnDay={openNewOnDay}
-          />
-        )}
-
-        {/* Mês/Dia view */}
-        {(viewMode === "mes" || viewMode === "dia") && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Calendar */}
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-3">
-                  <Calendar
-                    mode="single"
-                    defaultMonth={selectedDate}
-                    selected={selectedDate}
-                    onSelect={d => d && setSelectedDate(d)}
-                    locale={ptBR}
-                    className="pointer-events-auto"
-                    modifiers={{ hasEvent: diasComEventos }}
-                    modifiersClassNames={{ hasEvent: "bg-primary/20 font-bold rounded-full" }}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Audiências próximas */}
-              {audiencias.length > 0 && (
-                <Card>
-                  <CardContent className="p-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Audiências próximas</p>
-                    <div className="space-y-2">
-                      {audiencias.slice(0, 5).map(a => (
-                        <div key={a.id} className="text-xs border rounded-lg p-2.5 bg-purple-500/5 border-purple-500/20">
-                          <p className="font-semibold text-purple-700">{a.tipo}</p>
-                          <p className="text-muted-foreground mt-0.5">{format(new Date(a.data_hora), "dd/MM HH:mm")}</p>
-                          {a.processos?.cliente_nome && <p className="text-muted-foreground truncate">{a.processos.cliente_nome}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Right panel: tabs */}
-            <div className="lg:col-span-2">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="mb-4 bg-muted/50">
-                  <TabsTrigger value="compromissos" className="gap-1.5 text-xs">
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    {viewMode === "dia"
-                      ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })
-                      : "Compromissos"}
-                  </TabsTrigger>
-                  <TabsTrigger value="tarefas" className="gap-1.5 text-xs">
-                    <ListTodo className="w-3.5 h-3.5" /> Tarefas
-                    {tarefas.length > 0 && <span className="ml-1 text-[10px] bg-primary/10 text-primary px-1 rounded">{tarefas.length}</span>}
-                  </TabsTrigger>
-                  <TabsTrigger value="prazos" className="gap-1.5 text-xs">
-                    <AlertCircle className="w-3.5 h-3.5" /> Prazos
-                    {prazosUrgentes.length > 0 && <span className="ml-1 text-[10px] bg-destructive/10 text-destructive px-1 rounded">{prazosUrgentes.length}</span>}
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Compromissos do dia */}
-                <TabsContent value="compromissos">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-base font-semibold font-serif">
-                      {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                    </h2>
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openNewOnDay(selectedDate)}>
-                      <Plus className="w-3.5 h-3.5" /> Evento
-                    </Button>
-                  </div>
-                  {eventosNoDia.length === 0
-                    ? <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">Nenhum compromisso neste dia</div>
-                    : <div className="space-y-2.5">
-                        {eventosNoDia.map(e => (
-                          <EventCard key={e.id} evento={e} onEdit={ev => { setEditData(ev); setShowForm(true); }} onDelete={setDeleteId} />
-                        ))}
-                      </div>
-                  }
-
-                  {/* Próximos eventos */}
-                  {eventos.filter(e => new Date(e.data_inicio) > selectedDate).length > 0 && (
-                    <div className="mt-6">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Próximos eventos</p>
-                      <div className="space-y-2">
-                        {eventos
-                          .filter(e => new Date(e.data_inicio) > selectedDate)
-                          .slice(0, 5)
-                          .map(e => (
-                            <div key={e.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/20 cursor-pointer" onClick={() => { setSelectedDate(new Date(e.data_inicio)); }}>
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${tipoColors[e.tipo]?.dot || "bg-muted-foreground"}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{e.titulo}</p>
-                                <p className="text-xs text-muted-foreground">{format(new Date(e.data_inicio), "dd/MM · HH:mm")}</p>
-                              </div>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted capitalize">{e.tipo}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
-
-                {/* Tarefas pendentes */}
-                <TabsContent value="tarefas">
-                  <div className="space-y-2">
-                    {tarefas.length === 0
-                      ? <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">Nenhuma tarefa pendente</div>
-                      : tarefas.map(t => {
-                          const dl = getDiasLabel(t.data_limite);
-                          return (
-                            <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border bg-card border-l-4 ${
-                              t.prioridade === "alta" ? "border-l-red-500" :
-                              t.prioridade === "média" ? "border-l-primary" : "border-l-muted"
-                            }`}>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium">{t.titulo}</p>
-                                {t.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>}
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className={`text-xs font-semibold ${dl.cls}`}>{dl.label}</p>
-                                <p className="text-[10px] text-muted-foreground capitalize">{t.prioridade}</p>
-                              </div>
-                            </div>
-                          );
-                        })
-                    }
-                  </div>
-                </TabsContent>
-
-                {/* Prazos */}
-                <TabsContent value="prazos">
-                  <div className="space-y-2">
-                    {tarefas.length === 0
-                      ? <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">Nenhum prazo pendente</div>
-                      : tarefas
-                          .sort((a, b) => new Date(a.data_limite).getTime() - new Date(b.data_limite).getTime())
-                          .map(t => {
-                            const dias = Math.ceil((new Date(t.data_limite).getTime() - Date.now()) / 86400000);
-                            const isUrgent = dias <= 3;
-                            return (
-                              <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border bg-card ${isUrgent ? "border-destructive/30 bg-destructive/3" : ""}`}>
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                                  dias < 0 ? "bg-destructive text-destructive-foreground" :
-                                  dias === 0 ? "bg-destructive text-destructive-foreground" :
-                                  dias <= 3 ? "bg-orange-500/10 text-orange-600" :
-                                  "bg-muted text-muted-foreground"
-                                }`}>
-                                  {dias < 0 ? `-${Math.abs(dias)}` : dias === 0 ? "!" : dias}
-                                  <span className="text-[9px] ml-px">{dias < 0 ? "atr" : dias > 0 ? "d" : ""}</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{t.titulo}</p>
-                                  <p className="text-xs text-muted-foreground">{format(new Date(t.data_limite + "T12:00:00"), "dd/MM/yyyy")}</p>
-                                </div>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize ${
-                                  t.prioridade === "alta" ? "border-red-500/30 text-red-600" :
-                                  t.prioridade === "média" ? "border-primary/30 text-primary" : ""
-                                }`}>{t.prioridade}</span>
-                              </div>
-                            );
-                          })
-                    }
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-        )}
-
-        {/* Form Dialog */}
-        <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>{editData ? "Editar Evento" : "Novo Evento"}</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Título *</Label>
-                <Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Ex: Audiência - João Silva" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Data *</Label>
-                  <Input type="date" value={form.data_inicio} onChange={e => setForm({ ...form, data_inicio: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Hora *</Label>
-                  <Input type="time" value={form.hora_inicio} onChange={e => setForm({ ...form, hora_inicio: e.target.value })} required />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{tipoOptions.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Local</Label>
-                <Input value={form.local} onChange={e => setForm({ ...form, local: e.target.value })} placeholder="Ex: 1ª Vara Criminal" />
-              </div>
-              <div className="space-y-2">
-                <Label>Descrição</Label>
-                <Textarea value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} placeholder="Detalhes do compromisso..." rows={2} />
-              </div>
-              {gcalConnected && !editData && (
-                <div className="flex items-center justify-between py-2 border rounded-xl px-3 bg-green-500/5 border-green-500/20">
-                  <div className="flex items-center gap-2">
-                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" strokeWidth="2" fill="none"/><path d="M16 2v4M8 2v4M3 10h18" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="2" fill="#22c55e"/></svg>
-                    <span className="text-xs font-medium">Sincronizar com Google Calendar</span>
-                  </div>
-                  <Switch checked={syncToGcal} onCheckedChange={setSyncToGcal} />
-                </div>
-              )}
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-                <Button type="submit" disabled={loading}>{loading ? "Salvando..." : editData ? "Salvar" : "Criar"}</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={!!deleteId} onOpenChange={o => !o && setDeleteId(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Excluir evento?</AlertDialogTitle><AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {calendar.isLoading ? <AgendaLoading /> : calendar.isError ? <Alert variant="destructive"><TriangleAlert className="h-4 w-4" /><AlertTitle>Não foi possível carregar a Agenda</AlertTitle><AlertDescription><Button className="mt-3" variant="outline" onClick={() => calendar.refetch()}>Tentar novamente</Button></AlertDescription></Alert> : <><AgendaAttentionCenter items={filteredItems} conflicts={conflicts} />{calendar.failures.length ? <Alert><TriangleAlert className="h-4 w-4" /><AlertTitle>Agenda parcialmente atualizada</AlertTitle><AlertDescription>{calendar.failures.map(failure => failure.source).join(", ")} indisponível. Os demais dados foram preservados.</AlertDescription></Alert> : null}<AgendaViews view={route.view} date={route.date} range={range} items={filteredItems} members={calendar.members} onSelect={setSelectedItem} onNewAt={openNew} /></>}
       </div>
 
-      <AlertDialog open={showGcalDisconnectDialog} onOpenChange={setShowGcalDisconnectDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desconectar Google Calendar</AlertDialogTitle>
-            <AlertDialogDescription>
-              Deseja remover os eventos criados pelo ADVeyes do seu Google Calendar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => handleGcalDisconnect(false)} disabled={gcalDisconnecting}>
-              Não, manter eventos
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleGcalDisconnect(true)} disabled={gcalDisconnecting}>
-              {gcalDisconnecting ? "Removendo..." : "Sim, remover eventos"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AgendaDetailSheet item={selectedItem} members={calendar.members} onClose={() => setSelectedItem(null)} onEdit={openEdit} onDelete={setDeleteItem} />
+
+      <Dialog open={formOpen} onOpenChange={setFormOpen}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg"><DialogHeader><DialogTitle>{editingEvent ? "Editar compromisso" : "Novo compromisso"}</DialogTitle></DialogHeader><form className="space-y-4" onSubmit={saveEvent}><div className="space-y-2"><Label htmlFor="event-title">Título</Label><Input id="event-title" required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Tipo</Label><Select value={form.type} onValueChange={type => setForm({ ...form, type })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{eventTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="event-date">Data</Label><Input id="event-date" type="date" required value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></div></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label htmlFor="start-time">Início</Label><Input id="start-time" type="time" required value={form.startTime} onChange={event => setForm({ ...form, startTime: event.target.value })} /></div><div className="space-y-2"><Label htmlFor="end-time">Fim</Label><Input id="end-time" type="time" required value={form.endTime} onChange={event => setForm({ ...form, endTime: event.target.value })} /></div></div><div className="space-y-2"><Label htmlFor="event-location">Local</Label><Input id="event-location" value={form.location} onChange={event => setForm({ ...form, location: event.target.value })} /></div><div className="space-y-2"><Label htmlFor="event-description">Descrição</Label><Textarea id="event-description" rows={3} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></div>{googleConnected && !editingEvent ? <div className="flex items-center justify-between rounded-lg border p-3"><div className="flex items-center gap-2"><CalendarSync className="h-4 w-4 text-muted-foreground" /><Label htmlFor="sync-google">Sincronizar com Google</Label></div><Switch id="sync-google" checked={syncToGoogle} onCheckedChange={setSyncToGoogle} /></div> : null}<Button className="w-full" type="submit" disabled={saving}>{saving ? "Salvando..." : editingEvent ? "Salvar alterações" : "Criar compromisso"}</Button></form></DialogContent></Dialog>
+
+      <AlertDialog open={Boolean(deleteItem)} onOpenChange={open => { if (!open) setDeleteItem(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir compromisso?</AlertDialogTitle><AlertDialogDescription>Esta ação remove o compromisso da Agenda. Os dados só desaparecerão após a confirmação do banco.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={confirmDelete}>Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+
+      <AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Desconectar Google Calendar?</AlertDialogTitle><AlertDialogDescription>Você pode manter no Google os eventos já criados ou solicitar sua remoção.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={disconnecting}>Cancelar</AlertDialogCancel><Button variant="outline" disabled={disconnecting} onClick={() => disconnectGoogle(false)}>Manter eventos</Button><AlertDialogAction disabled={disconnecting} onClick={() => disconnectGoogle(true)}>Remover e desconectar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </AppLayout>
   );
-};
-
-export default Agenda;
+}

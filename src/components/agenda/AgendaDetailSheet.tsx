@@ -1,0 +1,15 @@
+import { ExternalLink, MapPin, Pencil, Trash2, UserRound } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import type { OperationalCalendarItem, OperationalCalendarMember } from "@/types/operational-calendar";
+
+export function AgendaDetailSheet({ item, members, onClose, onEdit, onDelete }: { item: OperationalCalendarItem | null; members: OperationalCalendarMember[]; onClose: () => void; onEdit: (item: OperationalCalendarItem) => void; onDelete: (item: OperationalCalendarItem) => void }) {
+  const navigate = useNavigate();
+  const assignee = members.find(member => member.userId === item?.assigneeId);
+  return <Sheet open={Boolean(item)} onOpenChange={open => { if (!open) onClose(); }}><SheetContent className="w-full overflow-y-auto sm:max-w-lg">{item ? <><SheetHeader><div className="mb-2 flex gap-2"><Badge>{item.sourceType === "event" ? "Compromisso" : item.sourceType === "task" ? "Tarefa" : "Audiência"}</Badge>{item.status ? <Badge variant="outline">{item.status}</Badge> : null}</div><SheetTitle>{item.title}</SheetTitle><SheetDescription>{format(new Date(item.date), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}</SheetDescription></SheetHeader><div className="mt-6 space-y-4 text-sm">{item.description ? <p className="rounded-lg bg-muted/50 p-3">{item.description}</p> : null}<div className="flex items-center gap-2"><UserRound className="h-4 w-4 text-muted-foreground" /><span>{assignee?.name ?? "Sem responsável definido"}</span></div>{item.location ? <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" /><span>{item.location}</span></div> : null}{item.processId ? <Button variant="outline" className="w-full justify-between" onClick={() => navigate(`/processos/${item.processId}`)}><span className="truncate">Processo {item.processNumber ?? "relacionado"}{item.clientName ? ` · ${item.clientName}` : ""}</span><ExternalLink className="h-4 w-4" /></Button> : null}<div className="rounded-lg border p-3"><p className="font-medium">Sincronização</p><p className="mt-1 text-muted-foreground">{item.googleEventId ? "Vinculado ao Google Calendar" : "Sem vínculo com o Google Calendar"}</p></div><div className="flex gap-2 border-t pt-4">{item.sourceType === "event" ? <Button className="flex-1" onClick={() => onEdit(item)}><Pencil className="mr-2 h-4 w-4" />Editar</Button> : <Button className="flex-1" variant="outline" onClick={() => navigate(item.sourceType === "task" ? "/tarefas" : "/audiencias")}><ExternalLink className="mr-2 h-4 w-4" />Abrir origem</Button>}{item.sourceType === "event" ? <Button variant="destructive" size="icon" aria-label="Excluir compromisso" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /></Button> : null}</div></div></> : null}</SheetContent></Sheet>;
+}
+
