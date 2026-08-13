@@ -508,18 +508,61 @@ Deno.serve(async (request) => {
       pages: result.pages,
     });
   } catch (error) {
-    if (error instanceof ProviderBudgetError) {
+    console.warn("legal-discovery: Escavador failed or unconfigured, running DataJud fallback...", error);
+    try {
+      const authorization = normalizeDataJudAuthorization(
+        Deno.env.get("DATAJUD_API_KEY"),
+      );
+      const discovered = await discoverProcessesByOab({
+        authorization,
+        oabNumber: input.oabNumber,
+        oabState: input.oabState,
+      });
+      const rows = discovered
+        .map((item) =>
+          dataJudDiscoveryRow(input.tenantId, registration.id, item)
+        )
+        .filter((row): row is NonNullable<typeof row> => row !== null);
+
+      const imported = await persistAndImport(auth.admin, {
+        tenantId: input.tenantId,
+        registrationId: registration.id,
+        provider: "datajud",
+        rows,
+      });
+
+      const discoveredAt = new Date().toISOString();
+      await Promise.all([
+        auth.admin.from("lawyer_registrations").update({
+          last_discovery_at: discoveredAt,
+        }).eq("id", registration.id).eq("tenant_id", input.tenantId),
+        auth.admin.from("legal_usage_events").insert({
+          tenant_id: input.tenantId,
+          provider: "datajud",
+          operation: "oab_discovery",
+          quantity: 1,
+          external_reference: registration.id,
+          metadata: { candidates: rows.length, fallback: true },
+        }),
+      ]);
+
       return json({
-        error: error.code,
         registrationId: registration.id,
         registrationSaved: true,
-        usage: error.state,
-      }, 429);
+        totalCandidates: rows.length,
+        importedProcesses: imported.imported,
+        providerUsed: "datajud_fallback",
+        escavadorError: error instanceof EscavadorApiError ? error.code : "escavador_unavailable",
+      });
+    } catch (fallbackError) {
+      console.error("legal-discovery: DataJud fallback also failed", fallbackError);
+      return json({
+        registrationId: registration.id,
+        registrationSaved: true,
+        totalCandidates: 0,
+        providerUsed: "none",
+        discoveryError: error instanceof EscavadorApiError ? error.code : "discovery_failed",
+      });
     }
-    if (error instanceof EscavadorApiError) {
-      return json({ error: error.code }, error.status);
-    }
-    console.error("legal-discovery: unexpected provider failure");
-    return json({ error: "escavador_request_failed" }, 502);
   }
 });
