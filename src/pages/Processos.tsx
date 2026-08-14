@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Download, FilterX, Loader2, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -28,6 +28,7 @@ export default function Processos() {
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<ProcessIntelligenceItem | null>(null);
+  const [displayLimit, setDisplayLimit] = useState(40);
   const [filters, setFilters] = useState(() => {
     const focus = searchParams.get("focus");
     if (focus === "stalled") return { ...EMPTY_INTELLIGENCE_FILTERS, stalledOnly: true };
@@ -38,8 +39,11 @@ export default function Processos() {
   const deferredSearch = useDeferredValue(filters.search);
   const effectiveFilters = useMemo(() => ({ ...filters, search: deferredSearch }), [deferredSearch, filters]);
   const filtered = useMemo(() => filterProcessIntelligence(intelligence.items, effectiveFilters), [effectiveFilters, intelligence.items]);
+  const visibleItems = useMemo(() => filtered.slice(0, displayLimit), [displayLimit, filtered]);
   const metrics = useMemo(() => intelligenceMetrics(intelligence.items), [intelligence.items]);
   const areas = useMemo(() => [...new Set(intelligence.items.map(item => item.area).filter(Boolean) as string[])].sort(), [intelligence.items]);
+
+  useEffect(() => { setDisplayLimit(40); }, [effectiveFilters]);
 
   const queueAll = async () => {
     try { const result = await intelligence.backfill.mutateAsync(); toast({ title: "Varredura iniciada", description: `${result.queued} processos foram colocados na fila.` }); }
@@ -63,7 +67,7 @@ export default function Processos() {
         <Select value={filters.area} onValueChange={value => setFilters(current => ({ ...current, area: value }))}><SelectTrigger><SelectValue placeholder="Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as áreas</SelectItem>{areas.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}</SelectContent></Select>
       </div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><Button variant={filters.stalledOnly ? "secondary" : "outline"} size="sm" onClick={() => setFilters(current => ({ ...current, stalledOnly: !current.stalledOnly }))}>Somente sem avanço</Button><div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{filtered.length} de {intelligence.items.length} processos</span><Button variant="ghost" size="sm" className="gap-1" onClick={() => setFilters(EMPTY_INTELLIGENCE_FILTERS)}><FilterX className="h-3.5 w-3.5" /> Limpar</Button><Button variant="ghost" size="icon" aria-label="Atualizar central" onClick={() => void intelligence.refetch()}><RefreshCw className={`h-4 w-4 ${intelligence.loading ? "animate-spin" : ""}`} /></Button></div></div></div>
 
-      {intelligence.loading ? <div className="flex min-h-72 items-center justify-center rounded-xl border"><Loader2 className="h-7 w-7 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">Lendo a carteira processual...</span></div> : intelligence.error ? <div role="alert" className="rounded-xl border border-destructive/30 p-8 text-center"><p className="font-semibold">Não foi possível carregar a inteligência processual</p><Button className="mt-4" onClick={() => void intelligence.refetch()}>Tentar novamente</Button></div> : <Tabs defaultValue="central"><TabsList><TabsTrigger value="central">Central</TabsTrigger><TabsTrigger value="pipeline">Pipeline</TabsTrigger><TabsTrigger value="lista">Lista</TabsTrigger></TabsList><TabsContent value="central" className="mt-4"><IntelligenceCentral items={filtered} onCorrect={setSelected} /></TabsContent><TabsContent value="pipeline" className="mt-4"><IntelligencePipeline items={filtered} /></TabsContent><TabsContent value="lista" className="mt-4"><IntelligenceList items={filtered} /></TabsContent></Tabs>}
+      {intelligence.loading ? <div className="flex min-h-72 items-center justify-center rounded-xl border"><Loader2 className="h-7 w-7 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">Lendo a carteira processual...</span></div> : intelligence.error ? <div role="alert" className="rounded-xl border border-destructive/30 p-8 text-center"><p className="font-semibold">Não foi possível carregar a inteligência processual</p><Button className="mt-4" onClick={() => void intelligence.refetch()}>Tentar novamente</Button></div> : <><Tabs defaultValue="central"><TabsList><TabsTrigger value="central">Central</TabsTrigger><TabsTrigger value="pipeline">Pipeline</TabsTrigger><TabsTrigger value="lista">Lista</TabsTrigger></TabsList><TabsContent value="central" className="mt-4"><IntelligenceCentral items={visibleItems} onCorrect={setSelected} /></TabsContent><TabsContent value="pipeline" className="mt-4"><IntelligencePipeline items={visibleItems} /></TabsContent><TabsContent value="lista" className="mt-4"><IntelligenceList items={visibleItems} /></TabsContent></Tabs>{visibleItems.length < filtered.length ? <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-4"><p className="text-xs text-muted-foreground">Exibindo {visibleItems.length} de {filtered.length} processos para manter a Central rápida.</p><Button variant="outline" onClick={() => setDisplayLimit(limit => limit + 40)}>Mostrar mais 40</Button></div> : null}</>}
 
       <ProcessoForm open={showForm} onOpenChange={setShowForm} onSuccess={() => void intelligence.refetch()} />
       <CorrectionDialog key={selected?.id ?? "none"} item={selected} open={Boolean(selected)} busy={intelligence.correct.isPending} onOpenChange={open => { if (!open) setSelected(null); }} onSubmit={async (correction, justification) => { if (!selected) return; try { await intelligence.correct.mutateAsync({ processId: selected.id, correction, justification }); toast({ title: "Leitura corrigida", description: "A revisão humana foi registrada e passa a prevalecer." }); setSelected(null); } catch { toast({ title: "Não foi possível salvar a correção", variant: "destructive" }); } }} />
