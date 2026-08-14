@@ -24,6 +24,7 @@ vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { ch
 vi.mock("@/components/onboarding/OnboardingResumeBanner", () => ({ OnboardingResumeBanner: () => null }));
 vi.mock("@/components/TrialBanner", () => ({ TrialBanner: () => null }));
 vi.mock("@/components/dashboard/CompactWorkspaceCalendar", () => ({ CompactWorkspaceCalendar: () => <div>Calendário integrado</div> }));
+vi.mock("@/components/dashboard/ProcessIntelligenceHomeCards", () => ({ ProcessIntelligenceHomeCards: () => <div>Inteligência processual</div> }));
 
 import Index from "@/pages/Index";
 
@@ -98,4 +99,3 @@ describe("Meu Painel", () => {
     expect(refetchMock).toHaveBeenCalledTimes(1);
   });
 });
-

@@ -22,7 +22,8 @@ const sections: Array<{
   {
     items: [
       { label: "Área de trabalho", icon: LayoutDashboard, path: "/" },
-      { label: "Processos e casos", icon: Briefcase, path: "/processos" },
+      { label: "Busca processual", icon: Search, path: "/busca" },
+      { label: "Central Processual", icon: Briefcase, path: "/processos" },
       { label: "Contatos", icon: Users, path: "/clientes" },
       { label: "CRM — Leads", icon: KanbanSquare, path: "/crm" },
     ],
@@ -39,7 +40,6 @@ const sections: Array<{
   {
     label: "Pesquisa",
     items: [
-      { label: "Busca processual", icon: Search, path: "/busca" },
       { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
     ],
   },

@@ -118,6 +118,10 @@ verify_jwt = true
 [functions.legal-reconcile]
 verify_jwt = false
 
+[functions.legal-process-intelligence]
+# Usuários são validados dentro da função; o worker usa segredo de cron.
+verify_jwt = false
+
 [functions.tenant-self-signup]
 enabled = true
 verify_jwt = true

@@ -3,7 +3,6 @@ import {
   AlertCircle,
   ArrowRight,
   Bell,
-  BriefcaseBusiness,
   CalendarDays,
   FilePlus2,
   ListTodo,
@@ -18,6 +17,7 @@ import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { FinancialOverview } from "@/components/dashboard/FinancialOverview";
 import { MonitoringOverview } from "@/components/dashboard/MonitoringOverview";
 import { OperationalKpis } from "@/components/dashboard/OperationalKpis";
+import { ProcessIntelligenceHomeCards } from "@/components/dashboard/ProcessIntelligenceHomeCards";
 import { OnboardingResumeBanner } from "@/components/onboarding/OnboardingResumeBanner";
 import { TrialBanner } from "@/components/TrialBanner";
 import { Button } from "@/components/ui/button";
@@ -174,45 +174,7 @@ const Index = () => {
 
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-3" aria-label="Processos e atualizações">
               <div className="xl:col-span-2">
-                <Card>
-                  <CardContent className="p-0">
-                    <div className="flex items-start justify-between gap-3 border-b p-4 sm:p-5">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <BriefcaseBusiness className="h-4 w-4 text-primary" />
-                          <h2 className="font-serif text-lg font-semibold">Processos recentes</h2>
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">Últimos casos atualizados no escritório</p>
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => navigate("/processos")}>
-                        Ver todos <ArrowRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {dashboard.data.recentProcesses.length === 0 ? (
-                      <p className="p-8 text-center text-sm text-muted-foreground">Nenhum processo cadastrado.</p>
-                    ) : (
-                      <div className="divide-y">
-                        {dashboard.data.recentProcesses.map(process => (
-                          <button
-                            type="button"
-                            key={process.id}
-                            onClick={() => navigate(`/processos/${process.id}`)}
-                            className="flex w-full flex-col gap-2 p-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate font-mono text-xs font-semibold">{process.numero}</span>
-                              <span className="mt-1 block truncate text-xs text-muted-foreground">{process.cliente_nome || "Cliente não informado"}</span>
-                            </span>
-                            <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
-                              <span className="rounded-full border px-2 py-0.5">{process.area || "Geral"}</span>
-                              <span>{process.status}</span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <ProcessIntelligenceHomeCards tenantId={tenantId} />
               </div>
 
               <div className="space-y-4">

@@ -24,6 +24,7 @@ import {
   type AndamentoManual,
 } from "@/components/processos/AndamentosManuais";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
+import { ProcessIntelligencePanel } from "@/components/processos/ProcessIntelligencePanel";
 import { AreaBadge } from "@/components/common/AreaBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -272,6 +273,8 @@ const ProcessoDetalhe = () => {
             Parte das informações complementares está temporariamente indisponível. O processo e os demais módulos continuam acessíveis.
           </div>
         )}
+
+        {tenantId && id ? <ProcessIntelligencePanel tenantId={tenantId} processId={id} /> : null}
 
         {processo.legal_sync_status === "pending" && !processo.last_legal_sync_at && (
           <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
