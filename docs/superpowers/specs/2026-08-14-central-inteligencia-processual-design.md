@@ -1,7 +1,7 @@
 # ADVeyes — Central de Inteligência Processual
 
 Data: 14 de agosto de 2026  
-Status: aprovado em conversa; aguardando revisão do documento
+Status: aprovado pelo usuário
 
 ## Objetivo
 
