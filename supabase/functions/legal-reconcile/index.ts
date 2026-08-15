@@ -1049,7 +1049,10 @@ async function reconcileDjenGroup(
         : permanent
         ? null
         : nextAttemptDelayMs(source.failure_count);
-      const stopped = permanent || (!rateLimited && delay === null);
+      // Rate limit, timeout e indisponibilidade do CNJ são transitórios. Após
+      // a escala curta, a fonte volta ao intervalo normal em vez de ser
+      // desligada silenciosamente depois de cinco tentativas.
+      const stopped = permanent;
       await context.admin.from("legal_sync_sources").update({
         failure_count: rateLimited
           ? source.failure_count

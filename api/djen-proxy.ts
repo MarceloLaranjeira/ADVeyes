@@ -11,6 +11,12 @@ const ALLOWED_PARAMS = new Set([
   "itensPorPagina",
   "pagina",
 ]);
+const UPSTREAM_TIMEOUT_MS = 12_000;
+const MAX_ATTEMPTS = 2;
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 function json(
   response: ServerResponse,
@@ -55,34 +61,50 @@ export default async function handler(
     return json(response, 400, { error: "missing_reference" });
   }
 
-  try {
-    const upstream = await fetch(target, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (compatible; ADVeyes/1.0; +https://adveyes.automatikus.com.br)",
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
-    response.statusCode = upstream.status;
-    response.setHeader(
-      "Content-Type",
-      upstream.headers.get("content-type") ?? "application/json",
-    );
-    response.setHeader("Cache-Control", "no-store");
-    for (const name of [
-      "x-ratelimit-limit",
-      "x-ratelimit-remaining",
-      "retry-after",
-    ]) {
-      const value = upstream.headers.get(name);
-      if (value) response.setHeader(name, value);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const upstream = await fetch(target, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent":
+            "Mozilla/5.0 (compatible; ADVeyes/1.0; +https://adveyes.automatikus.com.br)",
+        },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+
+      if (upstream.status >= 500 && attempt < MAX_ATTEMPTS) {
+        await upstream.arrayBuffer();
+        await wait(350 * attempt);
+        continue;
+      }
+
+      response.statusCode = upstream.status;
+      response.setHeader(
+        "Content-Type",
+        upstream.headers.get("content-type") ?? "application/json",
+      );
+      response.setHeader("Cache-Control", "no-store");
+      for (const name of [
+        "x-ratelimit-limit",
+        "x-ratelimit-remaining",
+        "retry-after",
+      ]) {
+        const value = upstream.headers.get(name);
+        if (value) response.setHeader(name, value);
+      }
+      response.end(Buffer.from(await upstream.arrayBuffer()));
+      return;
+    } catch (error) {
+      console.error("DJEN proxy upstream failure", {
+        attempt,
+        error: error instanceof Error ? error.name : "unknown",
+      });
+      if (attempt < MAX_ATTEMPTS) {
+        await wait(350 * attempt);
+        continue;
+      }
+      response.setHeader("Retry-After", "60");
+      return json(response, 504, { error: "upstream_timeout" });
     }
-    response.end(Buffer.from(await upstream.arrayBuffer()));
-  } catch (error) {
-    console.error("DJEN proxy upstream failure", {
-      error: error instanceof Error ? error.name : "unknown",
-    });
-    return json(response, 502, { error: "upstream_unavailable" });
   }
 }

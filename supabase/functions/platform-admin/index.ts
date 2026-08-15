@@ -32,12 +32,13 @@ interface TenantRow {
   created_at: string;
 }
 
-function countByTenant(rows: Array<{ tenant_id: string }> | null) {
-  const counts = new Map<string, number>();
-  for (const row of rows ?? []) {
-    counts.set(row.tenant_id, (counts.get(row.tenant_id) ?? 0) + 1);
-  }
-  return counts;
+interface LegalOverviewCountRow {
+  tenant_id: string;
+  active_members: number;
+  candidate_processes: number;
+  monitored_processes: number;
+  integration_failures: number;
+  last_legal_success_at: string | null;
 }
 
 Deno.serve(async (request) => {
@@ -232,14 +233,7 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_action" }, 400);
   }
 
-  const [
-    tenantsResult,
-    membershipsResult,
-    subscriptionsResult,
-    discoveriesResult,
-    monitorsResult,
-    failedEventsResult,
-  ] = await Promise.all([
+  const [tenantsResult, subscriptionsResult, legalCountsResult] = await Promise.all([
     auth.admin
       .from("tenants")
       .select(
@@ -247,33 +241,16 @@ Deno.serve(async (request) => {
       )
       .order("created_at", { ascending: false }),
     auth.admin
-      .from("tenant_memberships")
-      .select("tenant_id")
-      .eq("status", "active"),
-    auth.admin
       .from("tenant_subscriptions")
       .select(
         "tenant_id, status, next_due_date, trial_ends_at, billing_plans(code)",
       ),
-    auth.admin
-      .from("process_discoveries")
-      .select("tenant_id")
-      .eq("state", "candidate"),
-    auth.admin
-      .from("legal_provider_monitors")
-      .select("tenant_id")
-      .in("status", ["queued", "pending", "found"]),
-    auth.admin
-      .from("legal_provider_events")
-      .select("tenant_id")
-      .in("status", ["failed", "quarantined"])
-      .not("tenant_id", "is", null),
+    auth.admin.rpc("platform_legal_overview_counts", {
+      p_actor_user_id: auth.user.id,
+    }),
   ]);
 
-  const coreError = [
-    tenantsResult.error,
-    membershipsResult.error,
-  ].find(Boolean);
+  const coreError = [tenantsResult.error, legalCountsResult.error].find(Boolean);
   if (coreError) {
     console.error("platform-admin: overview core query failed");
     return json({ error: "operation_failed" }, 500);
@@ -281,26 +258,17 @@ Deno.serve(async (request) => {
 
   [
     ["subscriptions", subscriptionsResult.error],
-    ["discoveries", discoveriesResult.error],
-    ["monitors", monitorsResult.error],
-    ["failed events", failedEventsResult.error],
   ].forEach(([query, error]) => {
     if (error) {
       console.error(`platform-admin: optional ${query} query failed`);
     }
   });
 
-  const memberships = countByTenant(membershipsResult.data);
-  const discoveries = countByTenant(
-    discoveriesResult.error ? null : discoveriesResult.data,
-  );
-  const monitors = countByTenant(
-    monitorsResult.error ? null : monitorsResult.data,
-  );
-  const failedEvents = countByTenant(
-    failedEventsResult.error
-      ? null
-      : failedEventsResult.data as Array<{ tenant_id: string }> | null,
+  const legalCounts = new Map(
+    ((legalCountsResult.data ?? []) as LegalOverviewCountRow[]).map((row) => [
+      row.tenant_id,
+      row,
+    ]),
   );
   const subscriptions = new Map(
     (subscriptionsResult.error ? [] : subscriptionsResult.data ?? []).map(
@@ -313,6 +281,7 @@ Deno.serve(async (request) => {
 
   const tenants = (tenantsResult.data as TenantRow[] ?? []).map((tenant) => {
     const subscription = subscriptions.get(tenant.id);
+    const counts = legalCounts.get(tenant.id);
     return {
       id: tenant.id,
       displayName: tenant.display_name,
@@ -321,10 +290,11 @@ Deno.serve(async (request) => {
       status: tenant.status,
       trialEndsAt: tenant.trial_ends_at,
       createdAt: tenant.created_at,
-      activeMembers: memberships.get(tenant.id) ?? 0,
-      candidateProcesses: discoveries.get(tenant.id) ?? 0,
-      monitoredProcesses: monitors.get(tenant.id) ?? 0,
-      integrationFailures: failedEvents.get(tenant.id) ?? 0,
+      activeMembers: counts?.active_members ?? 0,
+      candidateProcesses: counts?.candidate_processes ?? 0,
+      monitoredProcesses: counts?.monitored_processes ?? 0,
+      integrationFailures: counts?.integration_failures ?? 0,
+      lastLegalSuccessAt: counts?.last_legal_success_at ?? null,
       subscription: subscription
         ? {
           planCode: Array.isArray(subscription.billing_plans)
@@ -343,9 +313,9 @@ Deno.serve(async (request) => {
       tenants: tenants.length,
       activeTenants: tenants.filter((tenant) => tenant.status === "active")
         .length,
-      activeMembers: membershipsResult.data?.length ?? 0,
-      monitoredProcesses: monitorsResult.data?.length ?? 0,
-      integrationFailures: failedEventsResult.data?.length ?? 0,
+      activeMembers: tenants.reduce((sum, tenant) => sum + tenant.activeMembers, 0),
+      monitoredProcesses: tenants.reduce((sum, tenant) => sum + tenant.monitoredProcesses, 0),
+      integrationFailures: tenants.reduce((sum, tenant) => sum + tenant.integrationFailures, 0),
     },
     tenants,
   });
