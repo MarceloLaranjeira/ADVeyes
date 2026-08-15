@@ -93,12 +93,6 @@ interface Movimento {
   source_url: string | null;
 }
 
-interface Processo {
-  id: string;
-  numero: string;
-  cliente_nome: string | null;
-}
-
 interface SyncRun {
   id: string;
   provider: "djen" | "escavador" | "datajud";
@@ -121,6 +115,16 @@ interface SyncSource {
   failure_count: number;
   last_error_code: string | null;
   paused_reason: string | null;
+}
+
+interface SyncSummary {
+  monitored_oabs: number;
+  monitored_processes: number;
+  pending_count: number;
+  failing_count: number;
+  stopped_count: number;
+  next_run: string | null;
+  last_success: string | null;
 }
 
 const providerLabels: Record<string, string> = {
@@ -178,7 +182,12 @@ function failureLabel(code: string | null) {
   return failureLabels[code] ?? "Falha registrada";
 }
 
-const Publicacoes = () => {
+interface PublicacoesProps {
+  mode?: "publicacoes" | "intimacoes";
+}
+
+const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
+  const isIntimations = mode === "intimacoes";
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -186,9 +195,11 @@ const Publicacoes = () => {
   const [activeTab, setActiveTab] = useState<FeedTab>("publicacoes");
   const [publicacoes, setPublicacoes] = useState<Publicacao[]>([]);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
-  const [processos, setProcessos] = useState<Map<string, Processo>>(new Map());
+  const [movementsLoaded, setMovementsLoaded] = useState(false);
+  const [loadingMovements, setLoadingMovements] = useState(false);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [syncSources, setSyncSources] = useState<SyncSource[]>([]);
+  const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
   const [taskByPublication, setTaskByPublication] = useState<Map<string, string>>(
     new Map(),
   );
@@ -216,28 +227,29 @@ const Publicacoes = () => {
     if (!currentTenant) return;
     setLoading(true);
     const tenantId = currentTenant.tenantId;
+    let publicationsQuery = supabase
+      .from("publicacoes")
+      .select(
+        "id, tenant_id, process_id, tipo, tribunal, numero_processo, cliente_nome, data_publicacao, conteudo, conteudo_simplificado, status, prazo_dias, data_prazo, tarefa_gerada, provider, origin_system, review_status, possible_deadline, source_name, source_url",
+      )
+      .eq("tenant_id", tenantId)
+      .order("data_publicacao", { ascending: false });
+
+    if (isIntimations) {
+      publicationsQuery = publicationsQuery.eq(
+        "review_status",
+        "pending_review",
+      );
+    }
+
     const [
       publicationsResult,
-      movementsResult,
-      processesResult,
       runsResult,
       sourcesResult,
+      summaryResult,
       linksResult,
     ] = await Promise.all([
-        supabase
-          .from("publicacoes")
-          .select("*")
-          .eq("tenant_id", tenantId)
-          .order("data_publicacao", { ascending: false }),
-        supabase
-          .from("process_movements")
-          .select("*")
-          .eq("tenant_id", tenantId)
-          .order("occurred_at", { ascending: false }),
-        supabase
-          .from("processos")
-          .select("id, numero, cliente_nome")
-          .eq("tenant_id", tenantId),
+        publicationsQuery,
         supabase
           .from("legal_sync_runs")
           .select(
@@ -252,7 +264,19 @@ const Publicacoes = () => {
             "id, source_kind, provider, reference, active, next_sync_at, last_success_at, failure_count, last_error_code, paused_reason",
           )
           .eq("tenant_id", tenantId)
-          .order("next_sync_at", { ascending: true }),
+          .or("active.eq.false,last_error_code.not.is.null")
+          .or("paused_reason.is.null,paused_reason.neq.covered_by_oab")
+          .order("failure_count", { ascending: false })
+          .limit(12),
+        // A view agregada preserva o RLS da tabela-base (security_invoker).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("legal_sync_source_summary")
+          .select(
+            "monitored_oabs, monitored_processes, pending_count, failing_count, stopped_count, next_run, last_success",
+          )
+          .eq("tenant_id", tenantId)
+          .maybeSingle(),
         // A migration desta entrega ainda não integra o arquivo de tipos
         // gerado; o acesso permanece tipado no resultado logo abaixo.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -262,31 +286,36 @@ const Publicacoes = () => {
           .eq("tenant_id", tenantId),
       ]);
 
-    const firstError = publicationsResult.error ??
-      movementsResult.error ??
-      processesResult.error ??
-      runsResult.error ??
-      sourcesResult.error ??
+    const auxiliaryError = runsResult.error ?? sourcesResult.error ??
+      summaryResult.error ??
       linksResult.error;
-    if (firstError) {
+    if (publicationsResult.error) {
       toast({
-        title: "Não foi possível carregar o acompanhamento jurídico",
+        title: "Não foi possível carregar as intimações",
         description: "Tente novamente em alguns instantes.",
         variant: "destructive",
       });
-    } else {
+    } else if (auxiliaryError) {
+      toast({
+        title: "Intimações carregadas",
+        description:
+          "Alguns dados complementares da sincronização não responderam.",
+      });
+    }
+
+    if (!publicationsResult.error) {
       setPublicacoes((publicationsResult.data ?? []) as Publicacao[]);
-      setMovimentos((movementsResult.data ?? []) as Movimento[]);
-      setProcessos(
-        new Map(
-          (processesResult.data ?? []).map((process: Processo) => [
-            process.id,
-            process,
-          ]),
-        ),
-      );
+    }
+    if (!runsResult.error) {
       setSyncRuns((runsResult.data ?? []) as SyncRun[]);
+    }
+    if (!sourcesResult.error) {
       setSyncSources((sourcesResult.data ?? []) as SyncSource[]);
+    }
+    if (!summaryResult.error) {
+      setSyncSummary((summaryResult.data ?? null) as SyncSummary | null);
+    }
+    if (!linksResult.error) {
       setTaskByPublication(new Map(
         (linksResult.data ?? []).map((link: {
           publication_id: string;
@@ -295,11 +324,45 @@ const Publicacoes = () => {
       ));
     }
     setLoading(false);
-  }, [currentTenant, toast]);
+  }, [currentTenant, isIntimations, toast]);
+
+  const loadMovements = useCallback(async () => {
+    if (!currentTenant || movementsLoaded || loadingMovements) return;
+    setLoadingMovements(true);
+    const { data, error } = await supabase
+      .from("process_movements")
+      .select(
+        "id, tenant_id, process_id, process_number, client_name, provider, movement_type, occurred_at, title, content, source_name, source_url",
+      )
+      .eq("tenant_id", currentTenant.tenantId)
+      .order("occurred_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      toast({
+        title: "Não foi possível carregar os andamentos",
+        description: "As intimações continuam disponíveis normalmente.",
+        variant: "destructive",
+      });
+    } else {
+      setMovimentos((data ?? []) as Movimento[]);
+      setMovementsLoaded(true);
+    }
+    setLoadingMovements(false);
+  }, [currentTenant, loadingMovements, movementsLoaded, toast]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setMovimentos([]);
+    setMovementsLoaded(false);
+  }, [currentTenant?.tenantId]);
+
+  useEffect(() => {
+    if (activeTab === "andamentos") void loadMovements();
+  }, [activeTab, loadMovements]);
 
   useEffect(() => {
     const publicationId = searchParams.get("publication");
@@ -331,18 +394,17 @@ const Publicacoes = () => {
     return movimentos.filter((movement) => {
       if (source !== "todas" && movement.provider !== source) return false;
       if (!normalized) return true;
-      const process = processos.get(movement.process_id);
       return [
         movement.title,
         movement.content,
         movement.source_name,
-        process?.numero,
-        process?.cliente_nome,
+        movement.process_number,
+        movement.client_name,
       ].some((value) =>
         value?.toLocaleLowerCase("pt-BR").includes(normalized)
       );
     });
-  }, [movimentos, processos, search, source]);
+  }, [movimentos, search, source]);
 
   const movementGroups = useMemo(() => {
     const grouped = new Map<string, Movimento[]>();
@@ -352,15 +414,20 @@ const Publicacoes = () => {
     }
     return Array.from(grouped.entries()).map(([key, items]) => ({
       key,
-      process: processos.get(items[0]?.process_id),
+      processId: items[0]?.process_id,
+      processNumber: items[0]?.process_number,
+      clientName: items[0]?.client_name,
       items,
       timeline: buildProcessTimeline({ movements: items }),
     }));
-  }, [filteredMovements, processos]);
+  }, [filteredMovements]);
 
   const stats = useMemo(() => ({
     total: publicacoes.length,
     pending: publicacoes.filter((item) => item.status === "nova").length,
+    pendingReview: publicacoes.filter((item) =>
+      item.review_status === "pending_review"
+    ).length,
     deadline: publicacoes.filter((item) =>
       item.possible_deadline && item.review_status === "pending_review"
     ).length,
@@ -516,16 +583,26 @@ const Publicacoes = () => {
       .at(-1) ?? null;
 
     return {
-      monitoredOabs: new Set(
+      monitoredOabs: syncSummary?.monitored_oabs ?? new Set(
         active.filter((source) => source.source_kind === "oab")
           .map((source) => source.reference),
       ).size,
-      monitoredProcesses: new Set(
+      monitoredProcesses: syncSummary?.monitored_processes ?? new Set(
         active.filter((source) => source.source_kind === "process")
           .map((source) => source.reference),
       ).size,
-      nextRun,
-      lastSuccess,
+      nextRun: syncSummary?.next_run ?? nextRun,
+      lastSuccess: syncSummary?.last_success ?? lastSuccess,
+      pendingCount: syncSummary?.pending_count ?? syncSources.filter((source) =>
+        source.last_error_code === "integration_not_configured"
+      ).length,
+      failingCount: syncSummary?.failing_count ?? syncSources.filter((source) =>
+        source.last_error_code &&
+        source.last_error_code !== "integration_not_configured"
+      ).length,
+      stoppedCount: syncSummary?.stopped_count ?? syncSources.filter((source) =>
+        !source.active && source.paused_reason !== "covered_by_oab"
+      ).length,
       pending: syncSources.filter((source) =>
         source.last_error_code === "integration_not_configured"
       ),
@@ -533,9 +610,11 @@ const Publicacoes = () => {
         source.last_error_code &&
         source.last_error_code !== "integration_not_configured"
       ),
-      stopped: syncSources.filter((source) => !source.active),
+      stopped: syncSources.filter((source) =>
+        !source.active && source.paused_reason !== "covered_by_oab"
+      ),
     };
-  }, [syncSources]);
+  }, [syncSources, syncSummary]);
 
   const lastSync = syncRuns[0];
 
@@ -545,10 +624,14 @@ const Publicacoes = () => {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              Publicações e andamentos
+              {isIntimations
+                ? "Intimações aguardando revisão"
+                : "Publicações e andamentos"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Acompanhamento real e isolado de {currentTenant?.displayName}.
+              {isIntimations
+                ? `Comunicações oficiais que exigem conferência de ${currentTenant?.displayName}.`
+                : `Acompanhamento real e isolado de ${currentTenant?.displayName}.`}
             </p>
           </div>
           <Button onClick={() => void synchronize()} disabled={syncing}>
@@ -569,7 +652,9 @@ const Publicacoes = () => {
           >
             <CardContent className="flex items-center justify-between p-5">
               <div>
-                <p className="text-sm text-muted-foreground">Publicações</p>
+                <p className="text-sm text-muted-foreground">
+                  {isIntimations ? "Intimações" : "Publicações"}
+                </p>
                 <p className="mt-1 text-3xl font-bold">{stats.total}</p>
               </div>
               <Bell className="h-6 w-6 text-primary" />
@@ -584,8 +669,12 @@ const Publicacoes = () => {
           >
             <CardContent className="flex items-center justify-between p-5">
               <div>
-                <p className="text-sm text-muted-foreground">Novas</p>
-                <p className="mt-1 text-3xl font-bold">{stats.pending}</p>
+                <p className="text-sm text-muted-foreground">
+                  {isIntimations ? "Aguardando revisão" : "Novas"}
+                </p>
+                <p className="mt-1 text-3xl font-bold">
+                  {isIntimations ? stats.pendingReview : stats.pending}
+                </p>
               </div>
               <FileText className="h-6 w-6 text-blue-600" />
             </CardContent>
@@ -662,24 +751,24 @@ const Publicacoes = () => {
               />
               <SyncMetric
                 label="Fontes com falha"
-                value={syncPanel.failing.length}
-                tone={syncPanel.failing.length > 0 ? "warning" : "neutral"}
+                value={syncPanel.failingCount}
+                tone={syncPanel.failingCount > 0 ? "warning" : "neutral"}
               />
               <SyncMetric
                 label="Fontes interrompidas"
-                value={syncPanel.stopped.length}
-                tone={syncPanel.stopped.length > 0 ? "danger" : "neutral"}
+                value={syncPanel.stoppedCount}
+                tone={syncPanel.stoppedCount > 0 ? "danger" : "neutral"}
               />
             </div>
 
-            {syncPanel.pending.length > 0 && (
+            {syncPanel.pendingCount > 0 && (
               <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-                {syncPanel.pending.length} fonte(s) aguardam a configuração do
+                {syncPanel.pendingCount} fonte(s) aguardam a configuração do
                 provedor. Os andamentos disponíveis continuam sendo atualizados.
               </p>
             )}
 
-            {(syncPanel.failing.length > 0 || syncPanel.stopped.length > 0) && (
+            {(syncPanel.failingCount > 0 || syncPanel.stoppedCount > 0) && (
               <ul className="space-y-1 text-xs">
                 {[...syncPanel.stopped, ...syncPanel.failing]
                   .filter((source, index, list) =>
@@ -719,7 +808,8 @@ const Publicacoes = () => {
           >
             <TabsList>
               <TabsTrigger value="publicacoes">
-                Publicações ({publicacoes.length})
+                {isIntimations ? "Intimações pendentes" : "Publicações"} (
+                {publicacoes.length})
               </TabsTrigger>
               <TabsTrigger value="andamentos">
                 Andamentos ({movimentos.length})
@@ -776,7 +866,7 @@ const Publicacoes = () => {
           </div>
         </div>
 
-        {loading ? (
+        {loading || (activeTab === "andamentos" && loadingMovements) ? (
           <div className="flex justify-center py-20">
             <RefreshCw className="h-7 w-7 animate-spin text-primary" />
           </div>
@@ -915,15 +1005,18 @@ const Publicacoes = () => {
             {filteredPublications.length === 0 && (
               <EmptyState
                 icon={Bell}
-                title="Nenhuma publicação real encontrada"
-                description="As publicações oficiais encontradas no DJEN/CNJ por OAB ou processo aparecerão aqui automaticamente. Dados do DataJud não são apresentados como publicação."
+                title={isIntimations
+                  ? "Nenhuma intimação aguardando revisão"
+                  : "Nenhuma publicação real encontrada"}
+                description={isIntimations
+                  ? "Quando uma nova comunicação oficial exigir conferência, ela aparecerá aqui."
+                  : "As publicações oficiais encontradas no DJEN/CNJ por OAB ou processo aparecerão aqui automaticamente. Dados do DataJud não são apresentados como publicação."}
               />
             )}
           </div>
         ) : (
           <div className="space-y-5">
             {movementGroups.map((group) => {
-              const reference = group.items[0];
               return (
                 <DepthCard key={group.key}>
                   <CardHeader className="pb-3">
@@ -934,14 +1027,14 @@ const Publicacoes = () => {
                           <Badge variant="secondary">{group.items.length} evento(s)</Badge>
                         </div>
                         <CardTitle className="mt-3 font-mono text-base">
-                          {group.process?.numero ?? reference.process_number ?? "Processo não identificado"}
+                          {group.processNumber ?? "Processo não identificado"}
                         </CardTitle>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {group.process?.cliente_nome ?? reference.client_name ?? "Cliente não identificado"}
+                          {group.clientName ?? "Cliente não identificado"}
                         </p>
                       </div>
-                      {group.process && (
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/processos/${group.process!.id}`)}>
+                      {group.processId && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/processos/${group.processId}`)}>
                           Abrir processo
                         </Button>
                       )}

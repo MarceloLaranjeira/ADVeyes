@@ -34,7 +34,7 @@ const sections: Array<{
       { label: "Agenda", icon: Calendar, path: "/agenda" },
       { label: "Tarefas", icon: CheckSquare, path: "/tarefas" },
       { label: "Audiências", icon: Gavel, path: "/audiencias" },
-      { label: "Publicações", icon: Newspaper, path: "/publicacoes" },
+      { label: "Intimações", icon: Newspaper, path: "/intimacoes" },
     ],
   },
   {

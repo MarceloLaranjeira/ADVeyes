@@ -95,7 +95,7 @@ function buildAttentionItems(
       kind: "publication",
       title: `${source.pendingPublicationCount} intimação(ões) aguardando revisão`,
       description: "Revise o conteúdo e confirme possíveis prazos antes de distribuir atividades.",
-      href: "/publicacoes",
+      href: "/intimacoes",
       date: null,
       days: null,
     });
@@ -250,7 +250,7 @@ export async function loadOperationalDashboard(
     supabase.from("time_entries").select("horas").eq("tenant_id", tenantId).gte("data", monthStartDate),
     supabase.from("metas_financeiras").select("meta_receita").eq("tenant_id", tenantId).eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).maybeSingle(),
     supabase.from("processo_monitoramento").select("tribunal, ultima_verificacao").eq("tenant_id", tenantId).eq("ativo", true),
-    supabase.from("publicacoes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).in("status", ["nova", "urgente"]),
+    supabase.from("publicacoes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("review_status", "pending_review"),
   ]);
 
   const warnings: string[] = [];
@@ -297,4 +297,3 @@ export async function loadOperationalDashboard(
     warnings,
   }, now);
 }
-

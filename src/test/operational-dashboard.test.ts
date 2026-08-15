@@ -71,6 +71,8 @@ describe("buildOperationalDashboard", () => {
       href: "/processos/process-1",
       days: -2,
     });
+    expect(dashboard.attention.find(item => item.kind === "publication"))
+      .toMatchObject({ href: "/intimacoes" });
   });
 
   it("consolida áreas e saúde do monitoramento", () => {
@@ -88,4 +90,3 @@ describe("buildOperationalDashboard", () => {
     expect(dashboard.warnings).toEqual(["Financeiro: acesso negado"]);
   });
 });
-
