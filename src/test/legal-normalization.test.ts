@@ -12,9 +12,45 @@ import {
   normalizeEscavadorPublication,
   normalizeEscavadorPublicDocument,
   normalizeEscavadorProcessParties,
+  normalizeProcessDiscoveryParties,
   resolveOriginSystem,
   RETRY_DELAYS_MS,
 } from "../../supabase/functions/_shared/legal-normalization.ts";
+
+describe("normalizeProcessDiscoveryParties", () => {
+  it("reaproveita envolvidos da capa armazenada com polo ativo e passivo", () => {
+    const parties = normalizeProcessDiscoveryParties({
+      provider: "escavador",
+      titleActiveParty: "Título resumido",
+      providerPayload: {
+        fontes: [{
+          id: 12,
+          envolvidos: [
+            { nome: "Empresa Autora", polo: "ATIVO", tipo_pessoa: "JURIDICA" },
+            { nome: "Empresa Ré", polo: "PASSIVO", tipo_pessoa: "JURIDICA" },
+          ],
+        }],
+      },
+    });
+
+    expect(parties).toHaveLength(2);
+    expect(parties.map((party) => [party.side, party.displayName])).toEqual([
+      ["ativo", "Empresa Autora"],
+      ["passivo", "Empresa Ré"],
+    ]);
+  });
+
+  it("usa os títulos dos polos quando a descoberta não possui capa rica", () => {
+    const parties = normalizeProcessDiscoveryParties({
+      provider: "djen",
+      titleActiveParty: "Maria da Silva",
+      titlePassiveParty: "Banco Exemplo S.A.",
+    });
+
+    expect(parties.map((party) => party.side)).toEqual(["ativo", "passivo"]);
+    expect(parties[0].personType).toBe("desconhecido");
+  });
+});
 
 describe("normalizeEscavadorPublicDocument", () => {
   it("preserva metadados e cria identidade separada dos andamentos", () => {

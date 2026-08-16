@@ -154,6 +154,35 @@ export async function ingestProcessParties(
   });
   if (error) throw error;
 
+  // Mantém os campos legados usados em listas e relatórios alinhados com a
+  // relação canônica de partes exibida no detalhe do processo.
+  const { data: processParties, error: sidesError } = await admin
+    .from("process_parties")
+    .select("side, display_name")
+    .eq("tenant_id", input.tenantId)
+    .eq("process_id", input.processId)
+    .in("side", ["ativo", "passivo"])
+    .order("display_name");
+  if (sidesError) throw sidesError;
+  const namesFor = (side: "ativo" | "passivo") => [...new Set(
+    (processParties ?? [])
+      .filter((party) => party.side === side)
+      .map((party) => String(party.display_name).trim())
+      .filter(Boolean),
+  )].join("; ");
+  const activeNames = namesFor("ativo");
+  const passiveNames = namesFor("passivo");
+  const legacyPatch: Record<string, string> = {};
+  if (activeNames) legacyPatch.polo_ativo = activeNames;
+  if (passiveNames) legacyPatch.polo_passivo = passiveNames;
+  if (Object.keys(legacyPatch).length) {
+    const { error: processError } = await admin.from("processos")
+      .update(legacyPatch)
+      .eq("tenant_id", input.tenantId)
+      .eq("id", input.processId);
+    if (processError) throw processError;
+  }
+
   const created = rows.filter((row) => !existingByHash.has(row.identity_hash)).length;
   return {
     received: rows.length,

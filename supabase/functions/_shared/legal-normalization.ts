@@ -754,6 +754,58 @@ export function normalizeEscavadorProcessParties(
   return Array.from(parties.values());
 }
 
+/**
+ * Reaproveita a capa já armazenada durante a descoberta do processo. Isso
+ * evita uma segunda consulta paga e cobre índices do DataJud que entregam
+ * andamentos, mas omitem as partes na resposta pública.
+ */
+export function normalizeProcessDiscoveryParties(source: {
+  provider: "datajud" | "djen" | "escavador";
+  titleActiveParty?: unknown;
+  titlePassiveParty?: unknown;
+  providerPayload?: Record<string, unknown> | null;
+}): NormalizedParty[] {
+  const payload = source.providerPayload ?? {};
+  const richParties = source.provider === "escavador"
+    ? normalizeEscavadorProcessParties(payload)
+    : source.provider === "datajud"
+    ? normalizeDataJudParties(payload as DataJudProcessPayload)
+    : [];
+  if (richParties.length) return richParties;
+
+  const candidates: Array<{
+    name: unknown;
+    side: "ativo" | "passivo";
+  }> = [
+    { name: source.titleActiveParty, side: "ativo" },
+    { name: source.titlePassiveParty, side: "passivo" },
+  ];
+
+  return candidates.flatMap(({ name, side }) => {
+    const displayName = collapse(name);
+    if (!displayName) return [];
+    return [{
+      externalId: null,
+      displayName,
+      normalizedName: normalizePartyName(displayName),
+      personType: "desconhecido",
+      documentMasked: null,
+      documentHash: null,
+      side,
+      proceduralRole: null,
+      internalClassification: side === "passivo" ? "parte_contraria" : "terceiro",
+      relatedLawyers: [],
+      contact: { phone: null, email: null, address: null },
+      provider: source.provider,
+      payload: {
+        origem: "process_discovery",
+        nome: displayName,
+        polo: side,
+      },
+    } satisfies NormalizedParty];
+  });
+}
+
 function slug(value: string): string {
   return value
     .normalize("NFD")

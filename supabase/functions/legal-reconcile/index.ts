@@ -55,6 +55,7 @@ import {
   normalizeDataJudProcessMetadata,
   normalizeDjenPublication,
   normalizeEscavadorProcessParties,
+  normalizeProcessDiscoveryParties,
   normalizeEscavadorMovement,
   normalizeEscavadorPublicDocument,
   RECONCILIATION_INTERVAL_MS,
@@ -493,6 +494,42 @@ async function reconcileProcessSource(
 
   const partyResult: IngestionResult = { received: 0, created: 0, ignored: 0, createdIds: [] };
   const movementResult: IngestionResult = { received: 0, created: 0, ignored: 0, createdIds: [] };
+
+  // A descoberta por OAB frequentemente já contém a capa completa do
+  // Escavador. Reutilizá-la preenche os polos mesmo quando o DataJud omite
+  // `partes` e não consome uma nova consulta do provedor complementar.
+  const { data: discoveries, error: discoveriesError } = await context.admin
+    .from("process_discoveries")
+    .select("provider, title_active_party, title_passive_party, provider_payload")
+    .eq("tenant_id", source.tenant_id)
+    .eq("numero_cnj", formatCnj(process.numero))
+    .order("provider_fetched_at", { ascending: false })
+    .limit(20);
+  if (discoveriesError) throw discoveriesError;
+  for (const discovery of discoveries ?? []) {
+    if (!["datajud", "djen", "escavador"].includes(discovery.provider)) continue;
+    const storedParties = await ingestProcessParties(context.admin, {
+      tenantId: source.tenant_id,
+      processId: source.process_id,
+      parties: normalizeProcessDiscoveryParties({
+        provider: discovery.provider as "datajud" | "djen" | "escavador",
+        titleActiveParty: discovery.title_active_party,
+        titlePassiveParty: discovery.title_passive_party,
+        providerPayload: discovery.provider_payload && typeof discovery.provider_payload === "object"
+          ? discovery.provider_payload as Record<string, unknown>
+          : null,
+      }),
+    });
+    partyResult.received += storedParties.received;
+    partyResult.created += storedParties.created;
+    partyResult.ignored += storedParties.ignored;
+  }
+  if (partyResult.received) {
+    await reconcileProcessContacts(context.admin, {
+      tenantId: source.tenant_id,
+      processId: source.process_id,
+    });
+  }
 
   // Tenta a reconciliação oficial do DataJud sem bloquear o Escavador se falhar ou não retornar dados.
   if (context.dataJudAuthorization) {
