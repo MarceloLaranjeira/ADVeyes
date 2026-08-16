@@ -33,6 +33,10 @@ interface DashboardSourceData {
   hours: Array<Pick<Tables["time_entries"]["Row"], "horas">>;
   goal: Pick<GoalRow, "meta_receita"> | null;
   monitoring: Array<Pick<MonitoringRow, "tribunal" | "ultima_verificacao">>;
+  legalMonitoringSummary?: {
+    monitored_processes: number | string | null;
+    last_success: string | null;
+  } | null;
   pendingPublicationCount: number;
   warnings: string[];
 }
@@ -158,6 +162,9 @@ export function buildOperationalDashboard(
     .map(item => item.ultima_verificacao)
     .filter((value): value is string => Boolean(value))
     .sort((left, right) => right.localeCompare(left));
+  const monitoredProcessCount = Number(
+    source.legalMonitoringSummary?.monitored_processes ?? source.monitoring.length,
+  );
 
   return {
     generatedAt: now.toISOString(),
@@ -189,9 +196,9 @@ export function buildOperationalDashboard(
         : 0,
     },
     monitoring: {
-      monitoredProcesses: source.monitoring.length,
+      monitoredProcesses: monitoredProcessCount,
       activeCourts: new Set(source.monitoring.map(item => item.tribunal).filter(Boolean)).size,
-      lastVerification: verificationTimes[0] ?? null,
+      lastVerification: source.legalMonitoringSummary?.last_success ?? verificationTimes[0] ?? null,
     },
     attention: buildAttentionItems(source, now),
     upcomingHearings: source.upcomingHearings,
@@ -231,6 +238,7 @@ export async function loadOperationalDashboard(
     hoursResult,
     goalResult,
     monitoringResult,
+    legalMonitoringSummaryResult,
     publicationsResult,
   ] = await Promise.all([
     supabase.from("processos").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).neq("status", "Arquivado"),
@@ -250,6 +258,14 @@ export async function loadOperationalDashboard(
     supabase.from("time_entries").select("horas").eq("tenant_id", tenantId).gte("data", monthStartDate),
     supabase.from("metas_financeiras").select("meta_receita").eq("tenant_id", tenantId).eq("mes", now.getMonth() + 1).eq("ano", now.getFullYear()).maybeSingle(),
     supabase.from("processo_monitoramento").select("tribunal, ultima_verificacao").eq("tenant_id", tenantId).eq("ativo", true),
+    // A integração atual usa legal_sync_sources; processo_monitoramento é
+    // mantida apenas para escritórios legados.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("legal_sync_source_summary")
+      .select("monitored_processes, last_success")
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
     supabase.from("publicacoes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("review_status", "pending_review"),
   ]);
 
@@ -272,6 +288,7 @@ export async function loadOperationalDashboard(
     ["Horas", hoursResult.error],
     ["Metas", goalResult.error],
     ["Monitoramento", monitoringResult.error],
+    ["Monitoramento jurídico", legalMonitoringSummaryResult.error],
     ["Intimações", publicationsResult.error],
   ].forEach(([label, error]) => addWarning(warnings, label as string, error as SupabaseError));
 
@@ -293,6 +310,7 @@ export async function loadOperationalDashboard(
     hours: hoursResult.data ?? [],
     goal: goalResult.data ?? null,
     monitoring: monitoringResult.data ?? [],
+    legalMonitoringSummary: legalMonitoringSummaryResult.data ?? null,
     pendingPublicationCount: publicationsResult.count ?? 0,
     warnings,
   }, now);

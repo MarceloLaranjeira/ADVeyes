@@ -201,7 +201,7 @@ async function pendingCandidateIds(
   input: {
     tenantId: string;
     registrationId: string;
-    provider: "datajud" | "escavador";
+    provider: "datajud" | "djen" | "escavador";
     processNumbers: string[];
   },
 ): Promise<string[]> {
@@ -216,6 +216,70 @@ async function pendingCandidateIds(
     .limit(AUTO_IMPORT_BATCH);
   if (error) throw error;
   return (data ?? []).map((row) => row.id);
+}
+
+function djenRecipientName(
+  recipients: Array<Record<string, unknown>>,
+  side: "A" | "P",
+): string | null {
+  const recipient = recipients.find((item) => item.polo === side);
+  return typeof recipient?.nome === "string" && recipient.nome.trim()
+    ? recipient.nome.trim()
+    : null;
+}
+
+/**
+ * Uma publicação oficial também é evidência da existência do processo. Ao
+ * materializá-la como descoberta, o fluxo transacional existente cria o
+ * processo, os vínculos da OAB e as fontes de monitoramento sem duplicatas.
+ */
+async function materializeDjenProcesses(
+  context: ReconcileContext,
+  source: SyncSource,
+  publications: ReturnType<typeof normalizeDjenPublication>[],
+): Promise<number> {
+  if (!source.lawyer_registration_id) return 0;
+
+  const byNumber = new Map<string, (typeof publications)[number]>();
+  for (const publication of publications) {
+    if (publication.numeroProcesso && CNJ_PATTERN.test(publication.numeroProcesso)) {
+      byNumber.set(publication.numeroProcesso, publication);
+    }
+  }
+  if (!byNumber.size) return 0;
+
+  const rows = [...byNumber.values()].map((publication) => ({
+    tenant_id: source.tenant_id,
+    lawyer_registration_id: source.lawyer_registration_id,
+    numero_cnj: publication.numeroProcesso!,
+    provider: "djen",
+    state: "candidate",
+    title_active_party: djenRecipientName(publication.recipients, "A"),
+    title_passive_party: djenRecipientName(publication.recipients, "P"),
+    tribunal: publication.tribunal,
+    court_unit: publication.courtBody,
+    last_movement_at: publication.publishedAt,
+    provider_fetched_at: new Date().toISOString(),
+    provider_payload: publication.payload,
+  }));
+
+  const { error } = await context.admin.from("process_discoveries").upsert(rows, {
+    onConflict: "tenant_id,lawyer_registration_id,numero_cnj,provider",
+    ignoreDuplicates: true,
+  });
+  if (error) throw error;
+
+  const candidateIds = await pendingCandidateIds(context.admin, {
+    tenantId: source.tenant_id,
+    registrationId: source.lawyer_registration_id,
+    provider: "djen",
+    processNumbers: [...byNumber.keys()],
+  });
+  const imported = await autoImportDiscoveries(context.admin, {
+    tenantId: source.tenant_id,
+    candidateIds,
+  });
+  return imported.imported;
 }
 
 async function importStoredCandidates(
@@ -873,12 +937,25 @@ async function persistDjenForSource(
     .eq("tenant_id", source.tenant_id);
   if (error) throw error;
 
-  const processRows = (processes ?? []) as Array<
+  let processRows = (processes ?? []) as Array<
     ProcessReference & { numero: string }
   >;
   const normalized = fetched.items.map((publication) =>
     normalizeDjenPublication(publication, { receivedAt })
   );
+  const importedProcesses = source.source_kind === "oab"
+    ? await materializeDjenProcesses(context, source, normalized)
+    : 0;
+  if (importedProcesses > 0) {
+    const { data: refreshedProcesses, error: refreshError } = await context.admin
+      .from("processos")
+      .select("id, numero, cliente_nome, user_id")
+      .eq("tenant_id", source.tenant_id);
+    if (refreshError) throw refreshError;
+    processRows = (refreshedProcesses ?? []) as Array<
+      ProcessReference & { numero: string }
+    >;
+  }
   const registrationActor = source.lawyer_registration_id
     ? await resolveRegistrationActor(
       context.admin,
