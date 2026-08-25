@@ -48,6 +48,7 @@ import SolicitarAcesso from "./pages/SolicitarAcesso";
 import HomeEntry from "./pages/HomeEntry";
 import PlatformAdmin from "./pages/PlatformAdmin";
 import IntegracoesJuridicas from "./pages/IntegracoesJuridicas";
+import Controladoria from "./pages/Controladoria";
 import { AuthenticatedRoute } from "@/components/auth/AuthenticatedRoute";
 import { PlatformAdminRoute } from "@/components/auth/PlatformAdminRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -109,6 +110,7 @@ const App = () => (
                       <Route path="/processos" element={<Processos />} />
                       <Route path="/processos/:id" element={<ProcessoDetalhe />} />
                       <Route path="/clientes" element={<Clientes />} />
+                      <Route path="/controladoria" element={<Controladoria />} />
                       <Route path="/agenda" element={<Agenda />} />
                       <Route path="/tarefas" element={<Tarefas />} />
                       <Route path="/documentos" element={<Documentos />} />

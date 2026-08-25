@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Search, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck,
+  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck, ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
@@ -31,6 +31,7 @@ const sections: Array<{
   {
     label: "Rotina jurídica",
     items: [
+      { label: "Controladoria Jurídica", icon: ClipboardCheck, path: "/controladoria" },
       { label: "Agenda", icon: Calendar, path: "/agenda" },
       { label: "Tarefas", icon: CheckSquare, path: "/tarefas" },
       { label: "Audiências", icon: Gavel, path: "/audiencias" },
