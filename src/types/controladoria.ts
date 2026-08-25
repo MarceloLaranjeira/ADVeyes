@@ -52,3 +52,20 @@ export interface ControladoriaData {
   done: DoneSummary;
   warnings: string[];
 }
+
+/**
+ * Atos aceitos pela função `register_protocol`. A lista espelha o `check` da
+ * migration: divergir aqui produz um erro `invalid_tipo` vindo do banco.
+ */
+export const PROTOCOL_TYPES = [
+  { value: "peticao", label: "Petição" },
+  { value: "contestacao", label: "Contestação" },
+  { value: "recurso", label: "Recurso" },
+  { value: "apelacao", label: "Apelação" },
+  { value: "embargos", label: "Embargos" },
+  { value: "manifestacao", label: "Manifestação" },
+  { value: "cumprimento", label: "Cumprimento de sentença" },
+  { value: "outro", label: "Outro" },
+] as const;
+
+export type ProtocoloTipo = (typeof PROTOCOL_TYPES)[number]["value"];

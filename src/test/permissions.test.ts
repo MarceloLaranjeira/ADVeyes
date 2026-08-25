@@ -47,6 +47,16 @@ describe("matriz de permissões", () => {
       .toBe("excecao");
   });
 
+  it("concede o registro de protocolo aos mesmos perfis que o banco concede", () => {
+    // private.has_tenant_permission libera legal.create para owner, admin,
+    // lawyer e assistant — a mesma lista de legal.read e legal.update.
+    const row = findRow("legal", "create");
+    expect(row.base).toEqual(["owner", "admin", "lawyer", "assistant"]);
+    expect(row.exception).toHaveLength(0);
+    expect(permissionLevel(row, "assistant")).toBe("sempre");
+    expect(permissionLevel(row, "finance")).toBe("nunca");
+  });
+
   it("não oferece exceção a quem já tem o acesso pela regra base", () => {
     for (const row of rows) {
       for (const role of row.base) {

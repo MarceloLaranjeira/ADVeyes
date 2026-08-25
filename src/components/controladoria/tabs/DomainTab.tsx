@@ -12,6 +12,8 @@ export interface DomainTabProps {
   onRetry: () => void;
   onPage: (page: number) => void;
   actions?: (row: TabRow) => React.ReactNode;
+  /** Ação da aba inteira, acima da tabela — não depende de nenhuma linha. */
+  toolbar?: React.ReactNode;
 }
 
 export interface DomainColumn {
@@ -40,6 +42,7 @@ export function DomainTab({ title, empty, columns, ...props }: DomainTabProps & 
   return (
     <Card>
       <CardContent className="p-0">
+        {props.toolbar && <div className="flex justify-end border-b px-4 py-3">{props.toolbar}</div>}
         {props.loading ? <p className="p-8 text-center text-sm text-muted-foreground">Carregando {title.toLowerCase()}...</p> : props.error ? <div className="p-8 text-center"><p className="text-sm font-medium">Não foi possível carregar {title.toLowerCase()}.</p><Button variant="outline" className="mt-3" onClick={props.onRetry}>Tentar novamente</Button></div> : !props.data?.rows.length ? <p className="p-8 text-center text-sm text-muted-foreground">{empty}</p> : <>
           <Table>
             <TableHeader><TableRow>{columns.map(column => <TableHead key={column.label}>{column.label}</TableHead>)}{props.actions && <TableHead className="text-right">Ações</TableHead>}</TableRow></TableHeader>

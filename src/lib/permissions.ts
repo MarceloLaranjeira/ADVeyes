@@ -102,6 +102,14 @@ export const PERMISSION_GROUPS: Array<{
       },
       {
         module: "legal",
+        action: "create",
+        label: "Registrar protocolos",
+        description: "Lançar peças protocoladas e encerrar o prazo com o ato.",
+        base: ["owner", "admin", "lawyer", "assistant"],
+        exception: [],
+      },
+      {
+        module: "legal",
         action: "update",
         label: "Editar dados jurídicos",
         description: "Criar e alterar processos, prazos e tarefas.",

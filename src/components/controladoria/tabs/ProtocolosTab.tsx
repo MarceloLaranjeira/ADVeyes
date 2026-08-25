@@ -1,7 +1,8 @@
+import { Button } from "@/components/ui/button";
 import { DomainTab, date, text, type DomainTabProps } from "./DomainTab";
 
-export function ProtocolosTab(props: DomainTabProps): JSX.Element {
-  return <DomainTab {...props} title="Protocolos" empty="Nenhum protocolo registrado neste período." columns={[
+export function ProtocolosTab({ onRegister, ...props }: DomainTabProps & { onRegister?: () => void }): JSX.Element {
+  return <DomainTab {...props} toolbar={onRegister && <Button size="sm" onClick={onRegister}>Registrar protocolo</Button>} title="Protocolos" empty="Nenhum protocolo registrado neste período." columns={[
     { label: "Ato", render: row => <div><p className="font-medium">{text(row, "tipo")}</p><p className="text-xs text-muted-foreground">{text(row, "descricao", "Sem descrição")}</p></div> },
     { label: "Processo", render: row => text(row, "numero_processo") },
     { label: "Protocolo", render: row => text(row, "protocolo_numero") },

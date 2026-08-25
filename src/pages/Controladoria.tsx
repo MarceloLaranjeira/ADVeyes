@@ -4,6 +4,7 @@ import { AlertCircle, ClipboardCheck, RefreshCw } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ActionList } from "@/components/controladoria/ActionList";
 import { ControladoriaCounters } from "@/components/controladoria/ControladoriaCounters";
+import { ProtocoloDialog, type ProtocoloOrigin } from "@/components/controladoria/ProtocoloDialog";
 import { DoneBlock } from "@/components/controladoria/DoneBlock";
 import { UpcomingBlock } from "@/components/controladoria/UpcomingBlock";
 import { AudienciasTab } from "@/components/controladoria/tabs/AudienciasTab";
@@ -40,6 +41,16 @@ import type { ActivityStatus } from "@/types/activities";
 import type { ActionItem, ControladoriaCounters as CounterValues } from "@/types/controladoria";
 
 export type ControladoriaScope = "meus" | "escritorio";
+
+/** O que a linha de um prazo precisa oferecer para as ações da Controladoria. */
+interface DeadlineTarget {
+  id: string;
+  assigneeId: string | null;
+  status: string | null;
+  title: string;
+  processId: string | null;
+  processNumber: string | null;
+}
 const PERIODS = [7, 15, 30] as const;
 const CONTROLADORIA_TABS: ControladoriaTab[] = ["prazos", "intimacoes", "audiencias", "protocolos", "movimentacoes", "documentos"];
 const focusMap: Record<string, keyof CounterValues> = {
@@ -71,6 +82,7 @@ export default function Controladoria() {
   const { toast } = useToast();
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [reviewingPublication, setReviewingPublication] = useState<ActionItem | null>(null);
+  const [protocolo, setProtocolo] = useState<{ origin: ProtocoloOrigin | null } | null>(null);
   const [deadlineForm, setDeadlineForm] = useState({ date: "", days: "", reason: "", title: "" });
   const scope: ControladoriaScope = searchParams.get("escopo") === "meus" ? "meus" : "escritorio";
   const requestedPeriod = Number(searchParams.get("periodo"));
@@ -149,7 +161,8 @@ export default function Controladoria() {
     }));
     if (succeeded) setReviewingPublication(null);
   };
-  const deadlineActions = (id: string, assigneeId: string | null, status: string | null) => tenantId ? <div className="flex flex-wrap justify-end gap-2">
+  const deadlineActions = ({ id, assigneeId, status, title, processId, processNumber }: DeadlineTarget) => tenantId ? <div className="flex flex-wrap justify-end gap-2">
+    <Button size="sm" variant="outline" onClick={() => setProtocolo({ origin: { taskId: id, taskTitle: title, processId, processNumber } })}>Protocolar</Button>
     <Select disabled={busyAction === `assign:${id}`} value={assigneeId ?? "none"} onValueChange={value => void runAction(`assign:${id}`, "Responsável atualizado", () => assignDeadline(tenantId, id, value === "none" ? null : value))}>
       <SelectTrigger className="h-8 w-40" aria-label="Alterar responsável"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem value="none">Sem responsável</SelectItem>{(members.data ?? []).map(member => <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>)}</SelectContent>
@@ -213,7 +226,7 @@ export default function Controladoria() {
             <ControladoriaCounters counters={query.data.counters} active={activeCounter} onSelect={selectCounter} />
             <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
               <ActionList items={action} now={now} onOpenProcess={processNumber => navigate(processNumber ? `/processos?busca=${encodeURIComponent(processNumber)}` : "/processos")}>
-                {item => item.kind === "intimacao" ? publicationActions(item) : deadlineActions(item.id, item.assigneeId, item.status)}
+                {item => item.kind === "intimacao" ? publicationActions(item) : deadlineActions({ id: item.id, assigneeId: item.assigneeId, status: item.status, title: item.title, processId: item.processId ?? null, processNumber: item.processNumber })}
               </ActionList>
               <div className="space-y-4"><UpcomingBlock hearings={query.data.upcoming} /><DoneBlock done={query.data.done} periodDays={periodDays} /></div>
             </section>
@@ -242,10 +255,10 @@ export default function Controladoria() {
                   <Input aria-label="Data inicial" type="date" value={tabParams.from ?? ""} onChange={event => updateSearch({ de: event.target.value || null, pagina: null })} />
                   <Input aria-label="Data final" type="date" value={tabParams.to ?? ""} onChange={event => updateSearch({ ate: event.target.value || null, pagina: null })} />
                 </div>
-                <TabsContent value="prazos" className="mt-3"><PrazosTab {...domainProps} actions={row => deadlineActions(row.id, row.responsavel_id ? String(row.responsavel_id) : null, row.status ? String(row.status) : null)} /></TabsContent>
+                <TabsContent value="prazos" className="mt-3"><PrazosTab {...domainProps} actions={row => deadlineActions({ id: row.id, assigneeId: row.responsavel_id ? String(row.responsavel_id) : null, status: row.status ? String(row.status) : null, title: String(row.titulo ?? "Prazo"), processId: row.processo_id ? String(row.processo_id) : null, processNumber: null })} /></TabsContent>
                 <TabsContent value="intimacoes" className="mt-3"><IntimacoesTab {...domainProps} actions={publicationRowActions} /></TabsContent>
                 <TabsContent value="audiencias" className="mt-3"><AudienciasTab {...domainProps} /></TabsContent>
-                <TabsContent value="protocolos" className="mt-3"><ProtocolosTab {...domainProps} /></TabsContent>
+                <TabsContent value="protocolos" className="mt-3"><ProtocolosTab {...domainProps} onRegister={() => setProtocolo({ origin: null })} /></TabsContent>
                 <TabsContent value="movimentacoes" className="mt-3"><MovimentacoesTab {...domainProps} /></TabsContent>
                 <TabsContent value="documentos" className="mt-3"><DocumentosTab {...domainProps} /></TabsContent>
               </Tabs>
@@ -264,6 +277,16 @@ export default function Controladoria() {
           <DialogFooter><Button variant="outline" onClick={() => setReviewingPublication(null)}>Cancelar</Button><Button disabled={!deadlineForm.date || !deadlineForm.reason.trim() || Boolean(busyAction)} onClick={() => void submitDeadlineReview()}>Confirmar e criar prazo</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      {tenantId && user?.id && (
+        <ProtocoloDialog
+          open={Boolean(protocolo)}
+          tenantId={tenantId}
+          userId={user.id}
+          origin={protocolo?.origin ?? null}
+          onOpenChange={open => { if (!open) setProtocolo(null); }}
+          onRegistered={refreshControladoria}
+        />
+      )}
     </AppLayout>
   );
 }
