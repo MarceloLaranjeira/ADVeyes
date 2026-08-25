@@ -1,6 +1,15 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+/**
+ * O plugin `jspdf-autotable` acrescenta estas propriedades ao documento em
+ * tempo de execução sem estender os tipos publicados pelo jsPDF.
+ */
+type AutoTableDocument = jsPDF & {
+  lastAutoTable: { finalY: number };
+  internal: { getNumberOfPages: () => number };
+};
+
 interface Processo {
   numero: string;
   cliente_nome?: string | null;
@@ -159,7 +168,7 @@ export const exportProcessoDetalhadoPDF = (input: DetailedProcessPDFInput) => {
     margin: { left: 14, right: 14 },
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 8;
+  currentY = (doc as AutoTableDocument).lastAutoTable.finalY + 8;
 
   // 3. Resumo Processual por IA / Leitura da Capa
   if (p.legal_summary) {
@@ -219,7 +228,7 @@ export const exportProcessoDetalhadoPDF = (input: DetailedProcessPDFInput) => {
       margin: { left: 14, right: 14 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as AutoTableDocument).lastAutoTable.finalY + 8;
   }
 
   // 5. Intimações e Publicações Oficiais (DJEN)
@@ -255,7 +264,7 @@ export const exportProcessoDetalhadoPDF = (input: DetailedProcessPDFInput) => {
   }
 
   // Rodapé em todas as páginas
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageCount = (doc as AutoTableDocument).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
@@ -310,7 +319,7 @@ export const exportProcessosPDF = (processos: Processo[], tenantName?: string) =
     margin: { left: 14, right: 14 },
   });
 
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageCount = (doc as AutoTableDocument).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
