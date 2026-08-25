@@ -42,6 +42,27 @@ describe("activity status", () => {
     expect(isActivityStatus("arquivada")).toBe(false);
   });
 
+  it("aceita revisão como status de atividade", () => {
+    expect(isActivityStatus("em_revisao")).toBe(true);
+  });
+
+  it("não conta revisão como tarefa concluída", () => {
+    const metrics = calculateActivityMetrics([
+      activity({ status: "em_revisao", pontos: 5, concluida_em: null }),
+      activity({ status: "concluída", pontos: 3, concluida_em: "2026-08-02T12:00:00Z" }),
+    ]);
+
+    expect(metrics.completed).toBe(1);
+    expect(metrics.inReview).toBe(1);
+    expect(metrics.completedPoints).toBe(3);
+  });
+
+  it("leva a revisão até a conclusão e de volta", () => {
+    expect(canTransitionActivityStatus("em_andamento", "em_revisao")).toBe(true);
+    expect(canTransitionActivityStatus("em_revisao", "concluída")).toBe(true);
+    expect(canTransitionActivityStatus("em_revisao", "em_andamento")).toBe(true);
+  });
+
   it("permite mover e reabrir tarefas", () => {
     expect(canTransitionActivityStatus("pendente", "em_andamento")).toBe(true);
     expect(canTransitionActivityStatus("concluída", "pendente")).toBe(true);
@@ -90,6 +111,7 @@ describe("activity metrics", () => {
       total: 4,
       pending: 1,
       inProgress: 1,
+      inReview: 0,
       completed: 2,
       overdue: 1,
       completedPoints: 8,

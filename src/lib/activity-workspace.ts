@@ -13,7 +13,7 @@ import { classifyActivityDueDate } from "@/lib/activity-status";
 const views = new Set<ActivityView>(["overview", "list", "kanban", "calendar", "performance"]);
 const scopes = new Set<ActivityScope>(["mine", "office"]);
 const sorts = new Set<ActivitySort>(["due_asc", "due_desc", "priority", "newest", "oldest", "title", "points"]);
-const statuses = new Set<ActivityStatus>(["pendente", "em_andamento", "concluída"]);
+const statuses = new Set<ActivityStatus>(["pendente", "em_andamento", "em_revisao", "concluída"]);
 const dueKinds = new Set<ActivityDueKind | "all">(["all", "none", "overdue", "today", "tomorrow", "upcoming", "future"]);
 
 export function parseActivityRoute(params: URLSearchParams, defaultScope: ActivityScope): ActivityRouteState {

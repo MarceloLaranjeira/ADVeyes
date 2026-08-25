@@ -169,7 +169,7 @@ export default function Controladoria() {
     </Select>
     <Select disabled={busyAction === `status:${id}`} value={status ?? "pendente"} onValueChange={value => void runAction(`status:${id}`, "Status atualizado", () => changeDeadlineStatus(tenantId, id, value as ActivityStatus))}>
       <SelectTrigger className="h-8 w-36" aria-label="Alterar status"><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value="pendente">A fazer</SelectItem><SelectItem value="em_andamento">Fazendo</SelectItem><SelectItem value="concluída">Concluída</SelectItem></SelectContent>
+      <SelectContent><SelectItem value="pendente">A fazer</SelectItem><SelectItem value="em_andamento">Fazendo</SelectItem><SelectItem value="em_revisao">Revisão</SelectItem><SelectItem value="concluída">Concluída</SelectItem></SelectContent>
     </Select>
   </div> : null;
   const publicationActions = (item: ActionItem) => tenantId && user?.id ? <div className="flex flex-wrap gap-2">
