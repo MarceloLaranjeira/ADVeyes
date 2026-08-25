@@ -72,6 +72,14 @@ verify_jwt = false
 # Chamado pelo pg_cron e protegido por GOOGLE_CALENDAR_WORKER_SECRET.
 verify_jwt = false
 
+[functions.clickup-provision]
+# O JWT é validado dentro da função junto das permissões do tenant.
+verify_jwt = false
+
+[functions.clickup-worker]
+# Chamado pelo pg_cron e protegido por CLICKUP_WORKER_SECRET.
+verify_jwt = false
+
 [functions.tenant-public-config]
 enabled = true
 verify_jwt = false
