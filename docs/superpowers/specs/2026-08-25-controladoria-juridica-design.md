@@ -90,9 +90,15 @@ Todos com valor padrão que preserva o comportamento atual:
   comprovante ao ato, e não apenas ao processo;
 - `publicacoes.ciencia_em` e `publicacoes.ciencia_por` — registram que o
   escritório tomou ciência, quem tomou e quando;
-- `review-publication-deadline` passa a gravar `source_type = 'publicacao'` e
-  `source_id` na tarefa criada. O vínculo já existe em `deadline_suggestions`,
-  mas só é alcançável com mais uma junção.
+- `review-publication-deadline` passa a marcar como `prazo` a tarefa que cria.
+
+Uma ideia foi descartada durante a implementação: gravar também
+`source_type = 'publicacao'` e `source_id` nessa tarefa, para encurtar o
+caminho de volta até a intimação. Não é possível. O índice único
+`tarefas_external_source_uidx (tenant_id, source_type, source_id)` já pertence
+à tarefa de triagem que a ingestão cria para cada publicação nova, e o segundo
+registro colidiria, fazendo falhar toda confirmação de prazo. O caminho de
+volta continua sendo `deadline_suggestions.confirmed_task_id`.
 
 ### Status da providência
 
