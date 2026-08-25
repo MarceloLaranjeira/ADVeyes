@@ -6,6 +6,10 @@ import type { ControladoriaData } from "@/types/controladoria";
 const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 
 vi.mock("@/hooks/useControladoria", () => ({ useControladoria: queryMock }));
+vi.mock("@/hooks/useActiveTeamMembers", () => ({ useActiveTeamMembers: () => ({ data: [] }) }));
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: { rows: [], page: 1, pageSize: 20, total: 0 }, isLoading: false, isError: false, refetch: vi.fn() }),
+}));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ currentTenant: { tenantId: "tenant-1" } }) }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -57,7 +61,7 @@ describe("Controladoria", () => {
   it("mostra os próximos compromissos e o que foi feito no período", () => {
     render(<MemoryRouter><Controladoria /></MemoryRouter>);
     expect(screen.getByText("Instrução")).toBeInTheDocument();
-    expect(screen.getByText("Protocolos")).toBeInTheDocument();
+    expect(screen.getAllByText("Protocolos").length).toBeGreaterThan(0);
     expect(screen.getByText("Prazos concluídos")).toBeInTheDocument();
   });
 

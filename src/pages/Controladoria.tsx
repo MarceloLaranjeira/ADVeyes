@@ -1,23 +1,35 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ClipboardCheck, RefreshCw } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ActionList } from "@/components/controladoria/ActionList";
 import { ControladoriaCounters } from "@/components/controladoria/ControladoriaCounters";
 import { DoneBlock } from "@/components/controladoria/DoneBlock";
 import { UpcomingBlock } from "@/components/controladoria/UpcomingBlock";
+import { AudienciasTab } from "@/components/controladoria/tabs/AudienciasTab";
+import { DocumentosTab } from "@/components/controladoria/tabs/DocumentosTab";
+import { IntimacoesTab } from "@/components/controladoria/tabs/IntimacoesTab";
+import { MovimentacoesTab } from "@/components/controladoria/tabs/MovimentacoesTab";
+import { PrazosTab } from "@/components/controladoria/tabs/PrazosTab";
+import { ProtocolosTab } from "@/components/controladoria/tabs/ProtocolosTab";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useControladoria } from "@/hooks/useControladoria";
+import { useActiveTeamMembers } from "@/hooks/useActiveTeamMembers";
 import { classifyDeadline } from "@/lib/controladoria";
+import { fetchTabPage, type ControladoriaTab } from "@/services/controladoria-tabs";
 import type { ActionItem, ControladoriaCounters as CounterValues } from "@/types/controladoria";
 
 export type ControladoriaScope = "meus" | "escritorio";
 const PERIODS = [7, 15, 30] as const;
+const CONTROLADORIA_TABS: ControladoriaTab[] = ["prazos", "intimacoes", "audiencias", "protocolos", "movimentacoes", "documentos"];
 const focusMap: Record<string, keyof CounterValues> = {
   vencidos: "overdue",
   hoje: "today",
@@ -50,7 +62,27 @@ export default function Controladoria() {
   const focus = searchParams.get("foco");
   const activeCounter = focus ? focusMap[focus] ?? null : null;
   const query = useControladoria(tenantId, periodDays);
+  const members = useActiveTeamMembers(tenantId);
   const now = query.data ? new Date(query.data.generatedAt) : new Date();
+  const tabParam = searchParams.get("aba") as ControladoriaTab | null;
+  const activeTab = tabParam && CONTROLADORIA_TABS.includes(tabParam) ? tabParam : "prazos";
+  const tabPage = Math.max(1, Number(searchParams.get("pagina")) || 1);
+  const tabParams = {
+    tenantId: tenantId ?? "",
+    page: tabPage,
+    pageSize: Number(searchParams.get("porPagina")) || 20,
+    assigneeId: searchParams.get("responsavel"),
+    status: searchParams.get("status"),
+    processId: searchParams.get("processo"),
+    from: searchParams.get("de"),
+    to: searchParams.get("ate"),
+  };
+  const tabQuery = useQuery({
+    queryKey: ["controladoria-tab", activeTab, tabParams],
+    enabled: Boolean(tenantId),
+    queryFn: () => fetchTabPage(activeTab, tabParams),
+    staleTime: 30_000,
+  });
 
   const updateSearch = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
@@ -60,6 +92,13 @@ export default function Controladoria() {
   const selectCounter = (counter: keyof CounterValues | null) => {
     const focusValue = Object.entries(focusMap).find(([, value]) => value === counter)?.[0] ?? null;
     updateSearch({ foco: focusValue });
+  };
+  const domainProps = {
+    data: tabQuery.data,
+    loading: tabQuery.isLoading,
+    error: tabQuery.isError,
+    onRetry: () => void tabQuery.refetch(),
+    onPage: (page: number) => updateSearch({ pagina: page === 1 ? null : String(page) }),
   };
 
   const action = useMemo(() => {
@@ -111,6 +150,39 @@ export default function Controladoria() {
             <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
               <ActionList items={action} now={now} onOpenProcess={processNumber => navigate(processNumber ? `/processos?busca=${encodeURIComponent(processNumber)}` : "/processos")} />
               <div className="space-y-4"><UpcomingBlock hearings={query.data.upcoming} /><DoneBlock done={query.data.done} periodDays={periodDays} /></div>
+            </section>
+
+            <section aria-labelledby="dominios-controladoria" className="space-y-3">
+              <div>
+                <h2 id="dominios-controladoria" className="font-serif text-xl font-semibold">Visão por domínio</h2>
+                <p className="text-sm text-muted-foreground">Consulte o histórico completo sem sair do posto de comando.</p>
+              </div>
+              <Tabs value={activeTab} onValueChange={value => updateSearch({ aba: value === "prazos" ? null : value, pagina: null })}>
+                <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1">
+                  <TabsTrigger value="prazos">Prazos</TabsTrigger>
+                  <TabsTrigger value="intimacoes">Intimações</TabsTrigger>
+                  <TabsTrigger value="audiencias">Audiências</TabsTrigger>
+                  <TabsTrigger value="protocolos">Protocolos</TabsTrigger>
+                  <TabsTrigger value="movimentacoes">Movimentações</TabsTrigger>
+                  <TabsTrigger value="documentos">Documentos</TabsTrigger>
+                </TabsList>
+                <div className="mt-3 grid gap-2 rounded-xl border bg-card p-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <Select value={tabParams.assigneeId ?? "all"} onValueChange={value => updateSearch({ responsavel: value === "all" ? null : value, pagina: null })}>
+                    <SelectTrigger aria-label="Filtrar responsável"><SelectValue placeholder="Responsável" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">Todos os responsáveis</SelectItem>{(members.data ?? []).map(member => <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input aria-label="Filtrar status" placeholder="Status" value={tabParams.status ?? ""} onChange={event => updateSearch({ status: event.target.value || null, pagina: null })} />
+                  <Input aria-label="Filtrar processo" placeholder="ID do processo" value={tabParams.processId ?? ""} onChange={event => updateSearch({ processo: event.target.value || null, pagina: null })} />
+                  <Input aria-label="Data inicial" type="date" value={tabParams.from ?? ""} onChange={event => updateSearch({ de: event.target.value || null, pagina: null })} />
+                  <Input aria-label="Data final" type="date" value={tabParams.to ?? ""} onChange={event => updateSearch({ ate: event.target.value || null, pagina: null })} />
+                </div>
+                <TabsContent value="prazos" className="mt-3"><PrazosTab {...domainProps} /></TabsContent>
+                <TabsContent value="intimacoes" className="mt-3"><IntimacoesTab {...domainProps} /></TabsContent>
+                <TabsContent value="audiencias" className="mt-3"><AudienciasTab {...domainProps} /></TabsContent>
+                <TabsContent value="protocolos" className="mt-3"><ProtocolosTab {...domainProps} /></TabsContent>
+                <TabsContent value="movimentacoes" className="mt-3"><MovimentacoesTab {...domainProps} /></TabsContent>
+                <TabsContent value="documentos" className="mt-3"><DocumentosTab {...domainProps} /></TabsContent>
+              </Tabs>
             </section>
           </>
         )}
