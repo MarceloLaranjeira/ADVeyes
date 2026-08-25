@@ -158,6 +158,18 @@ export function postgresErrorCode(error: unknown): string {
     "registration_not_found",
     "registration_already_exists",
     "professional_not_found",
+    "owner_required",
+    "invalid_token",
+    "revoked_token",
+    "invalid_token_hash",
+    "invalid_identity",
+    "already_member",
+    "link_not_found",
+    "request_not_found",
+    "request_not_pending",
+    "invalid_decision",
+    "invalid_overrides",
+    "forbidden_override",
   ]);
 
   return record.message && stable.has(record.message)
@@ -168,11 +180,17 @@ export function postgresErrorCode(error: unknown): string {
 export function statusForError(code: string): number {
   if (
     code === "permission_denied" || code === "email_mismatch" ||
-    code === "owner_required_for_subscription"
+    code === "owner_required_for_subscription" ||
+    code === "owner_required" || code === "forbidden_override"
   ) return 403;
   if (code === "member_not_found" || code === "invitation_not_found") {
     return 404;
   }
+  if (code === "request_not_found" || code === "link_not_found") return 404;
+  if (
+    code === "already_member" || code === "request_not_pending"
+  ) return 409;
+  if (code === "invalid_token" || code === "revoked_token") return 410;
   if (code === "registration_not_found" || code === "professional_not_found") {
     return 404;
   }
@@ -188,4 +206,34 @@ export function statusForError(code: string): number {
   if (code === "signup_trial_plan_unavailable") return 503;
   if (code === "operation_failed") return 500;
   return 400;
+}
+
+/**
+ * Identificador curto para correlacionar uma falha inesperada entre o log do
+ * servidor e a mensagem mostrada ao usuário, sem vazar detalhes internos.
+ */
+export function createDiagnosticId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const suffix = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+  return `DIAG-${suffix}`;
+}
+
+/**
+ * Converte um erro do banco na resposta pública. Falhas conhecidas viram um
+ * código estável; o resto vira `operation_failed` com um diagnóstico logado.
+ */
+export function failureResponse(
+  scope: string,
+  error: unknown,
+): Response {
+  const code = postgresErrorCode(error);
+  if (code !== "operation_failed") {
+    return json({ error: code }, statusForError(code));
+  }
+
+  const diagnosticId = createDiagnosticId();
+  const details = (error ?? {}) as { code?: string; message?: string };
+  console.error(scope, diagnosticId, details.code ?? "", details.message ?? "");
+  return json({ error: code, diagnosticId }, 500);
 }

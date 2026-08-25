@@ -14,6 +14,7 @@ import { AreaDistribution } from "@/components/dashboard/AreaDistribution";
 import { AttentionCenter } from "@/components/dashboard/AttentionCenter";
 import { CompactWorkspaceCalendar } from "@/components/dashboard/CompactWorkspaceCalendar";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
+import { NoTenantState } from "@/components/dashboard/NoTenantState";
 import { FinancialOverview } from "@/components/dashboard/FinancialOverview";
 import { MonitoringOverview } from "@/components/dashboard/MonitoringOverview";
 import { OperationalKpis } from "@/components/dashboard/OperationalKpis";
@@ -37,8 +38,14 @@ function greetingFor(date: Date): string {
 const Index = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentTenant } = useTenant();
+  const { currentTenant, memberships } = useTenant();
   const tenantId = currentTenant?.tenantId ?? null;
+  // Os quatro estados do painel são decididos aqui, uma vez, em vez de ficarem
+  // implícitos numa cadeia de ternários.
+  const hasTenant = Boolean(tenantId);
+  const canAccessPlatform = (memberships ?? []).some(
+    (membership) => membership?.accessMode === "platform",
+  );
   const dashboard = useOperationalDashboard(tenantId);
   const now = dashboard.data ? new Date(dashboard.data.generatedAt) : new Date();
   const displayName = String(
@@ -81,7 +88,7 @@ const Index = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => void dashboard.refetch()} disabled={dashboard.isFetching}>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => { if (hasTenant) void dashboard.refetch(); }} disabled={!hasTenant || dashboard.isFetching}>
                 <RefreshCw className={dashboard.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} /> Atualizar
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate("/tarefas")}>
@@ -97,7 +104,9 @@ const Index = () => {
           </div>
         </header>
 
-        {!tenantId || dashboard.isLoading ? (
+        {!hasTenant ? (
+          <NoTenantState canAccessPlatform={canAccessPlatform} />
+        ) : dashboard.isLoading ? (
           <DashboardSkeleton />
         ) : dashboard.isError || !dashboard.data ? (
           <Card role="alert" className="border-destructive/30">

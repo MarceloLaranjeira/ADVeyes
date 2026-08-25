@@ -15,6 +15,10 @@ import {
   tokensFromPrimary,
 } from "@/lib/brand-presets";
 import {
+  describeLogoMargins,
+  measureTransparentMargins,
+} from "@/lib/logo-margins";
+import {
   BrandSettingsError,
   loadBrandSettings,
   saveBrandSettings,
@@ -22,6 +26,43 @@ import {
   type BrandSettings,
 } from "@/services/brand-settings";
 import { AlertTriangle, Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+
+/**
+ * Lê a logo enviada e devolve o aviso de margens transparentes, se houver.
+ *
+ * A leitura acontece no navegador porque só o arquivo real revela a sobra. Se
+ * a imagem não puder ser lida (SVG sem tamanho, canvas indisponível, resposta
+ * sem CORS), a pré-visualização segue sem aviso em vez de falhar.
+ */
+async function inspectLogoMargins(url: string): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.crossOrigin = "anonymous";
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("logo_unreadable"));
+      element.src = url;
+    });
+
+    const width = image.naturalWidth;
+    const height = image.naturalHeight;
+    if (!width || !height) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(image, 0, 0, width, height);
+
+    return describeLogoMargins(
+      measureTransparentMargins(context.getImageData(0, 0, width, height)),
+    );
+  } catch {
+    return null;
+  }
+}
 
 const emptySettings: BrandSettings = {
   publicName: null,
@@ -41,6 +82,7 @@ export const IdentidadeVisual = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [logoNotice, setLogoNotice] = useState<string | null>(null);
 
   const directMembership = memberships.find(
     (membership) => membership.tenantId === currentTenant?.tenantId,
@@ -69,6 +111,22 @@ export const IdentidadeVisual = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A conferência acompanha a logo em uso: trocar o arquivo troca o aviso.
+  useEffect(() => {
+    const path = settings.logoLightPath;
+    if (!path) {
+      setLogoNotice(null);
+      return;
+    }
+    let active = true;
+    void inspectLogoMargins(path).then((notice) => {
+      if (active) setLogoNotice(notice);
+    });
+    return () => {
+      active = false;
+    };
+  }, [settings.logoLightPath]);
 
   const primary = settings.colorTokens.primary ?? ADVEYES_PRIMARY;
   const activePreset = useMemo(
@@ -188,19 +246,30 @@ export const IdentidadeVisual = () => {
         <div className="space-y-3">
           <Label>Logo do escritório</Label>
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex h-20 w-40 items-center justify-center rounded-lg border bg-muted/30">
-              {settings.logoLightPath ? (
-                <img
-                  src={settings.logoLightPath}
-                  alt="Logo do escritório"
-                  className="max-h-16 max-w-36 object-contain"
-                />
-              ) : (
-                <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                  <ImageIcon className="h-5 w-5" />
-                  Sem logo
-                </span>
-              )}
+            {/*
+              A pré-visualização repete a geometria real da área da marca no
+              cabeçalho: mesma largura, mesma altura, mesmo fundo. Uma caixa
+              genérica esconde justamente o que costuma dar errado, que é a
+              logo alta ou de várias linhas encolhendo até ficar ilegível.
+            */}
+            <div className="space-y-2">
+              <div className="flex h-16 w-60 items-center justify-start rounded-lg bg-sidebar px-5 py-2">
+                {settings.logoLightPath ? (
+                  <img
+                    src={settings.logoLightPath}
+                    alt="Logo do escritório"
+                    className="h-auto w-auto max-h-12 max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
+                    <ImageIcon className="h-5 w-5" />
+                    Sem logo
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Como a marca aparece no cabeçalho do sistema.
+              </p>
             </div>
             <div className="space-y-2">
               <input
@@ -242,10 +311,18 @@ export const IdentidadeVisual = () => {
               </div>
               <p className="text-xs text-muted-foreground">
                 PNG, JPG, WEBP ou SVG, até 1,5 MB. Fundo transparente fica
-                melhor sobre o cabeçalho.
+                melhor sobre o cabeçalho, e a marca deve chegar às bordas do
+                arquivo.
               </p>
             </div>
           </div>
+
+          {logoNotice && (
+            <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              {logoNotice}
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">

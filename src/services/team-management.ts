@@ -7,6 +7,7 @@ import type {
   TeamRole,
 } from "@/types/team-management";
 import type { PermissionOverrides } from "@/lib/permissions";
+import { EdgeFunctionError, readEdgeError } from "@/lib/edge-errors";
 
 const messages: Record<string, string> = {
   unauthorized: "Sua sessão expirou. Entre novamente.",
@@ -28,15 +29,30 @@ const messages: Record<string, string> = {
     "Somente o proprietário pode liberar a alteração do plano.",
   pilot_seat_limit:
     "Durante o teste gratuito, o escritório pode ter o proprietário e mais uma pessoa.",
+  owner_required: "Somente o proprietário pode fazer isso.",
+  forbidden_override:
+    "As autoridades do proprietário não podem ser concedidas a outra pessoa.",
+  request_not_found: "A solicitação não foi encontrada.",
+  request_not_pending: "Esta solicitação já foi decidida.",
+  already_member: "Esta pessoa já faz parte do escritório.",
+  invalid_token: "Este link de solicitação não é válido.",
+  revoked_token: "Este link foi revogado. Peça um link novo ao escritório.",
+  link_not_found: "Este escritório ainda não tem um link de solicitação.",
+  invalid_role: "Escolha um perfil válido.",
+  invalid_data_scope: "Escolha um alcance de dados válido.",
+  team_required: "Selecione a equipe para o alcance escolhido.",
+  invalid_team: "A equipe selecionada não está disponível.",
   operation_failed: "Não foi possível concluir a operação.",
 };
 
-export class TeamManagementError extends Error {
-  constructor(public readonly code: string) {
-    super(messages[code] ?? messages.operation_failed);
+export class TeamManagementError extends EdgeFunctionError {
+  constructor(code: string, diagnosticId: string | null = null) {
+    super(code, messages, diagnosticId);
     this.name = "TeamManagementError";
   }
 }
+
+export { messages as teamManagementMessages };
 
 async function invoke<T>(
   functionName: string,
@@ -47,17 +63,8 @@ async function invoke<T>(
     15_000,
   );
   if (error) {
-    let code = "operation_failed";
-    const context = (error as { context?: Response }).context;
-    if (context) {
-      try {
-        const payload = await context.clone().json() as { error?: string };
-        code = payload.error ?? code;
-      } catch {
-        // The stable fallback intentionally hides infrastructure details.
-      }
-    }
-    throw new TeamManagementError(code);
+    const { code, diagnosticId } = await readEdgeError(error);
+    throw new TeamManagementError(code, diagnosticId);
   }
   return data as T;
 }

@@ -80,6 +80,18 @@ verify_jwt = false
 # Chamado pelo pg_cron e protegido por CLICKUP_WORKER_SECRET.
 verify_jwt = false
 
+[functions.tenant-access-link]
+# O JWT e as permissoes do proprietario sao validados dentro da funcao e no SQL.
+verify_jwt = false
+
+[functions.tenant-request-access]
+# A acao "lookup" precisa responder antes do login; as demais exigem sessao.
+verify_jwt = false
+
+[functions.tenant-decide-access]
+# O JWT e a autoridade de proprietario sao validados dentro da funcao e no SQL.
+verify_jwt = false
+
 [functions.tenant-public-config]
 enabled = true
 verify_jwt = false

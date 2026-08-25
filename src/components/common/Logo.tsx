@@ -13,6 +13,18 @@ const sizes = {
   xl: { icon: 80, text: "text-3xl", sub: "text-sm" },
 };
 
+/**
+ * Caixa da marca por tamanho. A altura vive no contêiner, não na imagem:
+ * uma altura fixa em pixels na própria logo corta as verticais e as de várias
+ * linhas, que só cabem inteiras quando podem encolher pela largura.
+ */
+const logoBoxes: Record<NonNullable<LogoProps["size"]>, string> = {
+  sm: "max-h-7 max-w-[140px]",
+  md: "max-h-10 max-w-[220px]",
+  lg: "max-h-14 max-w-[280px]",
+  xl: "max-h-20 max-w-[360px]",
+};
+
 /** Scales of Justice SVG mark */
 export const LogoMark = ({ className = "", dark = false, size = "md" }: LogoProps) => {
   const { brand } = useBrand();
@@ -90,12 +102,15 @@ export const LogoFull = ({ className = "", dark = false, size = "md" }: LogoProp
 
   if (logoPath) {
     return (
-      <img
-        src={logoPath}
-        alt={brand.publicName}
-        className={`max-w-full object-contain ${className}`}
-        style={{ height: sizes[size].icon }}
-      />
+      <span
+        className={`inline-flex items-center justify-center ${logoBoxes[size]}`}
+      >
+        <img
+          src={logoPath}
+          alt={brand.publicName}
+          className={`h-auto w-auto max-h-full max-w-full object-contain ${className}`}
+        />
+      </span>
     );
   }
 

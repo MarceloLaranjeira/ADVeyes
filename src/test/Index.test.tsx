@@ -3,9 +3,10 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OperationalDashboardData } from "@/types/operational-dashboard";
 
-const { dashboardMock, refetchMock } = vi.hoisted(() => ({
+const { dashboardMock, refetchMock, tenantMock } = vi.hoisted(() => ({
   dashboardMock: vi.fn(),
   refetchMock: vi.fn(),
+  tenantMock: vi.fn(),
 }));
 
 vi.mock("@/hooks/useOperationalDashboard", () => ({
@@ -17,7 +18,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("@/contexts/TenantContext", () => ({
-  useTenant: () => ({ currentTenant: { tenantId: "tenant-1", displayName: "Escritório Modelo" } }),
+  useTenant: tenantMock,
 }));
 
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -67,6 +68,10 @@ describe("Meu Painel", () => {
   beforeEach(() => {
     refetchMock.mockReset();
     dashboardMock.mockReset();
+    tenantMock.mockReset();
+    tenantMock.mockReturnValue({
+      currentTenant: { tenantId: "tenant-1", displayName: "Escritório Modelo" },
+    });
   });
 
   it("mostra escritório, indicadores e estados vazios úteis", () => {
@@ -97,5 +102,39 @@ describe("Meu Painel", () => {
     expect(screen.getByRole("heading", { name: /não foi possível carregar o painel/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /tentar novamente/i }));
     expect(refetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mostra estado vazio acionável quando a conta não tem escritório", () => {
+    tenantMock.mockReturnValue({ currentTenant: null });
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    // O skeleton só pode aparecer enquanto existe escritório e a consulta carrega.
+    expect(screen.queryByLabelText("Carregando painel")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /nenhum escritório ativo/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /solicitar acesso/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /criar escritório/i })).toBeInTheDocument();
+  });
+
+  it("não tenta consultar o painel sem escritório selecionado", () => {
+    tenantMock.mockReturnValue({ currentTenant: null });
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    expect(dashboardMock).toHaveBeenCalledWith(null);
+    const atualizar = screen.getByRole("button", { name: /atualizar/i });
+    expect(atualizar).toBeDisabled();
+    fireEvent.click(atualizar);
+    expect(refetchMock).not.toHaveBeenCalled();
+  });
+
+  it("mantém o skeleton enquanto o escritório existe e a consulta carrega", () => {
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: true, isError: false, isFetching: true, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    expect(screen.getByLabelText("Carregando painel")).toBeInTheDocument();
   });
 });

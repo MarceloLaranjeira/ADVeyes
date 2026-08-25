@@ -44,9 +44,14 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
       */}
       <Link
         to="/"
-        className="hidden lg:flex h-16 w-60 shrink-0 items-center bg-sidebar px-5"
+        className="hidden lg:flex h-16 w-60 shrink-0 items-center justify-start bg-sidebar px-5 py-2"
       >
-        <LogoFull size="md" dark className="max-w-full" />
+        {/*
+          A área da marca dá a altura; a logo se ajusta dentro dela. Assim uma
+          logo vertical ou de várias linhas encolhe pela largura em vez de ser
+          cortada pela altura fixa que existia aqui antes.
+        */}
+        <LogoFull size="lg" dark className="max-h-12" />
       </Link>
 
       {/* No mobile a régua some, então a marca volta a ser um item comum. */}

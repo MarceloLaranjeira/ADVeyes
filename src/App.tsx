@@ -44,6 +44,7 @@ import PortalDashboard from "./pages/portal/PortalDashboard";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import TermosUso from "./pages/TermosUso";
 import ConviteAceite from "./pages/ConviteAceite";
+import SolicitarAcesso from "./pages/SolicitarAcesso";
 import HomeEntry from "./pages/HomeEntry";
 import PlatformAdmin from "./pages/PlatformAdmin";
 import IntegracoesJuridicas from "./pages/IntegracoesJuridicas";
@@ -80,6 +81,12 @@ const App = () => (
                     <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/convite/aceitar" element={<ConviteAceite />} />
+                    {/*
+                      Rota publica de proposito: quem pede acesso ainda nao tem
+                      membership e nao pode ser desviado para o cadastro de um
+                      escritorio novo.
+                    */}
+                    <Route path="/solicitar-acesso" element={<SolicitarAcesso />} />
                     {/* Portal do Cliente (public, token-based) */}
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
