@@ -165,7 +165,7 @@ const Index = () => {
                         <button
                           type="button"
                           key={hearing.id}
-                          onClick={() => navigate(hearing.processo_id ? `/processos/${hearing.processo_id}` : "/audiencias")}
+                          onClick={() => navigate("/controladoria?aba=audiencias")}
                           className="w-full rounded-xl border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <span className="block truncate text-sm font-semibold">{hearing.tipo}</span>

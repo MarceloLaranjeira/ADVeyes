@@ -70,7 +70,9 @@ function buildAttentionItems(
       kind,
       title: task.titulo,
       description,
-      href: task.processo_id ? `/processos/${task.processo_id}` : "/tarefas",
+      // A Controladoria é o posto de comando: o item chega lá já com o
+      // contador correspondente aberto, em vez de abrir uma tela por tipo.
+      href: `/controladoria?foco=${days < 0 ? "vencidos" : days === 0 ? "hoje" : "proximos"}`,
       date: dueDate,
       days,
     };
@@ -87,7 +89,7 @@ function buildAttentionItems(
         hearing.processo_numero,
         hearing.vara ?? hearing.local,
       ].filter(Boolean).join(" · "),
-      href: hearing.processo_id ? `/processos/${hearing.processo_id}` : "/audiencias",
+      href: "/controladoria?aba=audiencias",
       date: hearing.data_hora,
       days,
     });
@@ -99,7 +101,7 @@ function buildAttentionItems(
       kind: "publication",
       title: `${source.pendingPublicationCount} intimação(ões) aguardando revisão`,
       description: "Revise o conteúdo e confirme possíveis prazos antes de distribuir atividades.",
-      href: "/intimacoes",
+      href: "/controladoria?foco=sem-ciencia",
       date: null,
       days: null,
     });

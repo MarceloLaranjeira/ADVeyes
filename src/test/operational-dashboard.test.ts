@@ -66,13 +66,19 @@ describe("buildOperationalDashboard", () => {
       "publication",
       "finance",
     ]);
+    // O centro de atenção entrega o item à Controladoria já com o contador
+    // certo aberto, em vez de espalhar o usuário por telas diferentes.
     expect(dashboard.attention[0]).toMatchObject({
       title: "Prazo vencido",
-      href: "/processos/process-1",
+      href: "/controladoria?foco=vencidos",
       days: -2,
     });
+    expect(dashboard.attention.find(item => item.kind === "today"))
+      .toMatchObject({ href: "/controladoria?foco=hoje" });
     expect(dashboard.attention.find(item => item.kind === "publication"))
-      .toMatchObject({ href: "/intimacoes" });
+      .toMatchObject({ href: "/controladoria?foco=sem-ciencia" });
+    expect(dashboard.attention.find(item => item.kind === "finance"))
+      .toMatchObject({ href: "/financeiro" });
   });
 
   it("consolida áreas e saúde do monitoramento", () => {
