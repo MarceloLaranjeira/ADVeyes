@@ -641,6 +641,7 @@ export type Database = {
           nome: string
           processo_id: string | null
           processo_numero: string | null
+          protocolo_id: string | null
           tamanho: number | null
           tenant_id: string | null
           tipo: string
@@ -653,6 +654,7 @@ export type Database = {
           nome: string
           processo_id?: string | null
           processo_numero?: string | null
+          protocolo_id?: string | null
           tamanho?: number | null
           tenant_id?: string | null
           tipo?: string
@@ -665,6 +667,7 @@ export type Database = {
           nome?: string
           processo_id?: string | null
           processo_numero?: string | null
+          protocolo_id?: string | null
           tamanho?: number | null
           tenant_id?: string | null
           tipo?: string
@@ -676,6 +679,13 @@ export type Database = {
             columns: ["processo_id"]
             isOneToOne: false
             referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documentos_protocolo_id_fkey"
+            columns: ["protocolo_id"]
+            isOneToOne: false
+            referencedRelation: "protocolos"
             referencedColumns: ["id"]
           },
           {
@@ -2552,6 +2562,79 @@ export type Database = {
         }
         Relationships: []
       }
+      protocolos: {
+        Row: {
+          created_at: string
+          created_by: string
+          descricao: string | null
+          id: string
+          numero_processo: string | null
+          observacoes: string | null
+          processo_id: string | null
+          protocolado_em: string
+          protocolo_numero: string | null
+          responsavel_id: string | null
+          tarefa_id: string | null
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          descricao?: string | null
+          id?: string
+          numero_processo?: string | null
+          observacoes?: string | null
+          processo_id?: string | null
+          protocolado_em?: string
+          protocolo_numero?: string | null
+          responsavel_id?: string | null
+          tarefa_id?: string | null
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          descricao?: string | null
+          id?: string
+          numero_processo?: string | null
+          observacoes?: string | null
+          processo_id?: string | null
+          protocolado_em?: string
+          protocolo_numero?: string | null
+          responsavel_id?: string | null
+          tarefa_id?: string | null
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "protocolos_processo_id_fkey"
+            columns: ["processo_id"]
+            isOneToOne: false
+            referencedRelation: "processos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "protocolos_tarefa_id_fkey"
+            columns: ["tarefa_id"]
+            isOneToOne: false
+            referencedRelation: "tarefas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "protocolos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_service_prices: {
         Row: {
           billing_model: string
@@ -2587,6 +2670,8 @@ export type Database = {
       }
       publicacoes: {
         Row: {
+          ciencia_em: string | null
+          ciencia_por: string | null
           cliente_nome: string | null
           content_hash: string
           conteudo: string
@@ -2615,6 +2700,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ciencia_em?: string | null
+          ciencia_por?: string | null
           cliente_nome?: string | null
           content_hash: string
           conteudo: string
@@ -2643,6 +2730,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ciencia_em?: string | null
+          ciencia_por?: string | null
           cliente_nome?: string | null
           content_hash?: string
           conteudo?: string
@@ -2881,6 +2970,7 @@ export type Database = {
           status: string
           tags: string[] | null
           tenant_id: string
+          tipo: string
           titulo: string
           updated_at: string
           user_id: string
@@ -2904,6 +2994,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           tenant_id: string
+          tipo?: string
           titulo: string
           updated_at?: string
           user_id: string
@@ -2927,6 +3018,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           tenant_id?: string
+          tipo?: string
           titulo?: string
           updated_at?: string
           user_id?: string
@@ -3911,6 +4003,36 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      register_protocol: {
+        Args: {
+          p_descricao?: string
+          p_numero_processo?: string
+          p_observacoes?: string
+          p_processo_id?: string
+          p_protocolado_em: string
+          p_protocolo_numero?: string
+          p_responsavel_id?: string
+          p_tarefa_id?: string
+          p_tenant_id: string
+          p_tipo: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string
+          descricao: string | null
+          id: string
+          numero_processo: string | null
+          observacoes: string | null
+          processo_id: string | null
+          protocolado_em: string
+          protocolo_numero: string | null
+          responsavel_id: string | null
+          tarefa_id: string | null
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
       }
       resolve_tenant_public_config: {
         Args: { p_hostname: string }
