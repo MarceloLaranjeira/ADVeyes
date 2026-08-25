@@ -58,7 +58,7 @@ create policy tenant_read on public.protocolos
   for select to authenticated
   using (private.has_tenant_permission(tenant_id, 'legal', 'read'));
 
-revoke all on public.protocolos from public, anon;
+revoke all on public.protocolos from public, anon, authenticated;
 grant select on public.protocolos to authenticated;
 grant all on public.protocolos to service_role;
 
@@ -113,7 +113,7 @@ create or replace function public.register_protocol(
 returns public.protocolos
 language plpgsql
 security definer
-set search_path = pg_catalog, public
+set search_path = pg_catalog
 as $$
 declare
   novo public.protocolos;
@@ -124,6 +124,17 @@ begin
 
   if not private.has_tenant_permission(p_tenant_id, 'legal', 'create') then
     raise exception 'permission_denied' using errcode = '42501';
+  end if;
+
+  if p_tipo not in (
+    'peticao', 'contestacao', 'recurso', 'apelacao',
+    'embargos', 'manifestacao', 'cumprimento', 'outro'
+  ) then
+    raise exception 'invalid_tipo' using errcode = 'P0002';
+  end if;
+
+  if p_processo_id is null and p_numero_processo is null then
+    raise exception 'processo_not_identified' using errcode = 'P0002';
   end if;
 
   if p_processo_id is not null and not exists (
@@ -140,23 +151,36 @@ begin
     raise exception 'tarefa_not_found' using errcode = 'P0002';
   end if;
 
+  if p_responsavel_id is not null
+     and not private.is_active_tenant_member(p_responsavel_id, p_tenant_id) then
+    raise exception 'responsavel_not_found' using errcode = 'P0002';
+  end if;
+
   insert into public.protocolos (
     tenant_id, processo_id, numero_processo, tipo, descricao,
     protocolado_em, protocolo_numero, responsavel_id, tarefa_id,
     observacoes, created_by
   ) values (
     p_tenant_id, p_processo_id, p_numero_processo, p_tipo, p_descricao,
-    coalesce(p_protocolado_em, now()), p_protocolo_numero,
+    p_protocolado_em, p_protocolo_numero,
     p_responsavel_id, p_tarefa_id, p_observacoes, auth.uid()
   )
   returning * into novo;
 
   -- "Protocolado" não é status: é o prazo concluído com o ato registrado.
-  -- As duas escritas vivem na mesma transação de propósito.
+  -- As duas escritas vivem na mesma transação de propósito. Se o
+  -- responsável da tarefa saiu do escritório entre a atribuição e o
+  -- protocolo, o gatilho de validação recusa o update; traduzimos para um
+  -- erro nomeado e desfazemos o insert junto, mantendo a operação atômica.
   if p_tarefa_id is not null then
-    update public.tarefas
-      set status = 'concluída'
-      where id = p_tarefa_id and tenant_id = p_tenant_id;
+    begin
+      update public.tarefas
+        set status = 'concluída'
+        where id = p_tarefa_id and tenant_id = p_tenant_id;
+    exception
+      when check_violation then
+        raise exception 'prazo_com_responsavel_inativo' using errcode = 'P0002';
+    end;
   end if;
 
   return novo;

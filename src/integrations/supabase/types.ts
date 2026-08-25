@@ -4033,6 +4033,12 @@ export type Database = {
           tipo: string
           updated_at: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "protocolos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       resolve_tenant_public_config: {
         Args: { p_hostname: string }

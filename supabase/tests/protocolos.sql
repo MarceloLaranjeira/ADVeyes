@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(15);
+select plan(29);
 
 -- ---------------------------------------------------------------------------
 -- Estrutura
@@ -25,6 +25,46 @@ select has_column(
 );
 select has_column(
   'public', 'publicacoes', 'ciencia_em', 'publicacoes ganha a coluna ciencia_em'
+);
+
+-- ---------------------------------------------------------------------------
+-- Privilegios diretos na tabela: so o service_role escreve. anon e
+-- authenticated nao ganham INSERT/UPDATE/DELETE/TRUNCATE — TRUNCATE em
+-- particular nao e sujeito a RLS, entao o privilegio sozinho ja bastaria
+-- para esvaziar a tabela se sobrasse concedido.
+-- ---------------------------------------------------------------------------
+
+select ok(
+  not has_table_privilege('anon', 'public.protocolos', 'insert'),
+  'anon nao insere em protocolos'
+);
+select ok(
+  not has_table_privilege('anon', 'public.protocolos', 'update'),
+  'anon nao atualiza protocolos'
+);
+select ok(
+  not has_table_privilege('anon', 'public.protocolos', 'delete'),
+  'anon nao apaga protocolos'
+);
+select ok(
+  not has_table_privilege('anon', 'public.protocolos', 'truncate'),
+  'anon nao trunca protocolos'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.protocolos', 'insert'),
+  'authenticated nao insere em protocolos diretamente'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.protocolos', 'update'),
+  'authenticated nao atualiza protocolos diretamente'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.protocolos', 'delete'),
+  'authenticated nao apaga protocolos diretamente'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.protocolos', 'truncate'),
+  'authenticated nao trunca protocolos'
 );
 
 -- ---------------------------------------------------------------------------
@@ -58,7 +98,8 @@ from (values
   ('85000000-0000-0000-0000-000000000002'::uuid, 'admin-a@protocolos.test'),
   ('85000000-0000-0000-0000-000000000003'::uuid, 'finance-a@protocolos.test'),
   ('85000000-0000-0000-0000-000000000004'::uuid, 'suspenso-a@protocolos.test'),
-  ('85000000-0000-0000-0000-000000000005'::uuid, 'owner-b@protocolos.test')
+  ('85000000-0000-0000-0000-000000000005'::uuid, 'owner-b@protocolos.test'),
+  ('85000000-0000-0000-0000-000000000006'::uuid, 'lawyer-a2@protocolos.test')
 ) fixture(id, email);
 
 insert into public.tenants (
@@ -112,6 +153,12 @@ insert into public.tenant_memberships (
     '85200000-0000-0000-0000-000000000002',
     '85000000-0000-0000-0000-000000000005',
     'owner', 'active', 'tenant', now(), null
+  ),
+  (
+    '85300000-0000-0000-0000-000000000006',
+    '85100000-0000-0000-0000-000000000001',
+    '85000000-0000-0000-0000-000000000006',
+    'lawyer', 'active', 'assigned', now(), null
   );
 
 -- Protocolo do tenant A, responsavel e um advogado que nao e quem vai le-lo
@@ -171,6 +218,26 @@ select is(
   'tarefa',
   'tarefa criada sem tipo continua com tipo = tarefa'
 );
+
+-- Tarefa-prazo cujo responsavel esta ativo no momento da atribuicao mas sera
+-- suspenso logo em seguida — alvo do cenario de atomicidade (cenario 8).
+insert into public.tarefas (
+  id, user_id, titulo, tenant_id, responsavel_id, status, tipo
+) values (
+  '85500000-0000-0000-0000-000000000004',
+  '85000000-0000-0000-0000-000000000001',
+  'Prazo cujo responsavel sai do escritorio',
+  '85100000-0000-0000-0000-000000000001',
+  '85000000-0000-0000-0000-000000000006',
+  'pendente',
+  'prazo'
+);
+
+-- O advogado sai do escritorio depois de assumir o prazo, antes de o
+-- protocolo ser registrado.
+update public.tenant_memberships
+set status = 'suspended', suspended_at = now()
+where id = '85300000-0000-0000-0000-000000000006';
 
 -- ---------------------------------------------------------------------------
 -- Cenario 1: protocolo de um escritorio nao aparece para membro de outro
@@ -281,7 +348,9 @@ select is(
 
 -- ---------------------------------------------------------------------------
 -- Cenario 5: register_protocol com tarefa de outro escritorio levanta
--- tarefa_not_found e nao deixa protocolo criado
+-- tarefa_not_found antes de qualquer insert. A checagem de tarefa roda
+-- antes do insert, entao isto nao exercita rollback pos-insert — essa prova
+-- e o cenario 8, com o responsavel suspenso apos a atribuicao.
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
@@ -305,7 +374,97 @@ select is(
     where tenant_id = '85100000-0000-0000-0000-000000000001'
   ),
   2,
-  'a tentativa recusada nao deixa protocolo orfao criado'
+  'a tarefa recusada antes do insert nao chega a criar protocolo'
+);
+
+-- ---------------------------------------------------------------------------
+-- Cenario 8: atomicidade de verdade — o insert do protocolo acontece, o
+-- update da tarefa falha depois (responsavel suspenso apos a atribuicao), e
+-- a funcao desfaz tudo: nem protocolo fica orfao nem a tarefa e concluida.
+-- ---------------------------------------------------------------------------
+
+select throws_ok(
+  $$
+    select public.register_protocol(
+      p_tenant_id := '85100000-0000-0000-0000-000000000001',
+      p_tipo := 'peticao',
+      p_protocolado_em := now(),
+      p_numero_processo := '0008000-00.2026.8.00.0001',
+      p_tarefa_id := '85500000-0000-0000-0000-000000000004'
+    )
+  $$,
+  'P0002',
+  'prazo_com_responsavel_inativo',
+  'responsavel suspenso apos a atribuicao recusa o registro'
+);
+
+select is(
+  (
+    select count(*)::int from public.protocolos
+    where tarefa_id = '85500000-0000-0000-0000-000000000004'
+  ),
+  0,
+  'o insert do protocolo e desfeito quando o update da tarefa falha'
+);
+
+select is(
+  (select status from public.tarefas where id = '85500000-0000-0000-0000-000000000004'),
+  'pendente',
+  'a tarefa continua pendente quando o registro do protocolo e desfeito'
+);
+
+-- ---------------------------------------------------------------------------
+-- Cenario 9: register_protocol recusa responsavel de outro escritorio
+-- ---------------------------------------------------------------------------
+
+select throws_ok(
+  $$
+    select public.register_protocol(
+      p_tenant_id := '85100000-0000-0000-0000-000000000001',
+      p_tipo := 'peticao',
+      p_protocolado_em := now(),
+      p_numero_processo := '0009000-00.2026.8.00.0001',
+      p_responsavel_id := '85000000-0000-0000-0000-000000000005'
+    )
+  $$,
+  'P0002',
+  'responsavel_not_found',
+  'responsavel de outro escritorio e recusado'
+);
+
+-- ---------------------------------------------------------------------------
+-- Cenario 10: register_protocol recusa tipo fora da lista permitida
+-- ---------------------------------------------------------------------------
+
+select throws_ok(
+  $$
+    select public.register_protocol(
+      p_tenant_id := '85100000-0000-0000-0000-000000000001',
+      p_tipo := 'tipo-inexistente',
+      p_protocolado_em := now(),
+      p_numero_processo := '0010000-00.2026.8.00.0001'
+    )
+  $$,
+  'P0002',
+  'invalid_tipo',
+  'tipo fora da lista permitida e recusado'
+);
+
+-- ---------------------------------------------------------------------------
+-- Cenario 11: register_protocol exige processo_id ou numero_processo
+-- ---------------------------------------------------------------------------
+
+select throws_ok(
+  $$
+    select public.register_protocol(
+      p_tenant_id := '85100000-0000-0000-0000-000000000001',
+      p_tipo := 'peticao',
+      p_protocolado_em := now()
+    )
+  $$,
+  'P0002',
+  'processo_not_identified',
+  'sem processo_id nem numero_processo e recusado'
 );
 
 reset role;
