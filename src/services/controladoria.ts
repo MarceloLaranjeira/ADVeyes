@@ -23,6 +23,7 @@ export interface ControladoriaPublicationSource {
   cliente_nome: string | null;
   data_publicacao: string | null;
   tipo: string;
+  process_id?: string | null;
 }
 
 export interface ControladoriaSource {
@@ -65,6 +66,7 @@ export function buildControladoria(
     title: deadline.titulo,
     dueDate: deadline.data_limite,
     processNumber: null,
+    processId: deadline.processo_id,
     clientName: null,
     assigneeId: deadline.responsavel_id,
     assigneeName: deadline.responsavel_id
@@ -78,6 +80,7 @@ export function buildControladoria(
     title: publication.tipo || "Intimação",
     dueDate: publication.data_publicacao,
     processNumber: publication.numero_processo,
+    processId: publication.process_id ?? null,
     clientName: publication.cliente_nome,
     assigneeId: null,
     assigneeName: null,
@@ -156,7 +159,7 @@ export async function fetchControladoria(
       .not("data_limite", "is", null).lte("data_limite", inSevenDays)
       .order("data_limite").limit(20),
     supabase.from("publicacoes")
-      .select("id, numero_processo, cliente_nome, data_publicacao, tipo")
+      .select("id, numero_processo, cliente_nome, data_publicacao, tipo, process_id")
       .eq("tenant_id", tenantId).is("ciencia_em", null).neq("review_status", "dismissed")
       .order("data_publicacao", { ascending: true }).limit(10),
     supabase.from("audiencias")

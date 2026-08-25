@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ClipboardCheck, RefreshCw } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -15,16 +15,28 @@ import { ProtocolosTab } from "@/components/controladoria/tabs/ProtocolosTab";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useControladoria } from "@/hooks/useControladoria";
 import { useActiveTeamMembers } from "@/hooks/useActiveTeamMembers";
 import { classifyDeadline } from "@/lib/controladoria";
+import {
+  acknowledgePublication,
+  assignDeadline,
+  changeDeadlineStatus,
+  reviewPublicationDeadline,
+} from "@/services/controladoria-actions";
 import { fetchTabPage, type ControladoriaTab } from "@/services/controladoria-tabs";
+import type { TabRow } from "@/services/controladoria-tabs";
+import type { ActivityStatus } from "@/types/activities";
 import type { ActionItem, ControladoriaCounters as CounterValues } from "@/types/controladoria";
 
 export type ControladoriaScope = "meus" | "escritorio";
@@ -56,6 +68,10 @@ export default function Controladoria() {
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.tenantId ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [reviewingPublication, setReviewingPublication] = useState<ActionItem | null>(null);
+  const [deadlineForm, setDeadlineForm] = useState({ date: "", days: "", reason: "", title: "" });
   const scope: ControladoriaScope = searchParams.get("escopo") === "meus" ? "meus" : "escritorio";
   const requestedPeriod = Number(searchParams.get("periodo"));
   const periodDays = PERIODS.includes(requestedPeriod as typeof PERIODS[number]) ? requestedPeriod : 7;
@@ -100,6 +116,54 @@ export default function Controladoria() {
     onRetry: () => void tabQuery.refetch(),
     onPage: (page: number) => updateSearch({ pagina: page === 1 ? null : String(page) }),
   };
+  const refreshControladoria = async () => {
+    await Promise.all([query.refetch(), tabQuery.refetch()]);
+  };
+  const runAction = async (key: string, success: string, action: () => Promise<void>): Promise<boolean> => {
+    setBusyAction(key);
+    try {
+      await action();
+      toast({ title: success });
+      await refreshControladoria();
+      return true;
+    } catch (error) {
+      toast({ title: "Não foi possível concluir", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" });
+      return false;
+    } finally {
+      setBusyAction(null);
+    }
+  };
+  const openDeadlineReview = (item: ActionItem) => {
+    setReviewingPublication(item);
+    setDeadlineForm({ date: "", days: "", reason: "", title: `Cumprir prazo — ${item.processNumber ?? "intimação"}` });
+  };
+  const submitDeadlineReview = async () => {
+    if (!tenantId || !reviewingPublication || !deadlineForm.date || !deadlineForm.reason.trim()) return;
+    const succeeded = await runAction(`review:${reviewingPublication.id}`, "Prazo confirmado e tarefa criada", () => reviewPublicationDeadline({
+      tenantId,
+      publicationId: reviewingPublication.id,
+      proposedDate: deadlineForm.date,
+      proposedDays: deadlineForm.days ? Number.parseInt(deadlineForm.days, 10) : null,
+      reason: deadlineForm.reason.trim(),
+      taskTitle: deadlineForm.title.trim() || `Cumprir prazo — ${reviewingPublication.processNumber ?? "intimação"}`,
+    }));
+    if (succeeded) setReviewingPublication(null);
+  };
+  const deadlineActions = (id: string, assigneeId: string | null, status: string | null) => tenantId ? <div className="flex flex-wrap justify-end gap-2">
+    <Select disabled={busyAction === `assign:${id}`} value={assigneeId ?? "none"} onValueChange={value => void runAction(`assign:${id}`, "Responsável atualizado", () => assignDeadline(tenantId, id, value === "none" ? null : value))}>
+      <SelectTrigger className="h-8 w-40" aria-label="Alterar responsável"><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value="none">Sem responsável</SelectItem>{(members.data ?? []).map(member => <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>)}</SelectContent>
+    </Select>
+    <Select disabled={busyAction === `status:${id}`} value={status ?? "pendente"} onValueChange={value => void runAction(`status:${id}`, "Status atualizado", () => changeDeadlineStatus(tenantId, id, value as ActivityStatus))}>
+      <SelectTrigger className="h-8 w-36" aria-label="Alterar status"><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value="pendente">A fazer</SelectItem><SelectItem value="em_andamento">Fazendo</SelectItem><SelectItem value="concluída">Concluída</SelectItem></SelectContent>
+    </Select>
+  </div> : null;
+  const publicationActions = (item: ActionItem) => tenantId && user?.id ? <div className="flex flex-wrap gap-2">
+    <Button size="sm" variant="outline" disabled={busyAction === `ack:${item.id}`} onClick={() => void runAction(`ack:${item.id}`, "Ciência registrada", () => acknowledgePublication(tenantId, item.id, user.id))}>Dar ciência</Button>
+    <Button size="sm" onClick={() => openDeadlineReview(item)}>Gerar prazo</Button>
+  </div> : null;
+  const publicationRowActions = (row: TabRow) => publicationActions({ id: row.id, kind: "intimacao", title: String(row.tipo ?? "Intimação"), dueDate: row.data_publicacao ? String(row.data_publicacao) : null, processNumber: row.numero_processo ? String(row.numero_processo) : null, processId: row.process_id ? String(row.process_id) : null, clientName: row.cliente_nome ? String(row.cliente_nome) : null, assigneeId: null, assigneeName: null, status: row.ciencia_em ? "com_ciencia" : "sem_ciencia" });
 
   const action = useMemo(() => {
     if (!query.data) return [];
@@ -148,7 +212,9 @@ export default function Controladoria() {
             {query.data.warnings.length > 0 && <div role="status" className="flex gap-3 rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><div><p className="font-semibold">Alguns blocos não puderam ser atualizados</p><p className="text-xs text-muted-foreground">{query.data.warnings.join(" · ")}</p></div></div>}
             <ControladoriaCounters counters={query.data.counters} active={activeCounter} onSelect={selectCounter} />
             <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-              <ActionList items={action} now={now} onOpenProcess={processNumber => navigate(processNumber ? `/processos?busca=${encodeURIComponent(processNumber)}` : "/processos")} />
+              <ActionList items={action} now={now} onOpenProcess={processNumber => navigate(processNumber ? `/processos?busca=${encodeURIComponent(processNumber)}` : "/processos")}>
+                {item => item.kind === "intimacao" ? publicationActions(item) : deadlineActions(item.id, item.assigneeId, item.status)}
+              </ActionList>
               <div className="space-y-4"><UpcomingBlock hearings={query.data.upcoming} /><DoneBlock done={query.data.done} periodDays={periodDays} /></div>
             </section>
 
@@ -176,8 +242,8 @@ export default function Controladoria() {
                   <Input aria-label="Data inicial" type="date" value={tabParams.from ?? ""} onChange={event => updateSearch({ de: event.target.value || null, pagina: null })} />
                   <Input aria-label="Data final" type="date" value={tabParams.to ?? ""} onChange={event => updateSearch({ ate: event.target.value || null, pagina: null })} />
                 </div>
-                <TabsContent value="prazos" className="mt-3"><PrazosTab {...domainProps} /></TabsContent>
-                <TabsContent value="intimacoes" className="mt-3"><IntimacoesTab {...domainProps} /></TabsContent>
+                <TabsContent value="prazos" className="mt-3"><PrazosTab {...domainProps} actions={row => deadlineActions(row.id, row.responsavel_id ? String(row.responsavel_id) : null, row.status ? String(row.status) : null)} /></TabsContent>
+                <TabsContent value="intimacoes" className="mt-3"><IntimacoesTab {...domainProps} actions={publicationRowActions} /></TabsContent>
                 <TabsContent value="audiencias" className="mt-3"><AudienciasTab {...domainProps} /></TabsContent>
                 <TabsContent value="protocolos" className="mt-3"><ProtocolosTab {...domainProps} /></TabsContent>
                 <TabsContent value="movimentacoes" className="mt-3"><MovimentacoesTab {...domainProps} /></TabsContent>
@@ -187,6 +253,17 @@ export default function Controladoria() {
           </>
         )}
       </div>
+      <Dialog open={Boolean(reviewingPublication)} onOpenChange={open => { if (!open) setReviewingPublication(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Gerar prazo da intimação</DialogTitle><DialogDescription>Confirme a data e registre o fundamento. O cálculo e a criação continuam na função jurídica oficial do sistema.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label htmlFor="deadline-date">Data do prazo</Label><Input id="deadline-date" type="date" value={deadlineForm.date} onChange={event => setDeadlineForm(current => ({ ...current, date: event.target.value }))} /></div><div className="space-y-2"><Label htmlFor="deadline-days">Dias</Label><Input id="deadline-days" type="number" min="1" value={deadlineForm.days} onChange={event => setDeadlineForm(current => ({ ...current, days: event.target.value }))} /></div></div>
+            <div className="space-y-2"><Label htmlFor="deadline-title">Título da tarefa</Label><Input id="deadline-title" value={deadlineForm.title} onChange={event => setDeadlineForm(current => ({ ...current, title: event.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="deadline-reason">Fundamento da revisão</Label><Textarea id="deadline-reason" value={deadlineForm.reason} onChange={event => setDeadlineForm(current => ({ ...current, reason: event.target.value }))} placeholder="Ex.: prazo expresso de 15 dias úteis no texto" /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setReviewingPublication(null)}>Cancelar</Button><Button disabled={!deadlineForm.date || !deadlineForm.reason.trim() || Boolean(busyAction)} onClick={() => void submitDeadlineReview()}>Confirmar e criar prazo</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

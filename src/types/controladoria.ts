@@ -14,6 +14,7 @@ export interface ActionItem {
   title: string;
   dueDate: string | null;
   processNumber: string | null;
+  processId?: string | null;
   clientName: string | null;
   assigneeId: string | null;
   assigneeName: string | null;
