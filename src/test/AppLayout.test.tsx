@@ -3,6 +3,9 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AppLayout } from "@/components/layout/AppLayout";
 
+// jsdom não implementa window.scrollTo; a régua chama ao montar.
+window.scrollTo = vi.fn();
+
 vi.mock("@/components/layout/AppHeader", () => ({
   AppHeader: () => <header>Cabeçalho</header>,
 }));
