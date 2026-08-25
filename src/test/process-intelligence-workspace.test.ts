@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_INTELLIGENCE_FILTERS, filterProcessIntelligence, intelligenceMetrics, sortByAttention } from "@/lib/process-intelligence-workspace";
+import { applySituation, EMPTY_INTELLIGENCE_FILTERS, filterProcessIntelligence, intelligenceMetrics, isArchivedProcess, sortByAttention } from "@/lib/process-intelligence-workspace";
 import type { ProcessIntelligenceItem, ProcessIntelligenceRecord } from "@/types/process-intelligence";
 
 function item(id: string, partial: Partial<ProcessIntelligenceRecord> = {}): ProcessIntelligenceItem {
@@ -27,5 +27,48 @@ describe("process intelligence workspace", () => {
   it("orders critical and longest-stalled cases first", () => {
     const ordered = sortByAttention([item("1", { risk: "alto", stalledDays: 90 }), item("2", { risk: "critico", stalledDays: 2 })]);
     expect(ordered[0].id).toBe("2");
+  });
+});
+
+function situationItem(id: string, status: string | null, stalled: boolean): ProcessIntelligenceItem {
+  return {
+    id,
+    number: `000000${id}-00.2026.8.04.0001`,
+    clientName: null,
+    clientDocument: null,
+    area: null,
+    status,
+    court: null,
+    courtUnit: null,
+    lawyer: null,
+    updatedAt: "2026-08-01T12:00:00Z",
+    intelligence: stalled
+      ? ({ isStalled: true, phase: "conhecimento", waitingOn: "escritorio", risk: "normal" } as ProcessIntelligenceItem["intelligence"])
+      : null,
+  };
+}
+
+describe("situação do processo", () => {
+  it("reconhece arquivado e encerrado, ignorando caixa e espaços", () => {
+    expect(isArchivedProcess("Arquivado")).toBe(true);
+    expect(isArchivedProcess(" arquivado ")).toBe(true);
+    expect(isArchivedProcess("Encerrado")).toBe(true);
+    expect(isArchivedProcess("Em andamento")).toBe(false);
+    expect(isArchivedProcess(null)).toBe(false);
+  });
+
+  it("mostra só os ativos por padrão", () => {
+    const items = [situationItem("1", "Em andamento", false), situationItem("2", "Arquivado", false)];
+    expect(applySituation(items, "ativos").map(i => i.id)).toEqual(["1"]);
+    expect(applySituation(items, "arquivados").map(i => i.id)).toEqual(["2"]);
+    expect(applySituation(items, "todos").map(i => i.id)).toEqual(["1", "2"]);
+  });
+
+  it("não conta arquivado como parado", () => {
+    const items = applySituation(
+      [situationItem("1", "Em andamento", true), situationItem("2", "Arquivado", true)],
+      "ativos",
+    );
+    expect(intelligenceMetrics(items)).toMatchObject({ total: 1, stalled: 1 });
   });
 });

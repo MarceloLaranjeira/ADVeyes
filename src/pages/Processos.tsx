@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { useProcessIntelligence } from "@/hooks/useProcessIntelligence";
-import { EMPTY_INTELLIGENCE_FILTERS, PHASE_LABELS, WAITING_LABELS, filterProcessIntelligence, intelligenceMetrics } from "@/lib/process-intelligence-workspace";
-import { parseProcessRoute, processRouteParams, PROCESS_PAGE_SIZE, type ProcessRouteState, type ProcessTab } from "@/lib/process-workspace";
+import { applySituation, EMPTY_INTELLIGENCE_FILTERS, PHASE_LABELS, WAITING_LABELS, filterProcessIntelligence, intelligenceMetrics } from "@/lib/process-intelligence-workspace";
+import { parseProcessRoute, processRouteParams, PROCESS_PAGE_SIZE, type ProcessRouteState, type ProcessSituation, type ProcessTab } from "@/lib/process-workspace";
 import type { IntelligenceRisk, ProcessIntelligenceItem, ProcessPhase, WaitingOn } from "@/types/process-intelligence";
 
 function exportCsv(items: ProcessIntelligenceItem[]) {
@@ -44,10 +44,11 @@ export default function Processos() {
 
   const deferredSearch = useDeferredValue(filters.search);
   const effectiveFilters = useMemo(() => ({ ...filters, search: deferredSearch }), [deferredSearch, filters]);
-  const filtered = useMemo(() => filterProcessIntelligence(intelligence.items, effectiveFilters), [effectiveFilters, intelligence.items]);
+  const inSituation = useMemo(() => applySituation(intelligence.items, route.situation), [intelligence.items, route.situation]);
+  const filtered = useMemo(() => filterProcessIntelligence(inSituation, effectiveFilters), [effectiveFilters, inSituation]);
   const visibleItems = useMemo(() => filtered.slice(0, limit), [limit, filtered]);
-  const metrics = useMemo(() => intelligenceMetrics(intelligence.items), [intelligence.items]);
-  const areas = useMemo(() => [...new Set(intelligence.items.map(item => item.area).filter(Boolean) as string[])].sort(), [intelligence.items]);
+  const metrics = useMemo(() => intelligenceMetrics(inSituation), [inSituation]);
+  const areas = useMemo(() => [...new Set(inSituation.map(item => item.area).filter(Boolean) as string[])].sort(), [inSituation]);
 
   const queueAll = async () => {
     try { const result = await intelligence.backfill.mutateAsync(); toast({ title: "Varredura iniciada", description: `${result.queued} processos foram colocados na fila.` }); }
@@ -63,13 +64,14 @@ export default function Processos() {
 
       <IntelligenceMetricCards {...metrics} />
 
-      <div className="rounded-xl border bg-card p-3 sm:p-4"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+      <div className="rounded-xl border bg-card p-3 sm:p-4"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-7">
         <div className="relative md:col-span-2"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={filters.search} onChange={event => setFilters({ search: event.target.value })} className="pl-9" placeholder="Buscar processo, cliente, advogado, motivo ou ação..." /></div>
         <Select value={filters.phase} onValueChange={value => setFilters({ phase: value as ProcessPhase | "all" })}><SelectTrigger><SelectValue placeholder="Fase" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as fases</SelectItem>{Object.entries(PHASE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
         <Select value={filters.waitingOn} onValueChange={value => setFilters({ waitingOn: value as WaitingOn | "all" })}><SelectTrigger><SelectValue placeholder="Aguardando" /></SelectTrigger><SelectContent><SelectItem value="all">Quem precisa agir</SelectItem>{Object.entries(WAITING_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
         <Select value={filters.risk} onValueChange={value => setFilters({ risk: value as IntelligenceRisk | "all" })}><SelectTrigger><SelectValue placeholder="Risco" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os riscos</SelectItem><SelectItem value="critico">Crítico</SelectItem><SelectItem value="alto">Alto</SelectItem><SelectItem value="atencao">Atenção</SelectItem><SelectItem value="normal">Normal</SelectItem></SelectContent></Select>
         <Select value={filters.area} onValueChange={value => setFilters({ area: value })}><SelectTrigger><SelectValue placeholder="Área" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as áreas</SelectItem>{areas.map(area => <SelectItem key={area} value={area}>{area}</SelectItem>)}</SelectContent></Select>
-      </div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><Button variant={filters.stalledOnly ? "secondary" : "outline"} size="sm" onClick={() => setFilters({ stalledOnly: !filters.stalledOnly })}>Somente sem avanço</Button><div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{filtered.length} de {intelligence.items.length} processos</span><Button variant="ghost" size="sm" className="gap-1" onClick={() => updateRoute({ filters: EMPTY_INTELLIGENCE_FILTERS, limit: PROCESS_PAGE_SIZE })}><FilterX className="h-3.5 w-3.5" /> Limpar</Button><Button variant="ghost" size="icon" aria-label="Atualizar central" onClick={() => void intelligence.refetch()}><RefreshCw className={`h-4 w-4 ${intelligence.loading ? "animate-spin" : ""}`} /></Button></div></div></div>
+        <Select value={route.situation} onValueChange={value => updateRoute({ situation: value as ProcessSituation, limit: PROCESS_PAGE_SIZE })}><SelectTrigger><SelectValue placeholder="Situação" /></SelectTrigger><SelectContent><SelectItem value="ativos">Ativos e em andamento</SelectItem><SelectItem value="arquivados">Arquivados</SelectItem><SelectItem value="todos">Todos</SelectItem></SelectContent></Select>
+      </div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><Button variant={filters.stalledOnly ? "secondary" : "outline"} size="sm" onClick={() => setFilters({ stalledOnly: !filters.stalledOnly })}>Somente sem avanço</Button><div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{filtered.length} de {inSituation.length} processos</span><Button variant="ghost" size="sm" className="gap-1" onClick={() => updateRoute({ filters: EMPTY_INTELLIGENCE_FILTERS, limit: PROCESS_PAGE_SIZE })}><FilterX className="h-3.5 w-3.5" /> Limpar</Button><Button variant="ghost" size="icon" aria-label="Atualizar central" onClick={() => void intelligence.refetch()}><RefreshCw className={`h-4 w-4 ${intelligence.loading ? "animate-spin" : ""}`} /></Button></div></div></div>
 
       {intelligence.loading ? <div className="flex min-h-72 items-center justify-center rounded-xl border"><Loader2 className="h-7 w-7 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">Lendo a carteira processual...</span></div> : intelligence.error ? <div role="alert" className="rounded-xl border border-destructive/30 p-8 text-center"><p className="font-semibold">Não foi possível carregar a inteligência processual</p><Button className="mt-4" onClick={() => void intelligence.refetch()}>Tentar novamente</Button></div> : <><Tabs value={tab} onValueChange={value => updateRoute({ tab: value as ProcessTab })}><TabsList><TabsTrigger value="central">Central</TabsTrigger><TabsTrigger value="pipeline">Pipeline</TabsTrigger><TabsTrigger value="lista">Lista</TabsTrigger></TabsList><TabsContent value="central" className="mt-4"><IntelligenceCentral items={visibleItems} onCorrect={setSelected} /></TabsContent><TabsContent value="pipeline" className="mt-4"><IntelligencePipeline items={visibleItems} /></TabsContent><TabsContent value="lista" className="mt-4"><IntelligenceList items={visibleItems} /></TabsContent></Tabs>{visibleItems.length < filtered.length ? <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-4"><p className="text-xs text-muted-foreground">Exibindo {visibleItems.length} de {filtered.length} processos para manter a Central rápida.</p><Button variant="outline" onClick={() => updateRoute({ limit: limit + PROCESS_PAGE_SIZE })}>Mostrar mais 40</Button></div> : null}</>}
 
