@@ -75,8 +75,10 @@ Tabela nova, protegida por RLS e com `GRANT` explícitos:
 - `tarefa_id` opcional: o prazo que este protocolo encerra;
 - observação, criação e atualização.
 
-O módulo entra em `tenant_record_assignments` como `protocolos`, de modo que
-o alcance de dados por registro funcione nele como nos demais.
+As políticas de RLS seguem exatamente as das tabelas irmãs do módulo `legal`
+— `private.has_tenant_permission(tenant_id, 'legal', <ação>)` —, o que dá
+visibilidade de escritório. Ver a seção Alcance de dados sobre por que essa é
+a regra vigente e por que protocolos não pode divergir dela.
 
 ### Acréscimos a tabelas existentes
 
@@ -169,12 +171,33 @@ filtrar no navegador.
 O período padrão dos blocos de compromissos e do que já foi feito é de sete
 dias, ajustável na própria tela.
 
-O alcance de dados não é implementado no serviço. O banco já resolve:
-`private.can_access_record` cruza `tenant_memberships.data_scope` com
-`tenant_record_assignments` por módulo, e quem tem alcance `assigned` não
-recebe as linhas dos outros. O seletor entre meus e do escritório é
-conveniência sobre o que a pessoa já poderia ver, nunca uma porta para ver
-mais.
+### Alcance de dados
+
+Hoje a visibilidade dos módulos jurídicos é do escritório inteiro, e isso é
+deliberado. A migration `20260807210000_processos_tarefas_tenant_rls.sql`
+removeu a restrição por registro de `clientes`, `processos`, `eventos`,
+`tarefas`, `audiencias` e `documentos`, deixando as políticas apenas com
+`private.has_tenant_permission(tenant_id, 'legal', <ação>)`. O comentário da
+própria migration explica: a condição por registro estava quebrada e, como
+`assigned` é o padrão de `tenant_memberships.data_scope`, mantê-la esconderia
+tudo de todo advogado recém-convidado. A função
+`private.can_access_tenant_record` continua existindo, e o mapa
+`tenant_record_assignments` também, mas nenhuma política os consulta.
+
+Duas consequências para esta entrega:
+
+- `protocolos` nasce com as mesmas políticas das tabelas irmãs. Dar a ela
+  restrição por registro criaria a única tabela do módulo jurídico invisível
+  para quem foi convidado ontem — incoerência sem ganho real, já que o prazo
+  ao lado continuaria visível.
+- O seletor entre meus e do escritório é apenas um filtro de conveniência
+  sobre o que a pessoa já enxerga. Ele não é, e o desenho não deve tratá-lo
+  como, uma fronteira de segurança.
+
+Reativar o alcance por registro é uma entrega própria: muda o que todos os
+usuários atuais enxergam, exige popular `tenant_record_assignments` para o
+acervo existente e precisa de decisão sobre o padrão de quem entra. Fica
+fora deste plano.
 
 O cálculo de quanto falta é a diferença entre `data_limite` e hoje, em dias
 corridos, no fuso do navegador — o mesmo que o restante do sistema usa. Dias
@@ -231,9 +254,11 @@ usa `search_path` fixo, com execução revogada de `PUBLIC`, como as demais
 funções privilegiadas do projeto.
 
 A Controladoria não cria autoridade nova: quem pode ver e agir sobre prazos,
-intimações, audiências e documentos continua sendo decidido pelo papel e pelo
-alcance de dados da membership. Protocolos entram na matriz de permissões
-como um módulo próprio.
+intimações, audiências e documentos continua sendo decidido pelas políticas
+já vigentes desses módulos, sem exceção nem atalho — reunir tudo em uma tela
+não pode conceder nada que a tela de origem negaria. Protocolos entram na
+matriz de permissões da interface dentro do grupo Processos, refletindo a
+política `legal` que a tabela usa.
 
 ## Erros e observabilidade
 
@@ -250,7 +275,11 @@ falha desconhecida. Detalhes internos do banco nunca chegam ao navegador.
 ### Banco
 
 - isolamento de protocolos entre escritórios;
-- alcance `assigned` não enxerga protocolo de outro responsável;
+- membro ativo com permissão de leitura no módulo jurídico enxerga os
+  protocolos do próprio escritório, incluindo os de outro responsável — é a
+  regra vigente das tabelas irmãs, e o teste existe para travá-la contra
+  divergência acidental;
+- quem não é membro ativo não enxerga nada;
 - registro de protocolo é atômico: falha na conclusão do prazo não deixa
   protocolo órfão, e o inverso também não ocorre;
 - protocolo apontando para tarefa de outro escritório é recusado;
