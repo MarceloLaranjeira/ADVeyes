@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
-import { restoreScrollOffset } from "@/lib/scroll-restoration";
+import { runScrollRestoration } from "@/lib/scroll-restoration";
 
 const PREFIX = "scroll:";
 
@@ -18,6 +18,10 @@ interface UseScrollRestorationOptions {
  * localmente dentro da rota de layout persistente: sem essa opção, as duas
  * instâncias do componente montariam o hook e cada uma salvaria e
  * restauraria a mesma chave do sessionStorage, disputando entre si.
+ *
+ * A lógica em si (o que fazer a cada navegação e o que gravar na saída) vive
+ * em `runScrollRestoration`, em `src/lib/scroll-restoration.ts` — aqui só
+ * amarramos essa lógica às APIs reais do navegador e ao roteador.
  */
 export function useScrollRestoration(
   options: UseScrollRestorationOptions = {},
@@ -27,34 +31,31 @@ export function useScrollRestoration(
   const navigationType = useNavigationType();
 
   useEffect(() => {
-    if (!enabled) return;
     if (typeof window === "undefined") return;
 
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-
-    const storageKey = `${PREFIX}${location.key}`;
-
-    if (navigationType === "POP") {
-      const saved = Number.parseInt(
-        window.sessionStorage.getItem(storageKey) ?? "0",
-        10,
-      );
-      restoreScrollOffset(Number.isFinite(saved) ? saved : 0, {
+    return runScrollRestoration({
+      enabled,
+      isPop: navigationType === "POP",
+      storageKey: `${PREFIX}${location.key}`,
+      getItem: (key) => window.sessionStorage.getItem(key),
+      setItem: (key, value) => window.sessionStorage.setItem(key, value),
+      setManualScrollRestoration: () => {
+        if ("scrollRestoration" in window.history) {
+          window.history.scrollRestoration = "manual";
+        }
+      },
+      restore: {
         documentHeight: () => document.documentElement.scrollHeight,
         viewportHeight: () => window.innerHeight,
         scrollTo: (offset) => window.scrollTo(0, offset),
         now: () => performance.now(),
         schedule: (callback) => window.requestAnimationFrame(callback),
-      });
-    } else {
-      window.scrollTo(0, 0);
-    }
-
-    return () => {
-      // A saída é o único momento em que a posição ainda é a do usuário.
-      window.sessionStorage.setItem(storageKey, String(window.scrollY));
-    };
+      },
+      getScrollY: () => window.scrollY,
+      addScrollListener: (handler) =>
+        window.addEventListener("scroll", handler, { passive: true }),
+      removeScrollListener: (handler) =>
+        window.removeEventListener("scroll", handler),
+    });
   }, [enabled, location.key, navigationType]);
 }
