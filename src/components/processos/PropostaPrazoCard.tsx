@@ -180,6 +180,20 @@ export function PropostaPrazoCard({
           <p className="text-xs text-muted-foreground">
             {proposta.fundamentoDoPrazo}
           </p>
+          {/*
+            A regra do ramo decide se a contagem é em dias úteis ou corridos,
+            e é o que mais muda a data fatal. Sem exibi-la aqui, o advogado
+            veria a data sem saber por que ela é aquela — e num processo
+            criminal a diferença entre CPP e CPC é de dias.
+          */}
+          <p className="text-xs text-muted-foreground">
+            {proposta.regraContagem.fundamento}
+            {proposta.regraContagem.confianca === "baixa" ? (
+              <span className="ml-1 font-medium text-amber-600">
+                Confira: a regra deste ramo não é pacífica.
+              </span>
+            ) : null}
+          </p>
           <ul className="space-y-1">
             {proposta.fundamentos.map((fundamento) => (
               <li

@@ -282,10 +282,16 @@ export function extractDeadline(content: string): ExtractedDeadline {
             : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
+        // O fundamento diz de onde saiu o NÚMERO de dias, e só isso. O modo
+        // de contagem e sua base legal vêm do resolver de ramo, que sabe se
+        // o processo corre pelo CPC, pela CLT ou pelo CPP — afirmar aqui
+        // "dias úteis na forma do art. 219" produzia justificativa
+        // contraditória num processo criminal.
         fundamento: qualificador === "corridos"
           ? "Prazo em dias corridos declarado na própria publicação."
-          : "Prazo declarado na própria publicação; contagem em dias úteis " +
-            "na forma do CPC, art. 219.",
+          : qualificador === "uteis"
+            ? "Prazo em dias úteis declarado na própria publicação."
+            : "Prazo declarado na própria publicação.",
         trecho: explicitMatch[0],
         alertas,
       };
@@ -307,9 +313,7 @@ export function extractDeadline(content: string): ExtractedDeadline {
             : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
-        fundamento:
-          "Prazo declarado por extenso na publicação; contagem em dias " +
-          "úteis na forma do CPC, art. 219.",
+        fundamento: "Prazo declarado por extenso na publicação.",
         trecho: wordMatch[0],
         alertas,
       };

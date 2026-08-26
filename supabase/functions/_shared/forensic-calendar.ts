@@ -293,6 +293,21 @@ export interface ComputeDeadlineOptions {
    * pessoal, juntada de AR), a regra do art. 224, §2 não se aplica.
    */
   intimacaoPessoal?: boolean;
+  /**
+   * Regime do CPP: o termo inicial corre do dia seguinte ao ato, sem
+   * protração para dia útil.
+   *
+   * A protração do art. 224, §3 do CPC é do processo civil. No penal o
+   * art. 798, §1 apenas exclui o dia do começo, e o §3 protrai somente o
+   * VENCIMENTO que cair em dia sem expediente. Sem esta distinção, uma
+   * intimação pessoal na sexta-feira só começaria a contar na segunda, e a
+   * data fatal sairia depois da devida.
+   *
+   * Não basta olhar `diasCorridos`: prazo civel em dias corridos existe
+   * (art. 231 e prazos de direito material) e nesses o termo inicial segue
+   * a regra do CPC. Quem chama decide, a partir do diploma aplicável.
+   */
+  regimePenal?: boolean;
   extraHolidays?: HolidayInput[];
 }
 
@@ -305,7 +320,12 @@ export interface ComputeDeadlineOptions {
 export function computeDeadline(
   options: ComputeDeadlineOptions,
 ): DeadlineComputation {
-  const { dias, diasCorridos = false, intimacaoPessoal = false } = options;
+  const {
+    dias,
+    diasCorridos = false,
+    intimacaoPessoal = false,
+    regimePenal = false,
+  } = options;
 
   if (!Number.isInteger(dias) || dias < 1) {
     throw new Error("prazo deve ser um número inteiro de dias maior que zero");
@@ -340,11 +360,18 @@ export function computeDeadline(
     );
   }
 
-  // Art. 224, §3 — a contagem começa no primeiro dia útil após a publicação.
-  const termoInicial = nextBusinessDay(addDays(publicacao, 1), calendar);
+  // O termo inicial depende do diploma. No CPC ele é protraído ao primeiro
+  // dia útil (art. 224, §3); no CPP a contagem é contínua e apenas exclui o
+  // dia do começo (art. 798, §1), sem protração na abertura.
+  const termoInicial = regimePenal
+    ? addDays(publicacao, 1)
+    : nextBusinessDay(addDays(publicacao, 1), calendar);
   fundamentos.push(
-    "CPC, art. 224, §3 — contagem iniciada no primeiro dia útil seguinte " +
-      "ao da publicação.",
+    regimePenal
+      ? "CPP, art. 798, §1 — exclui-se o dia do começo; a contagem corre a " +
+        "partir do dia seguinte, sem protração para dia útil."
+      : "CPC, art. 224, §3 — contagem iniciada no primeiro dia útil " +
+        "seguinte ao da publicação.",
   );
 
   const diasNaoUteis: CalendarDay[] = [];
@@ -386,8 +413,11 @@ export function computeDeadline(
   ) {
     vencimento = nextBusinessDay(vencimento, calendar);
     fundamentos.push(
-      "CPC, art. 224, §1 — vencimento protraído para o primeiro dia útil " +
-        "seguinte por queda em dia sem expediente normal.",
+      regimePenal
+        ? "CPP, art. 798, §3 — vencimento em domingo ou feriado prorrogado " +
+          "para o dia útil imediato."
+        : "CPC, art. 224, §1 — vencimento protraído para o primeiro dia " +
+          "útil seguinte por queda em dia sem expediente normal.",
     );
   }
 

@@ -35,6 +35,11 @@ export interface PropostaPrazo {
   dias: number;
   diasCorridos: boolean;
   intimacaoPessoal: boolean;
+  /**
+   * Regime do CPP aplicado: termo inicial no dia seguinte ao ato, sem
+   * protração para dia útil. Só é verdadeiro quando o CPP de fato incide.
+   */
+  regimePenal: boolean;
   confianca: ConfiancaPrazo;
   /** Por que este número de dias foi aplicado. */
   fundamentoDoPrazo: string;

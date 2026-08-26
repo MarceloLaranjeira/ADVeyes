@@ -36,11 +36,17 @@ async function calcularPrazoInterno(
     const fatalIso = toIsoDate(prazoFatal);
     const ano = Number(fatalIso.slice(0, 4));
 
-    const { data: settings } = await admin
+    // O cliente Supabase resolve com `{ data: null, error }` em vez de
+    // lancar, entao o `catch` desta funcao nao pega falha de consulta. Sem
+    // checar `error` explicitamente, uma falha transitoria viraria "sem
+    // configuracao" e "sem feriado nenhum" — e o prazo interno seria gravado
+    // com o calendario errado, silenciosamente.
+    const { data: settings, error: settingsError } = await admin
       .from("controladoria_settings")
       .select("antecedencia_dias_uteis")
       .eq("tenant_id", tenantId)
       .maybeSingle();
+    if (settingsError) return null;
 
     const antecedencia = typeof settings?.antecedencia_dias_uteis === "number"
       ? settings.antecedencia_dias_uteis
@@ -59,7 +65,10 @@ async function calcularPrazoInterno(
       ? consulta.or(`tribunal.is.null,tribunal.eq.${tribunal}`)
       : consulta.is("tribunal", null);
 
-    const { data: holidayRows } = await consulta;
+    const { data: holidayRows, error: holidayError } = await consulta;
+    // Feriado local faltando desloca a data. Melhor nao gravar prazo interno
+    // do que gravar um calculado sobre calendario incompleto.
+    if (holidayError) return null;
 
     const feriados: HolidayInput[] = (holidayRows ?? []).map((row) => ({
       date: String(row.holiday_date).slice(0, 10),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCalendar,
+  computeDeadline,
   parseIsoDate,
   subtractBusinessDays,
   toIsoDate,
@@ -63,5 +64,83 @@ describe("subtractBusinessDays", () => {
     const dia = parseIsoDate(resultado).getUTCDay();
     expect(dia).not.toBe(0);
     expect(dia).not.toBe(6);
+  });
+});
+
+describe("regime penal — termo inicial", () => {
+  it("não protrai o termo inicial para dia útil", () => {
+    // Intimação pessoal na sexta 07/08/2026. No CPC o termo inicial seria
+    // protraído para segunda; no CPP a contagem corre do dia seguinte, o
+    // sábado, porque o art. 798, §1 só exclui o dia do começo.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    expect(penal.termoInicial).toBe("2026-08-08");
+
+    const civel = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+    });
+    expect(civel.termoInicial).toBe("2026-08-10");
+  });
+
+  it("a data fatal penal não sai depois da devida", () => {
+    // O ponto do achado: protrair o início empurrava o vencimento para
+    // depois do prazo legal, mostrando folga que não existe.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    const civel = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+    });
+    expect(penal.vencimento < civel.vencimento).toBe(true);
+  });
+
+  it("cita o CPP na trilha, não o CPC", () => {
+    const penal = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    expect(penal.fundamentos.some((f) => f.includes("798"))).toBe(true);
+    expect(penal.fundamentos.some((f) => f.includes("224, §3"))).toBe(false);
+  });
+
+  it("ainda prorroga vencimento que cai em dia sem expediente", () => {
+    // CPP art. 798, §3 — a prorrogação do vencimento continua valendo.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-08-05",
+      dias: 3,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    const diaDaSemana = parseIsoDate(penal.vencimento).getUTCDay();
+    expect(diaDaSemana).not.toBe(0);
+    expect(diaDaSemana).not.toBe(6);
+  });
+
+  it("o padrão continua sendo o regime do CPC", () => {
+    // Guarda de regressão: nenhum chamador existente muda de comportamento.
+    const semRegime = computeDeadline({
+      disponibilizacao: "2026-08-07",
+      dias: 15,
+    });
+    expect(semRegime.fundamentos.some((f) => f.includes("224, §3"))).toBe(true);
   });
 });

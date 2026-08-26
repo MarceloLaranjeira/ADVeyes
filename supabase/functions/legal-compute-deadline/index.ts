@@ -199,6 +199,13 @@ Deno.serve(async (request) => {
   const diasCorridos = body.override?.diasCorridos ??
     aplicarRegraAoMotor(regra, leitura.qualificadorExplicito);
 
+  // O regime do CPP muda o termo inicial, nao so o modo de contagem: no
+  // penal a contagem corre do dia seguinte ao ato, sem protracao para dia
+  // util. So vale quando o CPP esta de fato sendo aplicado — se o ato
+  // determinou dias uteis, ou se o advogado sobrepos o modo, o termo inicial
+  // volta a seguir o CPC.
+  const regimePenal = regra.fonte === "cpp" && diasCorridos;
+
   /* ---------------------------------------------------------------- */
   /* Calendário do tribunal                                            */
   /* ---------------------------------------------------------------- */
@@ -246,6 +253,7 @@ Deno.serve(async (request) => {
       dias,
       diasCorridos,
       intimacaoPessoal,
+      regimePenal,
       extraHolidays,
     });
   } catch (error) {
@@ -296,6 +304,7 @@ Deno.serve(async (request) => {
       dias,
       diasCorridos,
       intimacaoPessoal,
+      regimePenal,
       confianca: usouOverride ? "manual" : leitura.confianca,
       fundamentoDoPrazo: usouOverride
         ? "Prazo informado pelo advogado."
