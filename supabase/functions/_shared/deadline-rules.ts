@@ -93,14 +93,21 @@ function normalize(value: string | null | undefined): string {
 
 /** Junta os campos que podem revelar o juízo, para uma varredura só. */
 /**
- * Valores que ocupam o campo sem dizer nada.
+ * Valores de área que não identificam o ramo.
  *
- * `confirm_legal_process_candidate` grava `'A definir'` como área ao
- * importar processo automaticamente — que é como a maior parte da carteira
- * entra no sistema. Tratar isso como ramo identificado devolvia CPC com
- * confiança alta e sem aviso: um processo criminal cuja vara não contenha a
- * palavra "criminal" sairia em dias úteis, sem nada sinalizando que o ramo
- * nunca foi conferido.
+ * Dois grupos, pelo mesmo motivo: nenhum deles diz de que diploma o processo
+ * corre, e tratá-los como ramo identificado devolvia CPC com confiança alta
+ * e sem aviso — um processo criminal cuja vara não contenha a palavra
+ * "criminal" sairia em dias úteis, sem nada sinalizando.
+ *
+ * Preenchimento vazio: `confirm_legal_process_candidate` grava `'A definir'`
+ * ao importar processo automaticamente, que é como a maior parte da carteira
+ * entra no sistema.
+ *
+ * Fase processual no lugar de ramo: `ProcessoForm.tsx` oferece "Recurso" na
+ * mesma lista de "Penal" e "Cível", como se fosse ramo. Não é — existe
+ * recurso em qualquer ramo, e uma apelação criminal cadastrada assim, com
+ * órgão julgador genérico do tipo "1ª Câmara", passava por cível.
  */
 const AREAS_VAZIAS = [
   "a definir",
@@ -113,6 +120,9 @@ const AREAS_VAZIAS = [
   "-",
   "--",
   "n/a",
+  "recurso",
+  "recursal",
+  "recursos",
 ];
 
 function areaIdentificada(area: string): boolean {

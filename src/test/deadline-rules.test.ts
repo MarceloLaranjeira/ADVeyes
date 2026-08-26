@@ -138,6 +138,29 @@ describe("resolverRegraContagem", () => {
     }
   });
 
+  it("trata 'Recurso' como ramo não identificado", () => {
+    // `ProcessoForm.tsx` oferece "Recurso" na mesma lista de "Penal" e
+    // "Cível", como se fosse ramo. Não é: existe recurso em qualquer ramo.
+    // Uma apelação criminal cadastrada assim, com órgão julgador generico,
+    // passava por cível com confiança alta e sem aviso.
+    const regra = resolverRegraContagem({
+      area: "Recurso",
+      vara: "1ª Câmara",
+    });
+    expect(regra.fonte).toBe("padrao");
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toBeTruthy();
+  });
+
+  it("'Recurso' com câmara criminal ainda resolve como penal", () => {
+    const regra = resolverRegraContagem({
+      area: "Recurso",
+      vara: "1ª Câmara Criminal",
+    });
+    expect(regra.fonte).toBe("cpp");
+    expect(regra.modo).toBe("corridos");
+  });
+
   it("o placeholder não impede a detecção pelo juízo", () => {
     // Área vazia mas vara criminal: o ramo ainda é identificável.
     const regra = resolverRegraContagem({
