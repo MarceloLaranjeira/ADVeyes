@@ -143,6 +143,17 @@ export function apenasCarteiraAtiva<T extends ProcessoArquivavel>(
  *   ).eq("tenant_id", tenantId);
  */
 export function carteiraAtiva<T>(query: T): T {
+  // Duas cláusulas, e a ordem do raciocínio importa:
+  //
+  //   `arquivado_manual` diferente de true — quem o advogado arquivou
+  //   explicitamente sai, e quem ele desarquivou (false) fica, mesmo que o
+  //   tribunal discorde. Nulo passa, porque significa "sem decisão".
+  //
+  //   `status` diferente de "Arquivado" — a marcação legada, que ainda é a
+  //   única presente em boa parte da base.
+  //
+  // O arquivamento vindo do tribunal continua fora daqui: mora em outra
+  // tabela e entra por `situacaoNaCarteira` depois do join.
   // `not(..., "ilike", ...)` e nao `neq`: `situacaoNaCarteira` normaliza caixa
   // antes de comparar, e um filtro SQL sensivel a caixa deixaria passar a
   // linha gravada como "arquivado" que o codigo considera arquivada — as duas
@@ -153,7 +164,12 @@ export function carteiraAtiva<T>(query: T): T {
   // limite de recursão do TypeScript se `T` for restringido pela estrutura
   // (`T extends { not: ... }`). O genérico fica livre e a chamada vai por
   // uma asserção estreita, que preserva o tipo do retorno para quem chama.
-  return (query as unknown as {
-    not: (column: string, operator: string, value: string) => T;
-  }).not("status", "ilike", STATUS_ARQUIVADO);
+  const encadeavel = query as unknown as {
+    not: (column: string, operator: string, value: string) => typeof encadeavel;
+    or: (filtro: string) => typeof encadeavel;
+  };
+
+  return encadeavel
+    .or("arquivado_manual.is.null,arquivado_manual.eq.false")
+    .not("status", "ilike", STATUS_ARQUIVADO) as unknown as T;
 }

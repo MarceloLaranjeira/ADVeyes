@@ -25,6 +25,8 @@ import {
 } from "@/components/processos/AndamentosManuais";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
 import { ProcessIntelligencePanel } from "@/components/processos/ProcessIntelligencePanel";
+import { ArquivamentoControl } from "@/components/processos/ArquivamentoControl";
+import { useProcessIntelligence } from "@/hooks/useProcessIntelligence";
 import { AreaBadge } from "@/components/common/AreaBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,6 +143,17 @@ const ProcessoDetalhe = () => {
   }, [id, tenantId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // A fase vem da inteligência processual, que é a leitura do tribunal sobre
+  // o andamento. O controle de arquivamento precisa dela para saber se
+  // tribunal e escritório discordam — e a consulta inclui arquivados, senão
+  // o processo que já está fora da carteira não teria fase para comparar.
+  const intelligence = useProcessIntelligence(tenantId ?? null, {
+    incluirArquivados: true,
+  });
+  const faseDoTribunal =
+    intelligence.items.find((item) => item.id === id)?.intelligence?.phase ??
+    null;
 
   const movementEvents = useMemo(() => buildProcessTimeline({
     movements: collections.movements,
@@ -274,6 +287,20 @@ const ProcessoDetalhe = () => {
           </div>
         )}
 
+        {tenantId && id ? (
+          <ArquivamentoControl
+            processoId={id}
+            tenantId={tenantId}
+            status={processo.status ?? null}
+            arquivadoManual={
+              typeof processo.arquivado_manual === "boolean"
+                ? processo.arquivado_manual
+                : null
+            }
+            fase={faseDoTribunal}
+            onChange={() => void load()}
+          />
+        ) : null}
         {tenantId && id ? <ProcessIntelligencePanel tenantId={tenantId} processId={id} /> : null}
 
         {processo.legal_sync_status === "pending" && !processo.last_legal_sync_at && (

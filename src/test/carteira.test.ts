@@ -90,9 +90,14 @@ describe("carteiraAtiva", () => {
     // passaria pela consulta e seria considerada arquivada pelo código — as
     // duas metades da mesma regra discordando.
     const chamadas: Array<[string, string, string]> = [];
+    const filtrosOr: string[] = [];
     const query = {
       not: (coluna: string, operador: string, valor: string) => {
         chamadas.push([coluna, operador, valor]);
+        return query;
+      },
+      or: (filtro: string) => {
+        filtrosOr.push(filtro);
         return query;
       },
     };
@@ -100,6 +105,29 @@ describe("carteiraAtiva", () => {
     carteiraAtiva(query);
 
     expect(chamadas).toEqual([["status", "ilike", "Arquivado"]]);
+    expect(filtrosOr).toEqual([
+      "arquivado_manual.is.null,arquivado_manual.eq.false",
+    ]);
+  });
+
+  it("o override manual entra no filtro que vai ao banco", () => {
+    // Sem esta cláusula, o processo que o advogado arquivou explicitamente
+    // continuaria nos contadores, e o que ele desarquivou seria escondido
+    // pela fase do tribunal — a precedência acordada valeria só no código,
+    // não na consulta.
+    const filtrosOr: string[] = [];
+    const query = {
+      not: () => query,
+      or: (filtro: string) => {
+        filtrosOr.push(filtro);
+        return query;
+      },
+    };
+
+    carteiraAtiva(query);
+
+    expect(filtrosOr[0]).toContain("arquivado_manual.is.null");
+    expect(filtrosOr[0]).toContain("arquivado_manual.eq.false");
   });
 });
 

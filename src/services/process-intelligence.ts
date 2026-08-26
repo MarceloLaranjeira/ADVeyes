@@ -41,20 +41,33 @@ export const processIntelligenceService = {
   ): Promise<ProcessIntelligenceItem[]> {
     const client = supabase as any;
     const [processes, intelligence] = await Promise.all([
-      client.from("processos").select("id, numero, cliente_nome, area, status, tribunal, vara, adjudicating_body, advogado, updated_at, created_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false }),
+      client.from("processos").select("id, numero, cliente_nome, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false }),
       client.from("process_intelligence_current").select("*").eq("tenant_id", tenantId),
     ]);
     if (processes.error) throw processes.error;
     if (intelligence.error) throw intelligence.error;
     const byProcess = new Map<string, ProcessIntelligenceRecord>((intelligence.data ?? []).map((row: Row) => [String(row.process_id), mapRecord(row)]));
-    return (processes.data ?? []).map((row: Row) => ({
+    const itens = (processes.data ?? []).map((row: Row) => ({
       id: String(row.id), number: String(row.numero ?? ""), clientName: row.cliente_nome as string | null,
       clientDocument: null, area: row.area as string | null, status: row.status as string | null,
       court: row.tribunal as string | null, courtUnit: (row.adjudicating_body ?? row.vara) as string | null,
       lawyer: row.advogado as string | null, updatedAt: String(row.updated_at ?? row.created_at), intelligence: byProcess.get(String(row.id)) ?? null,
-    })).filter((item: ProcessIntelligenceItem) =>
+    }));
+
+    // O override do advogado nao cabe em `ProcessIntelligenceItem`, que e o
+    // contrato da tela. Fica ao lado, indexado por processo, so para a
+    // decisao de carteira.
+    const overridePorProcesso = new Map<string, boolean | null>(
+      (processes.data ?? []).map((row: Row) => [
+        String(row.id),
+        typeof row.arquivado_manual === "boolean" ? row.arquivado_manual : null,
+      ]),
+    );
+
+    return itens.filter((item: ProcessIntelligenceItem) =>
       incluirArquivados || !estaArquivado({
         status: item.status,
+        arquivadoManual: overridePorProcesso.get(item.id) ?? null,
         fase: item.intelligence?.phase ?? null,
       }));
   },
