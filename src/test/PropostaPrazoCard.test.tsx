@@ -21,6 +21,12 @@ function build(overrides: Partial<PropostaPrazo> = {}): PropostaPrazo {
     diasUteisContados: 15,
     diasNaoUteis: [{ date: "2026-03-07", reason: "sábado" }],
     fundamentos: ["CPC, art. 219 — computados somente os dias úteis."],
+    regraContagem: {
+      modo: "uteis",
+      fonte: "cpc",
+      confianca: "alta",
+      fundamento: "CPC, art. 219 — computados somente os dias úteis.",
+    },
     alertas: [],
     calendario: {
       tribunal: "TJAM",

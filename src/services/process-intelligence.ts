@@ -1,6 +1,7 @@
 /* Generated Supabase types predate the process-intelligence migrations. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/integrations/supabase/client";
+import { estaArquivado } from "@/lib/carteira";
 import type { ProcessIntelligenceItem, ProcessIntelligenceManualOverride, ProcessIntelligenceRecord } from "@/types/process-intelligence";
 
 type Row = Record<string, unknown>;
@@ -23,7 +24,21 @@ function mapRecord(row: Row): ProcessIntelligenceRecord {
 }
 
 export const processIntelligenceService = {
-  async list(tenantId: string): Promise<ProcessIntelligenceItem[]> {
+  /**
+   * Carteira do escritório para a listagem e para a Controladoria.
+   *
+   * Arquivado sai por padrão. Quem quiser ver processo encerrado pede em
+   * voz alta, com `incluirArquivados` — a exceção é explícita na chamada,
+   * nunca um filtro que cada tela reinventa.
+   *
+   * O corte acontece depois do join porque as duas fontes de arquivamento
+   * moram em tabelas diferentes: a marcação manual em `processos.status` e
+   * a fase deduzida em `process_intelligence_current`.
+   */
+  async list(
+    tenantId: string,
+    { incluirArquivados = false }: { incluirArquivados?: boolean } = {},
+  ): Promise<ProcessIntelligenceItem[]> {
     const client = supabase as any;
     const [processes, intelligence] = await Promise.all([
       client.from("processos").select("id, numero, cliente_nome, area, status, tribunal, vara, adjudicating_body, advogado, updated_at, created_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false }),
@@ -37,7 +52,11 @@ export const processIntelligenceService = {
       clientDocument: null, area: row.area as string | null, status: row.status as string | null,
       court: row.tribunal as string | null, courtUnit: (row.adjudicating_body ?? row.vara) as string | null,
       lawyer: row.advogado as string | null, updatedAt: String(row.updated_at ?? row.created_at), intelligence: byProcess.get(String(row.id)) ?? null,
-    }));
+    })).filter((item: ProcessIntelligenceItem) =>
+      incluirArquivados || !estaArquivado({
+        status: item.status,
+        fase: item.intelligence?.phase ?? null,
+      }));
   },
 
   async analyze(tenantId: string, processId: string) {

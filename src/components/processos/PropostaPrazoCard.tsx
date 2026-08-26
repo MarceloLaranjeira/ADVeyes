@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  diasAteVencimento,
+  diasUteisAteVencimento,
   pesoDaConfianca,
   type PropostaPrazo,
 } from "@/services/deadline";
@@ -78,7 +78,7 @@ export function PropostaPrazoCard({
   onConfirmar,
   onAjustar,
 }: Props) {
-  const restantes = diasAteVencimento(proposta.vencimento);
+  const restantes = diasUteisAteVencimento(proposta.vencimento);
   const { texto: textoUrgencia, classe: classeUrgencia } = urgencia(restantes);
   const confianca = pesoDaConfianca(proposta.confianca);
   const temAlertas = proposta.alertas.length > 0;

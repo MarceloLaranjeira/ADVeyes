@@ -26,6 +26,10 @@ import {
   type HolidayInput,
 } from "../_shared/forensic-calendar.ts";
 import { extractDeadline } from "../_shared/deadline-extraction.ts";
+import {
+  aplicarRegraAoMotor,
+  resolverRegraContagem,
+} from "../_shared/deadline-rules.ts";
 
 interface ComputeRequest {
   tenantId?: string;
@@ -133,8 +137,45 @@ Deno.serve(async (request) => {
     overrideDias <= 365;
 
   const dias = usouOverride ? overrideDias : leitura.dias;
-  const diasCorridos = body.override?.diasCorridos ?? leitura.diasCorridos;
   const intimacaoPessoal = body.override?.intimacaoPessoal ?? false;
+
+  /* ---------------------------------------------------------------- */
+  /* Regra de contagem por ramo                                        */
+  /* ---------------------------------------------------------------- */
+
+  // Até aqui o modo de contagem vinha só do texto da publicação: se o ato
+  // não dissesse "dias corridos" com todas as letras, tudo caía no padrão
+  // do CPC. Num processo criminal isso estica a data fatal, porque o CPP
+  // conta prazo contínuo — e a tela mostrava folga onde não havia.
+  //
+  // O ramo mora no cadastro do processo, não na publicação, então é
+  // preciso buscá-lo. Sem processo casado, o resolver responde com o
+  // padrão e confiança baixa, que é o que ele deve fazer.
+  let processoDoPrazo:
+    | { area: string | null; vara: string | null; adjudicating_body: string | null }
+    | null = null;
+
+  if (numeroProcesso) {
+    const { data: processo } = await auth.admin
+      .from("processos")
+      .select("area, vara, adjudicating_body")
+      .eq("tenant_id", tenantId)
+      .eq("numero", numeroProcesso)
+      .maybeSingle();
+    processoDoPrazo = processo ?? null;
+  }
+
+  const regra = resolverRegraContagem({
+    area: processoDoPrazo?.area ?? null,
+    vara: processoDoPrazo?.vara ?? null,
+    adjudicatingBody: processoDoPrazo?.adjudicating_body ?? null,
+    tribunal,
+  });
+
+  // O advogado tem a palavra final; depois dele, o que está escrito no ato;
+  // por último, a dedução pelo ramo.
+  const diasCorridos = body.override?.diasCorridos ??
+    aplicarRegraAoMotor(regra, leitura.diasCorridos);
 
   /* ---------------------------------------------------------------- */
   /* Calendário do tribunal                                            */
@@ -217,6 +258,13 @@ Deno.serve(async (request) => {
     );
   }
 
+  // O aviso do ramo entra na mesma fila que os demais: quem assina lê uma
+  // lista só do que precisa conferir, não um campo escondido em outro
+  // canto da tela.
+  if (regra.aviso && body.override?.diasCorridos === undefined) {
+    alertas.push(regra.aviso);
+  }
+
   return json({
     proposta: {
       numeroProcesso,
@@ -237,6 +285,12 @@ Deno.serve(async (request) => {
       diasUteisContados: calculo.diasUteisContados,
       diasNaoUteis: calculo.diasNaoUteis,
       fundamentos: calculo.fundamentos,
+      regraContagem: {
+        modo: regra.modo,
+        fonte: regra.fonte,
+        confianca: regra.confianca,
+        fundamento: regra.fundamento,
+      },
       alertas,
       calendario: {
         tribunal,

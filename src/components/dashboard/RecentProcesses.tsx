@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AreaBadge } from "../common/AreaBadge";
 import { Clock, User, AlertTriangle, Scale, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtiva } from "@/lib/carteira";
 import { Button } from "../ui/button";
 
 interface Processo {
@@ -22,9 +23,11 @@ export const RecentProcesses = () => {
 
   const fetchProcessos = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("processos")
-      .select("id, numero, area, status, cliente_nome")
+    const { data } = await carteiraAtiva(
+      supabase
+        .from("processos")
+        .select("id, numero, area, status, cliente_nome"),
+    )
       .order("updated_at", { ascending: false })
       .limit(8);
 

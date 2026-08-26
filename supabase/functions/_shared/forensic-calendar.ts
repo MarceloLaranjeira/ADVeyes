@@ -408,3 +408,56 @@ export function computeDeadline(
     fundamentos,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Antecedência — prazo interno                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recua `dias` dias úteis a partir de `date`, para o prazo interno.
+ *
+ * A contagem tem de ser em dias úteis pelo mesmo calendário do prazo fatal,
+ * senão a folga evapora justamente quando é mais necessária: três dias
+ * corridos antes de uma segunda-feira caem na sexta anterior — véspera, com
+ * o fim de semana no meio. Três dias úteis caem na quarta da semana
+ * anterior, que é o que o escritório quer dizer ao pedir "três dias de
+ * antecedência".
+ *
+ * O dia de partida não conta: recuar 1 dia útil de uma quarta devolve terça.
+ * Com `dias` zero ou negativo, devolve o primeiro dia útil em `date` ou
+ * antes dela — nunca uma data em que o fórum está fechado.
+ *
+ * Dia de expediente reduzido conta como útil aqui, ao contrário do que faz
+ * `nextBusinessDay`. A protração do art. 224, §1 protege o termo legal; o
+ * prazo interno é convenção do escritório, e um dia de meio expediente
+ * ainda é um dia em que dá para trabalhar e protocolar.
+ */
+export function subtractBusinessDays(
+  date: Date,
+  dias: number,
+  calendar: ForensicCalendar,
+): Date {
+  const passos = Math.max(0, Math.trunc(dias));
+  let cursor = date;
+
+  // O limite protege contra calendário mal formado, como em nextBusinessDay.
+  const recuarAteDiaUtil = () => {
+    for (let guard = 0; guard < 400; guard += 1) {
+      if (calendar.nonBusinessReason(cursor) === null) return;
+      cursor = addDays(cursor, -1);
+    }
+    throw new Error("nenhum dia útil encontrado em 400 dias");
+  };
+
+  if (passos === 0) {
+    recuarAteDiaUtil();
+    return cursor;
+  }
+
+  for (let restantes = passos; restantes > 0; restantes -= 1) {
+    cursor = addDays(cursor, -1);
+    recuarAteDiaUtil();
+  }
+
+  return cursor;
+}

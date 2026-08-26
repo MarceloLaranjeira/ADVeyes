@@ -9,6 +9,11 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/async-timeout";
+import {
+  buildCalendar,
+  parseIsoDate,
+  type HolidayInput,
+} from "../../supabase/functions/_shared/forensic-calendar.ts";
 
 /** Quão firme é a leitura do prazo. Decide o peso visual na interface. */
 export type ConfiancaPrazo =
@@ -43,6 +48,17 @@ export interface PropostaPrazo {
   diasNaoUteis: DiaNaoUtil[];
   /** Artigos do CPC aplicados, na ordem em que incidiram. */
   fundamentos: string[];
+  /**
+   * Qual regra de contagem o ramo do processo impôs, e com que firmeza.
+   * `confianca: "baixa"` obriga a interface a pedir conferência — é o caso
+   * do Juizado Especial e do processo sem ramo identificado.
+   */
+  regraContagem: {
+    modo: "uteis" | "corridos";
+    fonte: "cpc" | "clt" | "cpp" | "jec" | "padrao";
+    confianca: "alta" | "baixa";
+    fundamento: string;
+  };
   /** Pontos que exigem conferência humana antes de confirmar. */
   alertas: string[];
   calendario: {
@@ -137,14 +153,53 @@ export function pesoDaConfianca(
   }
 }
 
-/** Dias corridos entre hoje e o vencimento. Negativo indica prazo vencido. */
-export function diasAteVencimento(
+/**
+ * Quantos dias ÚTEIS faltam até o vencimento. Negativo indica prazo vencido.
+ *
+ * Contar em dias corridos aqui era mentira confortável: no dia 21 de
+ * dezembro, um prazo que vence em 10 de janeiro aparecia como "faltam 20
+ * dias", quando na verdade o fórum está em recesso e não há um único dia
+ * útil no meio. O advogado que confiasse no número perderia o prazo lendo
+ * uma tela que dizia haver folga.
+ *
+ * Usa o mesmo calendário do cálculo — fins de semana, feriados nacionais e
+ * o recesso do art. 220. Feriados de tribunal entram por `feriados`, vindos
+ * de `forensic_holidays`; sem eles a conta continua correta para o resto e
+ * apenas otimista nos dias em que aquele tribunal específico não abre.
+ *
+ * O dia de hoje não conta: vencimento hoje devolve zero, e é isso que a
+ * interface traduz como "vence hoje".
+ */
+export function diasUteisAteVencimento(
   vencimento: string,
   hoje = new Date(),
+  feriados: HolidayInput[] = [],
 ): number {
-  const alvo = new Date(`${vencimento}T00:00:00.000Z`);
+  const alvo = parseIsoDate(vencimento);
   const base = new Date(
     Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
   );
-  return Math.round((alvo.getTime() - base.getTime()) / 86_400_000);
+
+  if (alvo.getTime() === base.getTime()) return 0;
+
+  const anos = [base.getUTCFullYear(), alvo.getUTCFullYear()];
+  const calendario = buildCalendar(
+    [...anos, Math.min(...anos) - 1, Math.max(...anos) + 1],
+    feriados,
+  );
+
+  const vencido = alvo.getTime() < base.getTime();
+  const inicio = vencido ? alvo : base;
+  const fim = vencido ? base : alvo;
+
+  // Conta os dias úteis no intervalo aberto à esquerda: o dia de partida
+  // não entra, o de chegada entra. É a mesma convenção do art. 224.
+  let uteis = 0;
+  let cursor = new Date(inicio.getTime() + 86_400_000);
+  while (cursor.getTime() <= fim.getTime()) {
+    if (calendario.nonBusinessReason(cursor) === null) uteis += 1;
+    cursor = new Date(cursor.getTime() + 86_400_000);
+  }
+
+  return vencido ? -uteis : uteis;
 }
