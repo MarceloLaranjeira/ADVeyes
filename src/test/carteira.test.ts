@@ -102,3 +102,20 @@ describe("carteiraAtiva", () => {
     expect(chamadas).toEqual([["status", "ilike", "Arquivado"]]);
   });
 });
+
+describe("normalização entre código e banco", () => {
+  it("considera arquivado o status com tabulação ou quebra de linha", () => {
+    // O `trim()` do JavaScript remove todo espaço em branco. A migration usa
+    // a classe [[:space:]] para casar com isso — `btrim` sozinho removeria
+    // só o caractere espaço, e um status com tabulação ficaria arquivado
+    // para o código e ativo para a consulta.
+    expect(estaArquivado({ status: "\tArquivado" })).toBe(true);
+    expect(estaArquivado({ status: "Arquivado\n" })).toBe(true);
+    expect(estaArquivado({ status: " \t arquivado \n " })).toBe(true);
+  });
+
+  it("não confunde status que apenas contém a palavra", () => {
+    expect(estaArquivado({ status: "Arquivado provisoriamente" })).toBe(false);
+    expect(estaArquivado({ status: "Aguardando arquivamento" })).toBe(false);
+  });
+});

@@ -64,7 +64,29 @@ const Audiencias = () => {
       carteiraAtiva(supabase.from("processos").select("id, numero, cliente_nome")),
     ]);
     if (aud) setAudiencias(aud);
-    if (proc) setProcessos(proc);
+
+    // A carteira ativa decide o que se pode ESCOLHER, não o que já está
+    // escolhido. Sem trazer de volta os processos já vinculados a alguma
+    // audiência, editar uma audiência de processo arquivado abriria o
+    // seletor sem o item correspondente — o vínculo atual sumiria da tela e
+    // seria perdido ao salvar.
+    const vinculados = [
+      ...new Set((aud ?? []).map(a => a.processo_id).filter(Boolean) as string[]),
+    ];
+    const ativos = proc ?? [];
+    const faltantes = vinculados.filter(id => !ativos.some(p => p.id === id));
+
+    if (faltantes.length === 0) {
+      setProcessos(ativos);
+      return;
+    }
+
+    const { data: arquivadosVinculados } = await supabase
+      .from("processos")
+      .select("id, numero, cliente_nome")
+      .in("id", faltantes);
+
+    setProcessos([...ativos, ...(arquivadosVinculados ?? [])]);
   };
 
   useEffect(() => { fetchData(); }, []);
