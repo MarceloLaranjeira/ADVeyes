@@ -54,13 +54,15 @@ export interface PropostaPrazo {
   /** Artigos do CPC aplicados, na ordem em que incidiram. */
   fundamentos: string[];
   /**
-   * Qual regra de contagem o ramo do processo impôs, e com que firmeza.
+   * A regra que de fato governou a contagem, e com que firmeza. Nem sempre
+   * é a do ramo: o qualificador escrito no ato vence, e a sobreposição do
+   * advogado vence os dois.
    * `confianca: "baixa"` obriga a interface a pedir conferência — é o caso
    * do Juizado Especial e do processo sem ramo identificado.
    */
   regraContagem: {
     modo: "uteis" | "corridos";
-    fonte: "cpc" | "clt" | "cpp" | "jec" | "padrao";
+    fonte: "cpc" | "clt" | "cpp" | "jec" | "padrao" | "ato" | "manual";
     confianca: "alta" | "baixa";
     fundamento: string;
   };

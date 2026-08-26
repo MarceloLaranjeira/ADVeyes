@@ -360,16 +360,31 @@ export function computeDeadline(
     );
   }
 
-  // O termo inicial depende do diploma. No CPC ele é protraído ao primeiro
-  // dia útil (art. 224, §3); no CPP a contagem é contínua e apenas exclui o
-  // dia do começo (art. 798, §1), sem protração na abertura.
-  const termoInicial = regimePenal
+  // O termo inicial depende do diploma E do marco.
+  //
+  // A dispensa de protração no penal vale para o ato que não passa pelo
+  // diário — a intimação pessoal, em que o art. 798, §1 do CPP apenas
+  // exclui o dia do começo. Quando o marco é publicação no diário
+  // eletrônico, a regra específica é outra e alcança também o processo
+  // penal: a Lei 11.419/2006 se aplica indistintamente aos processos civil,
+  // penal e trabalhista (art. 1º, §1º), e o art. 4º, §4º manda o prazo
+  // começar no primeiro dia útil seguinte ao da publicação.
+  //
+  // Sem essa distinção, uma publicação penal disponibilizada antes do fim
+  // de semana começaria a contar no sábado e a data fatal sairia ANTES da
+  // devida — o erro espelhado do que esta função corrigiu antes.
+  const semProtracaoInicial = regimePenal && intimacaoPessoal;
+  const termoInicial = semProtracaoInicial
     ? addDays(publicacao, 1)
     : nextBusinessDay(addDays(publicacao, 1), calendar);
   fundamentos.push(
-    regimePenal
+    semProtracaoInicial
       ? "CPP, art. 798, §1 — exclui-se o dia do começo; a contagem corre a " +
         "partir do dia seguinte, sem protração para dia útil."
+      : regimePenal
+      ? "Lei 11.419/2006, art. 4º, §4º — prazo iniciado no primeiro dia " +
+        "útil seguinte ao da publicação no diário eletrônico, regra que " +
+        "alcança o processo penal (art. 1º, §1º)."
       : "CPC, art. 224, §3 — contagem iniciada no primeiro dia útil " +
         "seguinte ao da publicação.",
   );

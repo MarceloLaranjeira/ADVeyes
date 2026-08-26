@@ -135,6 +135,24 @@ describe("regime penal — termo inicial", () => {
     expect(diaDaSemana).not.toBe(6);
   });
 
+  it("publicação penal no diário ainda começa em dia útil", () => {
+    // A dispensa de protração vale para a intimação pessoal, não para o
+    // diário. A Lei 11.419/2006 alcança o processo penal (art. 1º, §1º) e
+    // manda o prazo começar no primeiro dia útil seguinte à publicação
+    // (art. 4º, §4º). Sem isso, uma publicação antes do fim de semana
+    // começaria no sábado e a data fatal sairia ANTES da devida.
+    const penalDjen = computeDeadline({
+      disponibilizacao: "2026-08-05",
+      dias: 5,
+      diasCorridos: true,
+      regimePenal: true,
+    });
+    const inicio = parseIsoDate(penalDjen.termoInicial).getUTCDay();
+    expect(inicio).not.toBe(0);
+    expect(inicio).not.toBe(6);
+    expect(penalDjen.fundamentos.some((f) => f.includes("11.419"))).toBe(true);
+  });
+
   it("o padrão continua sendo o regime do CPC", () => {
     // Guarda de regressão: nenhum chamador existente muda de comportamento.
     const semRegime = computeDeadline({

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aplicarRegraAoMotor,
+  regraEfetiva,
   resolverRegraContagem,
 } from "../../supabase/functions/_shared/deadline-rules.ts";
 import { extractDeadline } from "../../supabase/functions/_shared/deadline-extraction.ts";
@@ -177,5 +178,44 @@ describe("qualificador da publicação ponta a ponta", () => {
     // Sem qualificador, o ramo decide — e no penal isso significa corridos.
     const penal = resolverRegraContagem({ area: "Penal" });
     expect(aplicarRegraAoMotor(penal, leitura.qualificadorExplicito)).toBe(true);
+  });
+});
+
+describe("siglas compactas de tribunal", () => {
+  it("reconhece TRT com número colado", () => {
+    // O dígito é caractere de palavra, então `\btrt\b` não casa com
+    // "TRT11" — e é esse o formato que a tela de configurações oferece.
+    for (const tribunal of ["TRT11", "TRT2", "TRT 15"]) {
+      const regra = resolverRegraContagem({ area: "A definir", tribunal });
+      expect(regra.fonte).toBe("clt");
+    }
+  });
+
+  it("não confunde outra sigla que comece com as mesmas letras", () => {
+    const regra = resolverRegraContagem({ area: "Cível", tribunal: "TJAM" });
+    expect(regra.fonte).toBe("cpc");
+  });
+});
+
+describe("regraEfetiva", () => {
+  const penal = resolverRegraContagem({ area: "Penal" });
+
+  it("o ato vence o ramo na trilha exibida", () => {
+    // Publicação criminal dizendo "5 dias úteis": a contagem sai em dias
+    // úteis, então mostrar "CPP, prazos contínuos" seria contraditório.
+    const efetiva = regraEfetiva(penal, "uteis", undefined);
+    expect(efetiva.modo).toBe("uteis");
+    expect(efetiva.fonte).toBe("ato");
+    expect(efetiva.fundamento).not.toContain("798");
+  });
+
+  it("o advogado vence o ato e o ramo", () => {
+    const efetiva = regraEfetiva(penal, "uteis", true);
+    expect(efetiva.modo).toBe("corridos");
+    expect(efetiva.fonte).toBe("manual");
+  });
+
+  it("sem ato nem override, devolve a própria regra do ramo", () => {
+    expect(regraEfetiva(penal, null, undefined)).toBe(penal);
   });
 });

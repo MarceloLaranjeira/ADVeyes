@@ -34,7 +34,16 @@
 export type CountingMode = "uteis" | "corridos";
 
 /** De qual diploma saiu a regra. Decide o texto do fundamento. */
-export type RuleSource = "cpc" | "clt" | "cpp" | "jec" | "padrao";
+export type RuleSource =
+  | "cpc"
+  | "clt"
+  | "cpp"
+  | "jec"
+  | "padrao"
+  /** O próprio ato determinou o modo, com todas as letras. */
+  | "ato"
+  /** O advogado sobrepôs o modo de contagem. */
+  | "manual";
 
 /**
  * `baixa` não bloqueia nada — apenas obriga a interface a pedir conferência
@@ -133,9 +142,14 @@ const LABOR_AREAS = [
 ];
 
 /** Varas e tribunais trabalhistas — TRT, vara do trabalho. */
+//
+// O dígito é caractere de palavra, então `\btrt\b` NÃO casa com "TRT11" —
+// e "TRT11" é justamente o formato que a tela de configurações oferece.
+// Sem `\d*`, o processo caía no ramo genérico com confiança alta e exibia
+// fundamento do CPC onde deveria citar a CLT.
 const LABOR_JUIZO_PATTERNS = [
   /vara do trabalho/,
-  /\btrt\b/,
+  /\btrt\s?\d*\b/,
   /\btst\b/,
   /justica do trabalho/,
 ];
@@ -284,4 +298,45 @@ export function aplicarRegraAoMotor(
   if (qualificadorDaPublicacao === "corridos") return true;
   if (qualificadorDaPublicacao === "uteis") return false;
   return regra.modo === "corridos";
+}
+
+/**
+ * A regra que de fato governou o cálculo, para a trilha de auditoria.
+ *
+ * `resolverRegraContagem` devolve o que o RAMO diz. Mas o ramo nem sempre
+ * decide: o qualificador escrito no ato vence, e a sobreposição do advogado
+ * vence os dois. Exibir a regra do ramo nesses casos produz trilha
+ * contraditória — o cartão afirmaria "CPP, prazos contínuos" ao lado de uma
+ * contagem em dias úteis que o juiz determinou.
+ *
+ * Esta função devolve quem realmente decidiu, para que a tela mostre isso.
+ */
+export function regraEfetiva(
+  regraDoRamo: CountingRule,
+  qualificadorDaPublicacao: "uteis" | "corridos" | null,
+  overrideDoAdvogado: boolean | undefined,
+): CountingRule {
+  if (overrideDoAdvogado !== undefined) {
+    return {
+      modo: overrideDoAdvogado ? "corridos" : "uteis",
+      fonte: "manual",
+      confianca: "alta",
+      fundamento: overrideDoAdvogado
+        ? "Contagem em dias corridos informada pelo advogado."
+        : "Contagem em dias úteis informada pelo advogado.",
+    };
+  }
+
+  if (qualificadorDaPublicacao !== null) {
+    return {
+      modo: qualificadorDaPublicacao === "corridos" ? "corridos" : "uteis",
+      fonte: "ato",
+      confianca: "alta",
+      fundamento: qualificadorDaPublicacao === "corridos"
+        ? "Contagem em dias corridos declarada na própria publicação."
+        : "Contagem em dias úteis declarada na própria publicação.",
+    };
+  }
+
+  return regraDoRamo;
 }

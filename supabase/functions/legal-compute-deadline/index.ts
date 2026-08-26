@@ -28,6 +28,7 @@ import {
 import { extractDeadline } from "../_shared/deadline-extraction.ts";
 import {
   aplicarRegraAoMotor,
+  regraEfetiva,
   resolverRegraContagem,
 } from "../_shared/deadline-rules.ts";
 
@@ -206,6 +207,14 @@ Deno.serve(async (request) => {
   // volta a seguir o CPC.
   const regimePenal = regra.fonte === "cpp" && diasCorridos;
 
+  // O que a tela deve mostrar: quem de fato decidiu o modo. O ramo perde
+  // para o qualificador do ato, e os dois perdem para o advogado.
+  const efetiva = regraEfetiva(
+    regra,
+    leitura.qualificadorExplicito,
+    body.override?.diasCorridos,
+  );
+
   /* ---------------------------------------------------------------- */
   /* Calendário do tribunal                                            */
   /* ---------------------------------------------------------------- */
@@ -291,7 +300,9 @@ Deno.serve(async (request) => {
   // O aviso do ramo entra na mesma fila que os demais: quem assina lê uma
   // lista só do que precisa conferir, não um campo escondido em outro
   // canto da tela.
-  if (regra.aviso && body.override?.diasCorridos === undefined) {
+  // O aviso do ramo só faz sentido quando o ramo governou. Se o ato ou o
+  // advogado decidiram, a controvérsia do ramo não incide sobre esta data.
+  if (regra.aviso && efetiva === regra) {
     alertas.push(regra.aviso);
   }
   alertas.push(...alertasDoResolver);
@@ -318,10 +329,10 @@ Deno.serve(async (request) => {
       diasNaoUteis: calculo.diasNaoUteis,
       fundamentos: calculo.fundamentos,
       regraContagem: {
-        modo: regra.modo,
-        fonte: regra.fonte,
-        confianca: regra.confianca,
-        fundamento: regra.fundamento,
+        modo: efetiva.modo,
+        fonte: efetiva.fonte,
+        confianca: efetiva.confianca,
+        fundamento: efetiva.fundamento,
       },
       alertas,
       calendario: {
