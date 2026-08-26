@@ -142,34 +142,59 @@ export function apenasCarteiraAtiva<T extends ProcessoArquivavel>(
  *     supabase.from("processos").select("id", { count: "exact", head: true })
  *   ).eq("tenant_id", tenantId);
  */
+/**
+ * A view que aplica a carteira ativa inteira no banco.
+ *
+ * `carteiraAtiva()` alcança só o que está em `processos`. O arquivamento
+ * deduzido das movimentações mora em outra tabela, e numa consulta de
+ * contagem (`head: true`) não vem linha para cruzar em memória — era por aí
+ * que o contador do painel divergia da listagem. Quem precisa da regra
+ * completa do lado do servidor lê desta view.
+ */
+export const VIEW_CARTEIRA_ATIVA = "processos_carteira_ativa";
+
+/**
+ * O predicado PostgREST da carteira ativa, aninhado.
+ *
+ * Fica separado da função para poder ser exercitado em teste sem montar um
+ * query builder — é a metade da regra que mais silenciosamente pode divergir
+ * de `situacaoNaCarteira`.
+ */
+export const FILTRO_CARTEIRA_ATIVA =
+  `arquivado_manual.eq.false,` +
+  `and(arquivado_manual.is.null,status.not.ilike.${STATUS_ARQUIVADO})`;
+
 export function carteiraAtiva<T>(query: T): T {
-  // Duas cláusulas, e a ordem do raciocínio importa:
+  // Uma cláusula só, e ela precisa ser aninhada.
   //
-  //   `arquivado_manual` diferente de true — quem o advogado arquivou
-  //   explicitamente sai, e quem ele desarquivou (false) fica, mesmo que o
-  //   tribunal discorde. Nulo passa, porque significa "sem decisão".
+  // A regra é hierárquica: a decisão do advogado vence, e o status legado só
+  // é consultado quando ele não decidiu. Escrever as duas metades como
+  // filtros separados as junta com AND, e aí um processo legado gravado como
+  // "Arquivado" que o advogado reativou continuaria fora de toda consulta —
+  // o botão "Reativar na carteira" não teria efeito nenhum. Por isso:
   //
-  //   `status` diferente de "Arquivado" — a marcação legada, que ainda é a
-  //   única presente em boa parte da base.
+  //   arquivado_manual = false                       → dentro, sempre.
+  //   arquivado_manual is null AND status ≠ Arquivado → dentro.
+  //   arquivado_manual = true                        → fora, sempre.
   //
   // O arquivamento vindo do tribunal continua fora daqui: mora em outra
-  // tabela e entra por `situacaoNaCarteira` depois do join.
-  // `not(..., "ilike", ...)` e nao `neq`: `situacaoNaCarteira` normaliza caixa
-  // antes de comparar, e um filtro SQL sensivel a caixa deixaria passar a
-  // linha gravada como "arquivado" que o codigo considera arquivada — as duas
+  // tabela e entra por `situacaoNaCarteira` depois do join — por isso a
+  // listagem, que já carrega a inteligência processual, deve passar também
+  // por `apenasCarteiraAtiva`.
+  //
+  // `not.ilike` e nao `neq`: `situacaoNaCarteira` normaliza caixa antes de
+  // comparar, e um filtro SQL sensivel a caixa deixaria passar a linha
+  // gravada como "arquivado" que o codigo considera arquivada — as duas
   // metades da mesma regra discordando. O espaco em volta e resolvido na
   // migration, que canoniza o valor gravado.
   //
   // O tipo do query builder do Supabase é grande o bastante para estourar o
   // limite de recursão do TypeScript se `T` for restringido pela estrutura
-  // (`T extends { not: ... }`). O genérico fica livre e a chamada vai por
-  // uma asserção estreita, que preserva o tipo do retorno para quem chama.
+  // (`T extends { or: ... }`). O genérico fica livre e a chamada vai por uma
+  // asserção estreita, que preserva o tipo do retorno para quem chama.
   const encadeavel = query as unknown as {
-    not: (column: string, operator: string, value: string) => typeof encadeavel;
     or: (filtro: string) => typeof encadeavel;
   };
 
-  return encadeavel
-    .or("arquivado_manual.is.null,arquivado_manual.eq.false")
-    .not("status", "ilike", STATUS_ARQUIVADO) as unknown as T;
+  return encadeavel.or(FILTRO_CARTEIRA_ATIVA) as unknown as T;
 }

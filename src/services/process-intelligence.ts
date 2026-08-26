@@ -1,7 +1,7 @@
 /* Generated Supabase types predate the process-intelligence migrations. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/integrations/supabase/client";
-import { estaArquivado } from "@/lib/carteira";
+import { carteiraAtiva, estaArquivado } from "@/lib/carteira";
 import type { ProcessIntelligenceItem, ProcessIntelligenceManualOverride, ProcessIntelligenceRecord } from "@/types/process-intelligence";
 
 type Row = Record<string, unknown>;
@@ -23,6 +23,37 @@ function mapRecord(row: Row): ProcessIntelligenceRecord {
   };
 }
 
+/**
+ * Tamanho da página ao varrer uma tabela inteira.
+ *
+ * O PostgREST corta a resposta num teto de linhas configurado no servidor.
+ * Como o corte é silencioso — vem uma resposta bem-sucedida, só que curta —
+ * uma carteira grande devolveria apenas as primeiras linhas por
+ * `updated_at`, e qualquer filtro aplicado depois disso descartaria parte
+ * dessa página sem repor o que ficou de fora. O resultado seria processo
+ * ativo sumindo da tela por causa de arquivado recém-movimentado.
+ */
+const PAGINA = 1000;
+
+/**
+ * Lê todas as linhas de uma consulta, página por página.
+ *
+ * `montar` recebe a faixa e devolve a consulta já filtrada, porque o
+ * `range` precisa ser aplicado por último, depois dos demais predicados.
+ */
+async function lerTudo(
+  montar: (de: number, ate: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+): Promise<Row[]> {
+  const todas: Row[] = [];
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await montar(de, de + PAGINA - 1);
+    if (error) throw error;
+    const pagina = data ?? [];
+    todas.push(...pagina);
+    if (pagina.length < PAGINA) return todas;
+  }
+}
+
 export const processIntelligenceService = {
   /**
    * Carteira do escritório para a listagem e para a Controladoria.
@@ -31,21 +62,44 @@ export const processIntelligenceService = {
    * voz alta, com `incluirArquivados` — a exceção é explícita na chamada,
    * nunca um filtro que cada tela reinventa.
    *
-   * O corte acontece depois do join porque as duas fontes de arquivamento
-   * moram em tabelas diferentes: a marcação manual em `processos.status` e
-   * a fase deduzida em `process_intelligence_current`.
+   * O arquivamento tem duas fontes em tabelas diferentes, e cada uma é
+   * aplicada onde consegue ser: a decisão do escritório e o status legado
+   * vivem em `processos` e descem para o banco; a fase deduzida vive em
+   * `process_intelligence_current` e só pode ser avaliada depois do join.
    */
   async list(
     tenantId: string,
     { incluirArquivados = false }: { incluirArquivados?: boolean } = {},
   ): Promise<ProcessIntelligenceItem[]> {
     const client = supabase as any;
-    const [processes, intelligence] = await Promise.all([
-      client.from("processos").select("id, numero, cliente_nome, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false }),
-      client.from("process_intelligence_current").select("*").eq("tenant_id", tenantId),
+    // A metade do arquivamento que mora em `processos` desce para o banco:
+    // filtrar lá reduz o que precisa vir pela rede e, junto da paginação,
+    // impede que arquivado recém-movimentado ocupe a primeira página e
+    // empurre processo ativo para fora do resultado. A fase do tribunal
+    // mora em outra tabela e continua sendo aplicada depois do join.
+    const selecionarProcessos = (de: number, ate: number) => {
+      const base = client
+        .from("processos")
+        .select("id, numero, cliente_nome, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at")
+        .eq("tenant_id", tenantId);
+      return (incluirArquivados ? base : carteiraAtiva(base))
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(de, ate);
+    };
+
+    const [linhasProcessos, linhasInteligencia] = await Promise.all([
+      lerTudo(selecionarProcessos),
+      lerTudo((de, ate) =>
+        client
+          .from("process_intelligence_current")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("process_id", { ascending: true })
+          .range(de, ate)),
     ]);
-    if (processes.error) throw processes.error;
-    if (intelligence.error) throw intelligence.error;
+    const processes = { data: linhasProcessos };
+    const intelligence = { data: linhasInteligencia };
     const byProcess = new Map<string, ProcessIntelligenceRecord>((intelligence.data ?? []).map((row: Row) => [String(row.process_id), mapRecord(row)]));
     const itens = (processes.data ?? []).map((row: Row) => ({
       id: String(row.id), number: String(row.numero ?? ""), clientName: row.cliente_nome as string | null,

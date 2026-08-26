@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, endOfMonth, format, startOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { carteiraAtiva } from "@/lib/carteira";
+import { VIEW_CARTEIRA_ATIVA } from "@/lib/carteira";
 import type { Database } from "@/integrations/supabase/types";
 import type {
   DashboardAttentionItem,
@@ -9,6 +9,19 @@ import type {
   DashboardProcess,
   OperationalDashboardData,
 } from "@/types/operational-dashboard";
+
+/**
+ * Consulta a view da carteira ativa.
+ *
+ * A view é nova e ainda não entrou nos tipos gerados do Supabase, então a
+ * chamada precisa de uma asserção. Ela fica aqui, uma vez, em vez de
+ * espalhada por cada consulta do painel.
+ */
+function daCarteiraAtiva() {
+  return (supabase as unknown as {
+    from: (tabela: string) => ReturnType<typeof supabase.from>;
+  }).from(VIEW_CARTEIRA_ATIVA);
+}
 
 type Tables = Database["public"]["Tables"];
 type TaskRow = Tables["tarefas"]["Row"];
@@ -242,9 +255,9 @@ export async function loadOperationalDashboard(
     legalMonitoringSummaryResult,
     publicationsResult,
   ] = await Promise.all([
-    carteiraAtiva(supabase.from("processos").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId)),
-    carteiraAtiva(supabase.from("processos").select("area").eq("tenant_id", tenantId)).limit(1000),
-    carteiraAtiva(supabase.from("processos").select("id, numero, cliente_nome, area, status, updated_at, ultimo_andamento").eq("tenant_id", tenantId)).order("updated_at", { ascending: false }).limit(6),
+    daCarteiraAtiva().select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    daCarteiraAtiva().select("area").eq("tenant_id", tenantId).limit(1000),
+    daCarteiraAtiva().select("id, numero, cliente_nome, area, status, updated_at, ultimo_andamento").eq("tenant_id", tenantId).order("updated_at", { ascending: false }).limit(6),
     supabase.from("clientes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
     supabase.from("documentos").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "novo"),

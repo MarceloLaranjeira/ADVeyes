@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   apenasCarteiraAtiva,
   carteiraAtiva,
+  FILTRO_CARTEIRA_ATIVA,
   estaArquivado,
   situacaoNaCarteira,
 } from "@/lib/carteira";
@@ -84,50 +85,50 @@ describe("apenasCarteiraAtiva", () => {
 });
 
 describe("carteiraAtiva", () => {
+  /** Captura o predicado único que a função manda ao banco. */
+  function filtroEnviado() {
+    const filtros: string[] = [];
+    const query = {
+      or: (filtro: string) => {
+        filtros.push(filtro);
+        return query;
+      },
+    };
+    carteiraAtiva(query);
+    expect(filtros).toHaveLength(1);
+    return filtros[0];
+  }
+
+  it("manda um predicado só, com o status aninhado sob o override nulo", () => {
+    // Duas cláusulas separadas seriam unidas por AND, e aí o processo legado
+    // gravado como "Arquivado" que o advogado reativou continuaria fora de
+    // toda consulta — o botão "Reativar na carteira" não teria efeito. O
+    // status legado só pode ser consultado quando não há decisão manual.
+    expect(filtroEnviado()).toBe(
+      "arquivado_manual.eq.false," +
+        "and(arquivado_manual.is.null,status.not.ilike.Arquivado)",
+    );
+  });
+
+  it("deixa o desarquivamento explícito vencer o status legado", () => {
+    // A primeira alternativa do OR não menciona status: quem tem
+    // `arquivado_manual = false` entra independentemente do que esteja
+    // gravado ali.
+    const [reativado] = filtroEnviado().split(",and(");
+    expect(reativado).toBe("arquivado_manual.eq.false");
+  });
+
   it("filtra sem depender da caixa gravada no banco", () => {
     // `situacaoNaCarteira` normaliza caixa antes de comparar. Se o filtro que
     // vai ao banco fosse sensível a caixa, a linha gravada como "arquivado"
     // passaria pela consulta e seria considerada arquivada pelo código — as
     // duas metades da mesma regra discordando.
-    const chamadas: Array<[string, string, string]> = [];
-    const filtrosOr: string[] = [];
-    const query = {
-      not: (coluna: string, operador: string, valor: string) => {
-        chamadas.push([coluna, operador, valor]);
-        return query;
-      },
-      or: (filtro: string) => {
-        filtrosOr.push(filtro);
-        return query;
-      },
-    };
-
-    carteiraAtiva(query);
-
-    expect(chamadas).toEqual([["status", "ilike", "Arquivado"]]);
-    expect(filtrosOr).toEqual([
-      "arquivado_manual.is.null,arquivado_manual.eq.false",
-    ]);
+    expect(filtroEnviado()).toContain("status.not.ilike.");
+    expect(filtroEnviado()).not.toContain("status.neq.");
   });
 
-  it("o override manual entra no filtro que vai ao banco", () => {
-    // Sem esta cláusula, o processo que o advogado arquivou explicitamente
-    // continuaria nos contadores, e o que ele desarquivou seria escondido
-    // pela fase do tribunal — a precedência acordada valeria só no código,
-    // não na consulta.
-    const filtrosOr: string[] = [];
-    const query = {
-      not: () => query,
-      or: (filtro: string) => {
-        filtrosOr.push(filtro);
-        return query;
-      },
-    };
-
-    carteiraAtiva(query);
-
-    expect(filtrosOr[0]).toContain("arquivado_manual.is.null");
-    expect(filtrosOr[0]).toContain("arquivado_manual.eq.false");
+  it("mantém o predicado e a constante exportada em sincronia", () => {
+    expect(filtroEnviado()).toBe(FILTRO_CARTEIRA_ATIVA);
   });
 });
 
