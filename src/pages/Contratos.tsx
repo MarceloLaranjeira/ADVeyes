@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtiva } from "@/lib/carteira";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,7 +134,7 @@ const Contratos = () => {
     const [tRes, dRes, pRes, cRes] = await Promise.all([
       (supabase.from as any)("contratos_templates").select("*").order("uso_count", { ascending: false }),
       (supabase.from as any)("documentos_gerados").select("*, contratos_templates(titulo), clientes(nome), processos(numero)").order("created_at", { ascending: false }).limit(20),
-      supabase.from("processos").select("id, numero").order("created_at", { ascending: false }),
+      carteiraAtiva(supabase.from("processos").select("id, numero")).order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
     if (tRes.data) setTemplates(tRes.data);

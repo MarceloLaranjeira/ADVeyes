@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtiva } from "@/lib/carteira";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,7 +61,7 @@ const Audiencias = () => {
   const fetchData = async () => {
     const [{ data: aud }, { data: proc }] = await Promise.all([
       supabase.from("audiencias").select("*").order("data_hora", { ascending: true }),
-      supabase.from("processos").select("id, numero, cliente_nome"),
+      carteiraAtiva(supabase.from("processos").select("id, numero, cliente_nome")),
     ]);
     if (aud) setAudiencias(aud);
     if (proc) setProcessos(proc);
