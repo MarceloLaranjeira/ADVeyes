@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtiva } from "@/lib/carteira";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,7 @@ const TimeTracking = () => {
   const fetchData = async () => {
     const [entriesRes, processosRes, clientesRes] = await Promise.all([
       (supabase.from as any)("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
-      supabase.from("processos").select("id, numero, descricao").order("created_at", { ascending: false }),
+      carteiraAtiva(supabase.from("processos").select("id, numero, descricao")).order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
     if (entriesRes.data) setEntries(entriesRes.data);
@@ -56,6 +57,35 @@ const TimeTracking = () => {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Duas listas de processo, porque as duas caixas de seleção fazem
+  // perguntas diferentes.
+  //
+  // A do formulário pergunta "em qual processo estou lançando horas agora?",
+  // e aí processo arquivado não deve aparecer — lançar hora nova em processo
+  // encerrado é quase sempre engano.
+  //
+  // A do filtro do relatório pergunta "de qual processo quero ver as horas
+  // que já foram lançadas?". Restringi-la à carteira ativa esconderia horas
+  // que existem e continuam faturáveis: o arquivamento é do processo, não do
+  // histórico. Por isso ela soma à carteira ativa todo processo que já
+  // aparece em algum lançamento.
+  const processosDoFiltro = useMemo(() => {
+    const porId = new Map<string, Record<string, any>>(
+      processos.map((p) => [String(p.id), p]),
+    );
+    for (const entry of entries) {
+      const id = entry.processo_id ? String(entry.processo_id) : null;
+      if (!id || porId.has(id)) continue;
+      porId.set(id, {
+        id,
+        numero: entry.processos?.numero ?? "Processo arquivado",
+        descricao: entry.processos?.descricao ?? null,
+        arquivado: true,
+      });
+    }
+    return [...porId.values()];
+  }, [processos, entries]);
 
   // Timer
   useEffect(() => {
@@ -224,8 +254,11 @@ const TimeTracking = () => {
             <SelectTrigger className="w-[220px]"><SelectValue placeholder="Todos os processos" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os processos</SelectItem>
-              {processos.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.numero} {p.descricao ? `— ${p.descricao.slice(0, 30)}` : ""}</SelectItem>
+              {processosDoFiltro.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.numero} {p.descricao ? `— ${p.descricao.slice(0, 30)}` : ""}
+                  {p.arquivado ? " (arquivado)" : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
