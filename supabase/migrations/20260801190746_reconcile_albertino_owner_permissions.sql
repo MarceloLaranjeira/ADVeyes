@@ -10,10 +10,19 @@ declare
   albertino_tenant_id uuid;
   affected integer;
 begin
+  -- Reparo de dados de um escritorio especifico: em ambiente novo (dev, CI,
+  -- reconstrucao do zero) o tenant nao existe e nao ha nada a reconciliar.
+  -- Com `into strict` a migration derrubava a cadeia inteira nesses casos.
+  -- Onde o tenant existe, a checagem das tres identidades continua valendo.
   select tenant.id
-  into strict albertino_tenant_id
+  into albertino_tenant_id
   from public.tenants tenant
   where tenant.slug = 'albertino';
+
+  if albertino_tenant_id is null then
+    raise notice 'Tenant albertino ausente: reconciliacao ignorada.';
+    return;
+  end if;
 
   update public.tenant_memberships membership
   set

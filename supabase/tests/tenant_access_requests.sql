@@ -83,8 +83,13 @@ values
   ('00000000-0000-4000-8000-0000000000a3', 'pede@example.com'),
   ('00000000-0000-4000-8000-0000000000a4', 'outro@example.com');
 
-insert into public.tenants (id, display_name, slug)
-values ('00000000-0000-4000-8000-0000000000b1', 'Escritorio Teste', 'escritorio-teste');
+insert into public.tenants (id, legal_name, display_name, slug)
+values (
+  '00000000-0000-4000-8000-0000000000b1',
+  'Escritorio Teste LTDA',
+  'Escritorio Teste',
+  'escritorio-teste'
+);
 
 insert into public.tenant_memberships (tenant_id, user_id, role, status, activated_at)
 values

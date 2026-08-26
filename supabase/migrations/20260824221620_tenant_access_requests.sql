@@ -770,28 +770,6 @@ begin
     raise exception using errcode = '42501', message = 'forbidden_override';
   end if;
 
-  insert into public.equipe (
-    tenant_id, user_id, nome, email, telefone, cargo, oab, ativo
-  ) values (
-    p_tenant_id,
-    request.user_id,
-    request.name,
-    request.email,
-    request.phone,
-    'advogado',
-    request.oab,
-    true
-  )
-  on conflict (tenant_id, lower(email))
-    where email is not null and btrim(email) <> ''
-  do update set
-    nome = excluded.nome,
-    telefone = coalesce(excluded.telefone, public.equipe.telefone),
-    oab = coalesce(excluded.oab, public.equipe.oab),
-    ativo = true,
-    updated_at = now()
-  returning id into professional_id;
-
   select membership.permission_overrides
   into previous_overrides
   from public.tenant_memberships membership
@@ -831,6 +809,32 @@ begin
     removed_at = null,
     updated_at = now()
   returning id into target_membership_id;
+
+  -- O trigger multitenant de equipe exige que o usuario já seja membro ativo
+  -- do tenant. Por isso a membership precisa existir antes do perfil
+  -- profissional; a transacao continua atomica e qualquer falha posterior
+  -- desfaz ambas as operacoes.
+  insert into public.equipe (
+    tenant_id, user_id, nome, email, telefone, cargo, oab, ativo
+  ) values (
+    p_tenant_id,
+    request.user_id,
+    request.name,
+    request.email,
+    request.phone,
+    'advogado',
+    request.oab,
+    true
+  )
+  on conflict (tenant_id, lower(email))
+    where email is not null and btrim(email) <> ''
+  do update set
+    nome = excluded.nome,
+    telefone = coalesce(excluded.telefone, public.equipe.telefone),
+    oab = coalesce(excluded.oab, public.equipe.oab),
+    ativo = true,
+    updated_at = now()
+  returning id into professional_id;
 
   update public.equipe
   set membership_id = target_membership_id, ativo = true, updated_at = now()
