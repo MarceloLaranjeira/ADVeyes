@@ -70,17 +70,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: () => ({
       select: () => ({
-        // `not` entrou na cadeia quando a listagem passou a excluir
-        // processo arquivado por padrão (`carteiraAtiva`). O duplo precisa
-        // aceitar a chamada e devolver a mesma forma, senão o teste falha
-        // por falta do método, não por comportamento.
-        eq: () => {
-          const elo = {
-            not: () => elo,
-            order: () => Promise.resolve({ data: [], error: null }),
-          };
-          return elo;
-        },
+        eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
       }),
     }),
   },

@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
-import { carteiraAtiva } from "@/lib/carteira";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { exportRelatorioGeralPDF } from "@/lib/pdf-export";
@@ -28,7 +27,7 @@ const Relatorios = () => {
 
   useEffect(() => {
     Promise.all([
-      carteiraAtiva(supabase.from("processos").select("*")),
+      supabase.from("processos").select("*"),
       supabase.from("clientes").select("*"),
       supabase.from("financeiro").select("*"),
       supabase.from("documentos").select("*"),

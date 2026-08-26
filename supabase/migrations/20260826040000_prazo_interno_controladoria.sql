@@ -123,16 +123,4 @@ grant insert, update (antecedencia_dias_uteis, updated_at)
   on table public.controladoria_settings to authenticated;
 grant all privileges on table public.controladoria_settings to service_role;
 
--- Canoniza o status de arquivamento.
---
--- `situacaoNaCarteira` normaliza caixa e espaco antes de comparar, mas o
--- filtro que vai ao banco compara texto. Sem canonizar, uma linha gravada
--- como "arquivado" ou " Arquivado " passa pelo filtro SQL e e considerada
--- arquivada pelo codigo — as duas metades da mesma regra discordando.
-update public.processos
-set status = 'Arquivado'
-where status is not null
-  and lower(btrim(status)) = 'arquivado'
-  and status <> 'Arquivado';
-
 commit;
