@@ -307,6 +307,34 @@ Deno.serve(async (request) => {
   }
   alertas.push(...alertasDoResolver);
 
+  // A tabela de atos que deduz a QUANTIDADE de dias e inteiramente civel:
+  // apelacao 15 dias pelo CPC, art. 1.003, §5. No processo penal a apelacao
+  // tem cinco dias (CPP, art. 593) e os demais atos tem prazos proprios.
+  //
+  // O resolver de ramo so decide COMO contar, nao QUANTOS dias sao. Entao
+  // uma publicacao criminal que mencione apelacao sem dizer o prazo recebia
+  // 15 dias com aparencia de deducao fundamentada, e a data fatal saia dez
+  // dias depois da devida.
+  //
+  // Nao invento aqui a tabela penal: numero errado com cara de fundamentado
+  // e pior do que numero ausente. O que cabe e dizer, sem rodeios, que a
+  // deducao nao se aplica a este processo e que os dias precisam vir do
+  // advogado.
+  if (
+    leitura.confianca === "inferido" &&
+    regra.fonte !== "cpc" &&
+    regra.fonte !== "padrao" &&
+    !usouOverride
+  ) {
+    alertas.push(
+      `O prazo de ${dias} dias nao estava escrito na publicacao: foi ` +
+        `deduzido do ato "${leitura.ato}" pela regra do processo civil. ` +
+        "Este processo nao corre pelo CPC, e o mesmo ato costuma ter prazo " +
+        "diferente no rito aplicavel. Informe os dias corretos antes de " +
+        "confirmar — a data proposta nao serve como prazo fatal.",
+    );
+  }
+
   return json({
     proposta: {
       numeroProcesso,

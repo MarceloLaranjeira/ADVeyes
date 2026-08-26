@@ -87,24 +87,38 @@ create policy controladoria_settings_tenant_read
   using (private.has_tenant_permission(tenant_id, 'legal', 'read'));
 
 -- Alterar a antecedência é decisão de quem administra o escritório.
--- A acao e 'update', nao 'write'.
+-- Configurar a antecedencia e decisao de quem administra o escritorio.
 --
--- `private.has_tenant_permission` valida o par (modulo, acao) contra uma
--- matriz fechada e devolve false para qualquer par desconhecido. A matriz
--- reconhece read/create/update/delete no modulo legal — 'write' nao existe
--- nela, entao a politica negaria a todos e ninguem conseguiria configurar a
--- antecedencia, apesar dos grants da tabela.
+-- Duas tentativas anteriores estavam erradas por motivos opostos:
+--
+--   'legal'/'write' negava a todos — a matriz de permissoes valida o par
+--   (modulo, acao) contra uma lista fechada e devolve false para par
+--   desconhecido, e 'write' nao existe nela.
+--
+--   'legal'/'update' liberava demais — essa acao pertence a owner, admin,
+--   lawyer E assistant. Um assistente poderia mudar a antecedencia de todo
+--   o escritorio, contrariando o que este proprio arquivo afirma.
+--
+-- O modulo legal nao tem acao restrita a administracao, entao a checagem e
+-- por papel. Isso ignora as excecoes por pessoa, o que aqui e desejado: nao
+-- e permissao sobre dado juridico, e sim sobre parametro operacional do
+-- escritorio inteiro.
 drop policy if exists controladoria_settings_tenant_write
   on public.controladoria_settings;
 create policy controladoria_settings_tenant_write
   on public.controladoria_settings
   for all to authenticated
-  using (private.has_tenant_permission(tenant_id, 'legal', 'update'))
-  with check (private.has_tenant_permission(tenant_id, 'legal', 'update'));
+  using (
+    private.tenant_role(auth.uid(), tenant_id) in ('owner', 'admin')
+  )
+  with check (
+    private.tenant_role(auth.uid(), tenant_id) in ('owner', 'admin')
+  );
 
 revoke all privileges on table public.controladoria_settings
   from public, anon, authenticated;
 grant select on table public.controladoria_settings to authenticated;
+-- O grant abre a porta; a policy acima e quem decide quem passa.
 grant insert, update (antecedencia_dias_uteis, updated_at)
   on table public.controladoria_settings to authenticated;
 grant all privileges on table public.controladoria_settings to service_role;
