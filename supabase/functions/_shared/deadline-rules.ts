@@ -92,6 +92,33 @@ function normalize(value: string | null | undefined): string {
 }
 
 /** Junta os campos que podem revelar o juízo, para uma varredura só. */
+/**
+ * Valores que ocupam o campo sem dizer nada.
+ *
+ * `confirm_legal_process_candidate` grava `'A definir'` como área ao
+ * importar processo automaticamente — que é como a maior parte da carteira
+ * entra no sistema. Tratar isso como ramo identificado devolvia CPC com
+ * confiança alta e sem aviso: um processo criminal cuja vara não contenha a
+ * palavra "criminal" sairia em dias úteis, sem nada sinalizando que o ramo
+ * nunca foi conferido.
+ */
+const AREAS_VAZIAS = [
+  "a definir",
+  "a identificar",
+  "nao definido",
+  "nao informado",
+  "indefinido",
+  "outro",
+  "outros",
+  "-",
+  "--",
+  "n/a",
+];
+
+function areaIdentificada(area: string): boolean {
+  return area.length > 0 && !AREAS_VAZIAS.includes(area);
+}
+
 function juizoText(input: ProcessRuleInput): string {
   return [input.vara, input.adjudicatingBody, input.tribunal]
     .map(normalize)
@@ -254,7 +281,7 @@ export function resolverRegraContagem(
   }
 
   // Cível e demais ramos identificados.
-  if (area) {
+  if (areaIdentificada(area)) {
     return {
       modo: "uteis",
       fonte: "cpc",

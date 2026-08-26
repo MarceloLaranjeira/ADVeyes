@@ -201,10 +201,14 @@ const WARNING_RULES: WarningRule[] = [
       "físicos, o prazo é em dobro (CPC, art. 229).",
   },
   {
+    // Este aviso afirmava "contam-se em dias corridos" como fato. O
+    // resolver de ramo calcula o Juizado em dias úteis, então os dois
+    // chegavam juntos ao cartão dizendo o oposto um do outro sobre a mesma
+    // data. A controvérsia é real; a certeza é que não era.
     pattern: /(juizado especial|lei 9.?099)/,
     message:
-      "Juizado Especial: os prazos seguem a Lei 9.099/95 e contam-se em " +
-      "dias corridos. Confira o rito.",
+      "Juizado Especial: a contagem no rito da Lei 9.099/95 é " +
+      "controvertida. Confira o rito antes de usar a data como prazo fatal.",
   },
   {
     pattern: /intimac.{0,20}pessoal/,

@@ -120,6 +120,33 @@ describe("resolverRegraContagem", () => {
     expect(resolverRegraContagem({ area: "execucao penal" }).fonte).toBe("cpp");
   });
 
+  it("trata 'A definir' como ramo não identificado", () => {
+    // `confirm_legal_process_candidate` grava esse valor ao importar
+    // processo automaticamente. Tratá-lo como ramo identificado devolvia
+    // CPC com confiança alta e sem aviso — um processo criminal cuja vara
+    // não diga "criminal" sairia em dias úteis sem nada sinalizando.
+    const regra = resolverRegraContagem({ area: "A definir" });
+    expect(regra.fonte).toBe("padrao");
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toBeTruthy();
+  });
+
+  it("outros preenchimentos vazios também caem no padrão avisado", () => {
+    for (const area of ["a identificar", "Não informado", "Outro", "-"]) {
+      const regra = resolverRegraContagem({ area });
+      expect(regra.confianca).toBe("baixa");
+    }
+  });
+
+  it("o placeholder não impede a detecção pelo juízo", () => {
+    // Área vazia mas vara criminal: o ramo ainda é identificável.
+    const regra = resolverRegraContagem({
+      area: "A definir",
+      vara: "2ª Vara Criminal",
+    });
+    expect(regra.fonte).toBe("cpp");
+  });
+
   it("sem ramo identificado, avisa que o padrão foi palpite", () => {
     const regra = resolverRegraContagem({});
     expect(regra.modo).toBe("uteis");
