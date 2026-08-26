@@ -23,6 +23,16 @@ export type DeadlineConfidence = "explicito" | "inferido" | "residual";
 export interface ExtractedDeadline {
   dias: number;
   diasCorridos: boolean;
+  /**
+   * O qualificador que o ato usou, quando usou algum.
+   *
+   * `diasCorridos` sozinho nao distingue "5 dias uteis" escrito com todas as
+   * letras de "5 dias" sem qualificador — os dois viram `false`. A diferenca
+   * importa: num processo criminal a regra do ramo impoe dias corridos, mas
+   * se o juiz escreveu "uteis" e o sistema contar corrido, a data fatal sai
+   * diferente da que foi expressamente determinada.
+   */
+  qualificadorExplicito: "uteis" | "corridos" | null;
   confianca: DeadlineConfidence;
   /** Ato processual reconhecido, quando houver. */
   ato: string | null;
@@ -265,6 +275,11 @@ export function extractDeadline(content: string): ExtractedDeadline {
       return {
         dias,
         diasCorridos: qualificador === "corridos",
+        qualificadorExplicito: qualificador === "corridos"
+          ? "corridos"
+          : qualificador === "uteis"
+            ? "uteis"
+            : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
         fundamento: qualificador === "corridos"
@@ -281,9 +296,15 @@ export function extractDeadline(content: string): ExtractedDeadline {
   if (wordMatch) {
     const dias = NUMERAIS[wordMatch[1]];
     if (dias !== undefined) {
+      const qualificadorPorExtenso = wordMatch[2]?.trim();
       return {
         dias,
-        diasCorridos: wordMatch[2]?.trim() === "corridos",
+        diasCorridos: qualificadorPorExtenso === "corridos",
+        qualificadorExplicito: qualificadorPorExtenso === "corridos"
+          ? "corridos"
+          : qualificadorPorExtenso === "uteis"
+            ? "uteis"
+            : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
         fundamento:
@@ -299,6 +320,7 @@ export function extractDeadline(content: string): ExtractedDeadline {
     return {
       dias: act.dias,
       diasCorridos: false,
+      qualificadorExplicito: null,
       confianca: "inferido",
       ato: act.ato,
       fundamento: act.fundamento,
@@ -314,6 +336,7 @@ export function extractDeadline(content: string): ExtractedDeadline {
   return {
     dias: 5,
     diasCorridos: false,
+    qualificadorExplicito: null,
     confianca: "residual",
     ato: null,
     fundamento: "CPC, art. 218, §3º — cinco dias quando a lei é omissa.",

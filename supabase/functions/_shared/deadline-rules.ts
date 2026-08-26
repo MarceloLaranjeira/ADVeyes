@@ -245,13 +245,24 @@ export function resolverRegraContagem(
 /**
  * Ponte para o motor, que fala em `diasCorridos`.
  *
- * A leitura da publicação continua tendo a palavra final: quando o texto diz
- * "dias corridos" com todas as letras, isso vale sobre a dedução por ramo —
- * o que está escrito no ato é mais forte do que o que se infere do cadastro.
+ * A leitura da publicação tem a palavra final, nos dois sentidos. Um booleano
+ * sozinho não dava conta disso: "5 dias úteis" escrito com todas as letras e
+ * "5 dias" sem qualificador chegavam aqui os dois como `false`, e a regra do
+ * ramo passava por cima dos dois igualmente.
+ *
+ * O caso que isso quebrava é real: num processo criminal em que o juiz
+ * determinou "prazo de 5 dias úteis", o CPP diria corridos, mas o que foi
+ * expressamente ordenado são dias úteis — e a data fatal calculada saía
+ * diferente da devida.
+ *
+ * Por isso a ponte recebe o qualificador, e não o booleano. Quando o ato se
+ * pronunciou, ele decide. Quando calou, decide o ramo.
  */
 export function aplicarRegraAoMotor(
   regra: CountingRule,
-  leituraDiasCorridos: boolean,
+  qualificadorDaPublicacao: "uteis" | "corridos" | null,
 ): boolean {
-  return leituraDiasCorridos || regra.modo === "corridos";
+  if (qualificadorDaPublicacao === "corridos") return true;
+  if (qualificadorDaPublicacao === "uteis") return false;
+  return regra.modo === "corridos";
 }

@@ -3,6 +3,7 @@ import {
   aplicarRegraAoMotor,
   resolverRegraContagem,
 } from "../../supabase/functions/_shared/deadline-rules.ts";
+import { extractDeadline } from "../../supabase/functions/_shared/deadline-extraction.ts";
 
 describe("resolverRegraContagem", () => {
   it("conta prazo criminal em dias corridos pelo art. 798 do CPP", () => {
@@ -88,19 +89,53 @@ describe("resolverRegraContagem", () => {
 });
 
 describe("aplicarRegraAoMotor", () => {
-  it("o texto da publicação vence a dedução por ramo", () => {
-    const civel = resolverRegraContagem({ area: "Cível" });
-    // A publicação disse "dias corridos" com todas as letras.
-    expect(aplicarRegraAoMotor(civel, true)).toBe(true);
+  const civel = resolverRegraContagem({ area: "Cível" });
+  const penal = resolverRegraContagem({ area: "Penal" });
+
+  it('"dias corridos" no ato vence a dedução por ramo', () => {
+    expect(aplicarRegraAoMotor(civel, "corridos")).toBe(true);
   });
 
-  it("o ramo penal impõe dias corridos sem o texto pedir", () => {
+  it('"dias úteis" no ato vence a regra do penal', () => {
+    // O caso que o booleano sozinho não distinguia: num processo criminal
+    // com "prazo de 5 dias úteis" determinado pelo juiz, o CPP diria
+    // corridos, mas o que foi expressamente ordenado são dias úteis.
+    expect(aplicarRegraAoMotor(penal, "uteis")).toBe(false);
+  });
+
+  it("o ramo penal impõe dias corridos quando o ato cala", () => {
+    expect(aplicarRegraAoMotor(penal, null)).toBe(true);
+  });
+
+  it("cível sem qualificador no ato segue em dias úteis", () => {
+    expect(aplicarRegraAoMotor(civel, null)).toBe(false);
+  });
+});
+
+describe("qualificador da publicação ponta a ponta", () => {
+  it('lê "dias úteis" do ato e impede que o penal vire dias corridos', () => {
+    const leitura = extractDeadline(
+      "Fica o réu intimado para manifestar-se no prazo de 5 dias úteis.",
+    );
+    expect(leitura.qualificadorExplicito).toBe("uteis");
+
     const penal = resolverRegraContagem({ area: "Penal" });
-    expect(aplicarRegraAoMotor(penal, false)).toBe(true);
+    expect(aplicarRegraAoMotor(penal, leitura.qualificadorExplicito))
+      .toBe(false);
   });
 
-  it("cível sem menção no texto segue em dias úteis", () => {
-    const civel = resolverRegraContagem({ area: "Cível" });
-    expect(aplicarRegraAoMotor(civel, false)).toBe(false);
+  it('lê "dias corridos" do ato', () => {
+    const leitura = extractDeadline("Manifeste-se no prazo de 10 dias corridos.");
+    expect(leitura.qualificadorExplicito).toBe("corridos");
+  });
+
+  it("distingue ausência de qualificador de qualificador útil", () => {
+    const leitura = extractDeadline("Manifeste-se no prazo de 15 dias.");
+    expect(leitura.qualificadorExplicito).toBeNull();
+    expect(leitura.diasCorridos).toBe(false);
+
+    // Sem qualificador, o ramo decide — e no penal isso significa corridos.
+    const penal = resolverRegraContagem({ area: "Penal" });
+    expect(aplicarRegraAoMotor(penal, leitura.qualificadorExplicito)).toBe(true);
   });
 });

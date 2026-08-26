@@ -30,6 +30,7 @@ function build(overrides: Partial<PropostaPrazo> = {}): PropostaPrazo {
     alertas: [],
     calendario: {
       tribunal: "TJAM",
+      feriados: [],
       feriadosDoTribunal: 2,
       cobertura: "tribunal",
     },
@@ -150,6 +151,7 @@ describe("PropostaPrazoCard", () => {
         proposta={build({
           calendario: {
             tribunal: "TJAM",
+            feriados: [],
             feriadosDoTribunal: 0,
             cobertura: "nacional",
           },

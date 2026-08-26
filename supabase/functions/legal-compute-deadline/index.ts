@@ -175,7 +175,7 @@ Deno.serve(async (request) => {
   // O advogado tem a palavra final; depois dele, o que está escrito no ato;
   // por último, a dedução pelo ramo.
   const diasCorridos = body.override?.diasCorridos ??
-    aplicarRegraAoMotor(regra, leitura.diasCorridos);
+    aplicarRegraAoMotor(regra, leitura.qualificadorExplicito);
 
   /* ---------------------------------------------------------------- */
   /* Calendário do tribunal                                            */
@@ -294,6 +294,10 @@ Deno.serve(async (request) => {
       alertas,
       calendario: {
         tribunal,
+        // O cliente refaz a contagem regressiva a cada render, entao precisa
+        // do mesmo calendario que o servidor usou. Sem isto o cartao anuncia
+        // dia util em data que aquele forum nao abre.
+        feriados: extraHolidays,
         feriadosDoTribunal,
         cobertura: feriadosDoTribunal > 0 ? "tribunal" : "nacional",
       },

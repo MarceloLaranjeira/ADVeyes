@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  diasUteisAteVencimento,
+  situacaoDoPrazo,
   pesoDaConfianca,
   type PropostaPrazo,
 } from "@/services/deadline";
@@ -35,21 +35,45 @@ function formatarData(iso: string): string {
  * fundamentação. Vencido e "vence hoje" são estados diferentes e a interface
  * não pode empatar os dois.
  */
-function urgencia(dias: number): { texto: string; classe: string } {
-  if (dias < 0) {
+function urgencia(
+  situacao: ReturnType<typeof situacaoDoPrazo>,
+): { texto: string; classe: string } {
+  if (situacao.estado === "vence_hoje") {
+    return { texto: "Vence hoje", classe: "text-destructive" };
+  }
+
+  const { diasUteis } = situacao;
+  const plural = diasUteis === 1 ? "dia útil" : "dias úteis";
+
+  if (situacao.estado === "vencido") {
+    // Vencido sem dia útil no meio acontece no fim de semana e no recesso: o
+    // prazo já passou, mas o forum nao abriu desde entao.
     return {
-      texto: `Vencido há ${Math.abs(dias)} ${Math.abs(dias) === 1 ? "dia" : "dias"}`,
+      texto: diasUteis === 0
+        ? "Vencido"
+        : `Vencido há ${diasUteis} ${plural}`,
       classe: "text-destructive",
     };
   }
-  if (dias === 0) return { texto: "Vence hoje", classe: "text-destructive" };
-  if (dias <= 3) {
-    return { texto: `Faltam ${dias} dias`, classe: "text-destructive" };
+
+  // A vencer sem nenhum dia util ate la: recesso forense pela frente. Dizer
+  // "faltam 0 dias" seria pior do que dizer o que de fato acontece.
+  if (diasUteis === 0) {
+    return {
+      texto: "Sem dia útil até o vencimento",
+      classe: "text-destructive",
+    };
   }
-  if (dias <= 7) {
-    return { texto: `Faltam ${dias} dias`, classe: "text-amber-600" };
+  if (diasUteis <= 3) {
+    return { texto: `Faltam ${diasUteis} ${plural}`, classe: "text-destructive" };
   }
-  return { texto: `Faltam ${dias} dias`, classe: "text-muted-foreground" };
+  if (diasUteis <= 7) {
+    return { texto: `Faltam ${diasUteis} ${plural}`, classe: "text-amber-600" };
+  }
+  return {
+    texto: `Faltam ${diasUteis} ${plural}`,
+    classe: "text-muted-foreground",
+  };
 }
 
 /** Uma etapa da cadeia do art. 224. */
@@ -78,8 +102,14 @@ export function PropostaPrazoCard({
   onConfirmar,
   onAjustar,
 }: Props) {
-  const restantes = diasUteisAteVencimento(proposta.vencimento);
-  const { texto: textoUrgencia, classe: classeUrgencia } = urgencia(restantes);
+  // O calendario do tribunal veio junto com a proposta; usa-lo aqui e o que
+  // impede o cartao de contar dia em que aquele forum nao abre.
+  const situacao = situacaoDoPrazo(
+    proposta.vencimento,
+    new Date(),
+    proposta.calendario.feriados,
+  );
+  const { texto: textoUrgencia, classe: classeUrgencia } = urgencia(situacao);
   const confianca = pesoDaConfianca(proposta.confianca);
   const temAlertas = proposta.alertas.length > 0;
 

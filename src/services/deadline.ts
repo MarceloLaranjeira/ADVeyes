@@ -63,6 +63,12 @@ export interface PropostaPrazo {
   alertas: string[];
   calendario: {
     tribunal: string | null;
+    /**
+     * Feriados que o servidor aplicou — nacionais, do tribunal, do escritório.
+     * Vêm na resposta para que a contagem regressiva do cartão use exatamente
+     * o mesmo calendário do cálculo.
+     */
+    feriados: HolidayInput[];
     feriadosDoTribunal: number;
     cobertura: "tribunal" | "nacional";
   };
@@ -154,33 +160,46 @@ export function pesoDaConfianca(
 }
 
 /**
- * Quantos dias ÚTEIS faltam até o vencimento. Negativo indica prazo vencido.
+ * Situação do prazo em relação a hoje.
  *
- * Contar em dias corridos aqui era mentira confortável: no dia 21 de
- * dezembro, um prazo que vence em 10 de janeiro aparecia como "faltam 20
- * dias", quando na verdade o fórum está em recesso e não há um único dia
- * útil no meio. O advogado que confiasse no número perderia o prazo lendo
- * uma tela que dizia haver folga.
+ * Um número só não dá conta disto, e a tentativa anterior tinha uma armadilha
+ * silenciosa: quando o vencimento caía numa sexta e hoje era sábado, não havia
+ * nenhum dia útil no intervalo, então a contagem devolvia `-0`. Em JavaScript
+ * `-0 < 0` é falso e `-0 === 0` é verdadeiro, então o cartão anunciava "Vence
+ * hoje" para um prazo que já tinha vencido.
  *
- * Usa o mesmo calendário do cálculo — fins de semana, feriados nacionais e
- * o recesso do art. 220. Feriados de tribunal entram por `feriados`, vindos
- * de `forensic_holidays`; sem eles a conta continua correta para o resto e
- * apenas otimista nos dias em que aquele tribunal específico não abre.
+ * O mesmo zero ambíguo aparecia do outro lado: em 21/12, um prazo que vence em
+ * 11/01 tem zero dias úteis no meio por causa do recesso — e virava "Vence
+ * hoje" para uma data a três semanas de distância.
  *
- * O dia de hoje não conta: vencimento hoje devolve zero, e é isso que a
- * interface traduz como "vence hoje".
+ * A direção agora vem da data do calendário, e a magnitude vem dos dias úteis.
+ * São perguntas diferentes e param de se confundir.
  */
-export function diasUteisAteVencimento(
+export type SituacaoPrazo =
+  | { estado: "vence_hoje" }
+  | { estado: "a_vencer"; diasUteis: number }
+  | { estado: "vencido"; diasUteis: number };
+
+/**
+ * Calcula a situação pelo mesmo calendário do prazo: fins de semana, feriados
+ * nacionais e o recesso do art. 220.
+ *
+ * `feriados` recebe o calendário do tribunal devolvido junto com a proposta.
+ * Sem ele a conta continua certa para o resto e apenas otimista nos dias em
+ * que aquele tribunal específico não abre — por isso quem tiver a lista deve
+ * passá-la.
+ */
+export function situacaoDoPrazo(
   vencimento: string,
   hoje = new Date(),
   feriados: HolidayInput[] = [],
-): number {
+): SituacaoPrazo {
   const alvo = parseIsoDate(vencimento);
   const base = new Date(
     Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
   );
 
-  if (alvo.getTime() === base.getTime()) return 0;
+  if (alvo.getTime() === base.getTime()) return { estado: "vence_hoje" };
 
   const anos = [base.getUTCFullYear(), alvo.getUTCFullYear()];
   const calendario = buildCalendar(
@@ -192,14 +211,16 @@ export function diasUteisAteVencimento(
   const inicio = vencido ? alvo : base;
   const fim = vencido ? base : alvo;
 
-  // Conta os dias úteis no intervalo aberto à esquerda: o dia de partida
-  // não entra, o de chegada entra. É a mesma convenção do art. 224.
-  let uteis = 0;
+  // Intervalo aberto à esquerda: o dia de partida não entra, o de chegada
+  // entra. É a mesma convenção do art. 224.
+  let diasUteis = 0;
   let cursor = new Date(inicio.getTime() + 86_400_000);
   while (cursor.getTime() <= fim.getTime()) {
-    if (calendario.nonBusinessReason(cursor) === null) uteis += 1;
+    if (calendario.nonBusinessReason(cursor) === null) diasUteis += 1;
     cursor = new Date(cursor.getTime() + 86_400_000);
   }
 
-  return vencido ? -uteis : uteis;
+  return vencido
+    ? { estado: "vencido", diasUteis }
+    : { estado: "a_vencer", diasUteis };
 }
