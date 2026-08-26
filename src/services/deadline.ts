@@ -9,6 +9,11 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/async-timeout";
+import {
+  buildCalendar,
+  parseIsoDate,
+  type HolidayInput,
+} from "../../supabase/functions/_shared/forensic-calendar.ts";
 
 /** Quão firme é a leitura do prazo. Decide o peso visual na interface. */
 export type ConfiancaPrazo =
@@ -30,6 +35,11 @@ export interface PropostaPrazo {
   dias: number;
   diasCorridos: boolean;
   intimacaoPessoal: boolean;
+  /**
+   * Regime do CPP aplicado: termo inicial no dia seguinte ao ato, sem
+   * protração para dia útil. Só é verdadeiro quando o CPP de fato incide.
+   */
+  regimePenal: boolean;
   confianca: ConfiancaPrazo;
   /** Por que este número de dias foi aplicado. */
   fundamentoDoPrazo: string;
@@ -43,10 +53,29 @@ export interface PropostaPrazo {
   diasNaoUteis: DiaNaoUtil[];
   /** Artigos do CPC aplicados, na ordem em que incidiram. */
   fundamentos: string[];
+  /**
+   * A regra que de fato governou a contagem, e com que firmeza. Nem sempre
+   * é a do ramo: o qualificador escrito no ato vence, e a sobreposição do
+   * advogado vence os dois.
+   * `confianca: "baixa"` obriga a interface a pedir conferência — é o caso
+   * do Juizado Especial e do processo sem ramo identificado.
+   */
+  regraContagem: {
+    modo: "uteis" | "corridos";
+    fonte: "cpc" | "clt" | "cpp" | "jec" | "padrao" | "ato" | "manual";
+    confianca: "alta" | "baixa";
+    fundamento: string;
+  };
   /** Pontos que exigem conferência humana antes de confirmar. */
   alertas: string[];
   calendario: {
     tribunal: string | null;
+    /**
+     * Feriados que o servidor aplicou — nacionais, do tribunal, do escritório.
+     * Vêm na resposta para que a contagem regressiva do cartão use exatamente
+     * o mesmo calendário do cálculo.
+     */
+    feriados: HolidayInput[];
     feriadosDoTribunal: number;
     cobertura: "tribunal" | "nacional";
   };
@@ -137,14 +166,68 @@ export function pesoDaConfianca(
   }
 }
 
-/** Dias corridos entre hoje e o vencimento. Negativo indica prazo vencido. */
-export function diasAteVencimento(
+/**
+ * Situação do prazo em relação a hoje.
+ *
+ * Um número só não dá conta disto, e a tentativa anterior tinha uma armadilha
+ * silenciosa: quando o vencimento caía numa sexta e hoje era sábado, não havia
+ * nenhum dia útil no intervalo, então a contagem devolvia `-0`. Em JavaScript
+ * `-0 < 0` é falso e `-0 === 0` é verdadeiro, então o cartão anunciava "Vence
+ * hoje" para um prazo que já tinha vencido.
+ *
+ * O mesmo zero ambíguo aparecia do outro lado: em 21/12, um prazo que vence em
+ * 11/01 tem zero dias úteis no meio por causa do recesso — e virava "Vence
+ * hoje" para uma data a três semanas de distância.
+ *
+ * A direção agora vem da data do calendário, e a magnitude vem dos dias úteis.
+ * São perguntas diferentes e param de se confundir.
+ */
+export type SituacaoPrazo =
+  | { estado: "vence_hoje" }
+  | { estado: "a_vencer"; diasUteis: number }
+  | { estado: "vencido"; diasUteis: number };
+
+/**
+ * Calcula a situação pelo mesmo calendário do prazo: fins de semana, feriados
+ * nacionais e o recesso do art. 220.
+ *
+ * `feriados` recebe o calendário do tribunal devolvido junto com a proposta.
+ * Sem ele a conta continua certa para o resto e apenas otimista nos dias em
+ * que aquele tribunal específico não abre — por isso quem tiver a lista deve
+ * passá-la.
+ */
+export function situacaoDoPrazo(
   vencimento: string,
   hoje = new Date(),
-): number {
-  const alvo = new Date(`${vencimento}T00:00:00.000Z`);
+  feriados: HolidayInput[] = [],
+): SituacaoPrazo {
+  const alvo = parseIsoDate(vencimento);
   const base = new Date(
     Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
   );
-  return Math.round((alvo.getTime() - base.getTime()) / 86_400_000);
+
+  if (alvo.getTime() === base.getTime()) return { estado: "vence_hoje" };
+
+  const anos = [base.getUTCFullYear(), alvo.getUTCFullYear()];
+  const calendario = buildCalendar(
+    [...anos, Math.min(...anos) - 1, Math.max(...anos) + 1],
+    feriados,
+  );
+
+  const vencido = alvo.getTime() < base.getTime();
+  const inicio = vencido ? alvo : base;
+  const fim = vencido ? base : alvo;
+
+  // Intervalo aberto à esquerda: o dia de partida não entra, o de chegada
+  // entra. É a mesma convenção do art. 224.
+  let diasUteis = 0;
+  let cursor = new Date(inicio.getTime() + 86_400_000);
+  while (cursor.getTime() <= fim.getTime()) {
+    if (calendario.nonBusinessReason(cursor) === null) diasUteis += 1;
+    cursor = new Date(cursor.getTime() + 86_400_000);
+  }
+
+  return vencido
+    ? { estado: "vencido", diasUteis }
+    : { estado: "a_vencer", diasUteis };
 }

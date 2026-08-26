@@ -26,6 +26,11 @@ import {
   type HolidayInput,
 } from "../_shared/forensic-calendar.ts";
 import { extractDeadline } from "../_shared/deadline-extraction.ts";
+import {
+  aplicarRegraAoMotor,
+  regraEfetiva,
+  resolverRegraContagem,
+} from "../_shared/deadline-rules.ts";
 
 interface ComputeRequest {
   tenantId?: string;
@@ -91,11 +96,12 @@ Deno.serve(async (request) => {
   let disponibilizacao: string;
   let tribunal: string | null = body.tribunal?.trim() || null;
   let numeroProcesso: string | null = null;
+  let processoId: string | null = null;
 
   if (body.publicationId?.trim()) {
     const { data: publication, error: publicationError } = await auth.admin
       .from("publicacoes")
-      .select("id, numero_processo, tribunal, conteudo, data_publicacao")
+      .select("id, process_id, numero_processo, tribunal, conteudo, data_publicacao")
       .eq("tenant_id", tenantId)
       .eq("id", body.publicationId.trim())
       .maybeSingle();
@@ -105,6 +111,7 @@ Deno.serve(async (request) => {
     conteudo = publication.conteudo ?? "";
     tribunal = tribunal ?? publication.tribunal ?? null;
     numeroProcesso = publication.numero_processo ?? null;
+    processoId = publication.process_id ?? null;
 
     // Ver o comentário do topo: esta coluna é a disponibilização.
     const raw = publication.data_publicacao
@@ -133,8 +140,80 @@ Deno.serve(async (request) => {
     overrideDias <= 365;
 
   const dias = usouOverride ? overrideDias : leitura.dias;
-  const diasCorridos = body.override?.diasCorridos ?? leitura.diasCorridos;
   const intimacaoPessoal = body.override?.intimacaoPessoal ?? false;
+
+  /* ---------------------------------------------------------------- */
+  /* Regra de contagem por ramo                                        */
+  /* ---------------------------------------------------------------- */
+
+  // Até aqui o modo de contagem vinha só do texto da publicação: se o ato
+  // não dissesse "dias corridos" com todas as letras, tudo caía no padrão
+  // do CPC. Num processo criminal isso estica a data fatal, porque o CPP
+  // conta prazo contínuo — e a tela mostrava folga onde não havia.
+  //
+  // O ramo mora no cadastro do processo, não na publicação, então é
+  // preciso buscá-lo. Sem processo casado, o resolver responde com o
+  // padrão e confiança baixa, que é o que ele deve fazer.
+  const alertasDoResolver: string[] = [];
+
+  let processoDoPrazo:
+    | { area: string | null; vara: string | null; adjudicating_body: string | null }
+    | null = null;
+
+  // O `process_id` da publicacao e a chave canonica; casar por numero e
+  // ultimo recurso. Numero repetido no mesmo escritorio — acontece em grau
+  // recursal e em processo redistribuido — faria `maybeSingle` falhar, e o
+  // resolver cairia no padrao sem ninguem perceber.
+  if (processoId || numeroProcesso) {
+    let consulta = auth.admin
+      .from("processos")
+      .select("area, vara, adjudicating_body")
+      .eq("tenant_id", tenantId);
+
+    consulta = processoId
+      ? consulta.eq("id", processoId)
+      : consulta.eq("numero", numeroProcesso as string).limit(1);
+
+    const { data: processo, error: processoError } = await consulta
+      .maybeSingle();
+
+    // Falha na busca nao derruba o calculo, mas nao pode passar por
+    // "processo sem ramo": o resolver devolveria confianca alta indevida.
+    if (processoError) {
+      alertasDoResolver.push(
+        "Nao foi possivel identificar o processo desta publicacao, entao o " +
+          "ramo nao pode ser conferido. Confirme o modo de contagem.",
+      );
+    }
+    processoDoPrazo = processo ?? null;
+  }
+
+  const regra = resolverRegraContagem({
+    area: processoDoPrazo?.area ?? null,
+    vara: processoDoPrazo?.vara ?? null,
+    adjudicatingBody: processoDoPrazo?.adjudicating_body ?? null,
+    tribunal,
+  });
+
+  // O advogado tem a palavra final; depois dele, o que está escrito no ato;
+  // por último, a dedução pelo ramo.
+  const diasCorridos = body.override?.diasCorridos ??
+    aplicarRegraAoMotor(regra, leitura.qualificadorExplicito);
+
+  // O regime do CPP muda o termo inicial, nao so o modo de contagem: no
+  // penal a contagem corre do dia seguinte ao ato, sem protracao para dia
+  // util. So vale quando o CPP esta de fato sendo aplicado — se o ato
+  // determinou dias uteis, ou se o advogado sobrepos o modo, o termo inicial
+  // volta a seguir o CPC.
+  const regimePenal = regra.fonte === "cpp" && diasCorridos;
+
+  // O que a tela deve mostrar: quem de fato decidiu o modo. O ramo perde
+  // para o qualificador do ato, e os dois perdem para o advogado.
+  const efetiva = regraEfetiva(
+    regra,
+    leitura.qualificadorExplicito,
+    body.override?.diasCorridos,
+  );
 
   /* ---------------------------------------------------------------- */
   /* Calendário do tribunal                                            */
@@ -183,6 +262,7 @@ Deno.serve(async (request) => {
       dias,
       diasCorridos,
       intimacaoPessoal,
+      regimePenal,
       extraHolidays,
     });
   } catch (error) {
@@ -217,6 +297,44 @@ Deno.serve(async (request) => {
     );
   }
 
+  // O aviso do ramo entra na mesma fila que os demais: quem assina lê uma
+  // lista só do que precisa conferir, não um campo escondido em outro
+  // canto da tela.
+  // O aviso do ramo só faz sentido quando o ramo governou. Se o ato ou o
+  // advogado decidiram, a controvérsia do ramo não incide sobre esta data.
+  if (regra.aviso && efetiva === regra) {
+    alertas.push(regra.aviso);
+  }
+  alertas.push(...alertasDoResolver);
+
+  // A tabela de atos que deduz a QUANTIDADE de dias e inteiramente civel:
+  // apelacao 15 dias pelo CPC, art. 1.003, §5. No processo penal a apelacao
+  // tem cinco dias (CPP, art. 593) e os demais atos tem prazos proprios.
+  //
+  // O resolver de ramo so decide COMO contar, nao QUANTOS dias sao. Entao
+  // uma publicacao criminal que mencione apelacao sem dizer o prazo recebia
+  // 15 dias com aparencia de deducao fundamentada, e a data fatal saia dez
+  // dias depois da devida.
+  //
+  // Nao invento aqui a tabela penal: numero errado com cara de fundamentado
+  // e pior do que numero ausente. O que cabe e dizer, sem rodeios, que a
+  // deducao nao se aplica a este processo e que os dias precisam vir do
+  // advogado.
+  if (
+    leitura.confianca === "inferido" &&
+    regra.fonte !== "cpc" &&
+    regra.fonte !== "padrao" &&
+    !usouOverride
+  ) {
+    alertas.push(
+      `O prazo de ${dias} dias nao estava escrito na publicacao: foi ` +
+        `deduzido do ato "${leitura.ato}" pela regra do processo civil. ` +
+        "Este processo nao corre pelo CPC, e o mesmo ato costuma ter prazo " +
+        "diferente no rito aplicavel. Informe os dias corretos antes de " +
+        "confirmar — a data proposta nao serve como prazo fatal.",
+    );
+  }
+
   return json({
     proposta: {
       numeroProcesso,
@@ -225,6 +343,7 @@ Deno.serve(async (request) => {
       dias,
       diasCorridos,
       intimacaoPessoal,
+      regimePenal,
       confianca: usouOverride ? "manual" : leitura.confianca,
       fundamentoDoPrazo: usouOverride
         ? "Prazo informado pelo advogado."
@@ -237,9 +356,19 @@ Deno.serve(async (request) => {
       diasUteisContados: calculo.diasUteisContados,
       diasNaoUteis: calculo.diasNaoUteis,
       fundamentos: calculo.fundamentos,
+      regraContagem: {
+        modo: efetiva.modo,
+        fonte: efetiva.fonte,
+        confianca: efetiva.confianca,
+        fundamento: efetiva.fundamento,
+      },
       alertas,
       calendario: {
         tribunal,
+        // O cliente refaz a contagem regressiva a cada render, entao precisa
+        // do mesmo calendario que o servidor usou. Sem isto o cartao anuncia
+        // dia util em data que aquele forum nao abre.
+        feriados: extraHolidays,
         feriadosDoTribunal,
         cobertura: feriadosDoTribunal > 0 ? "tribunal" : "nacional",
       },
