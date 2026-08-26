@@ -53,6 +53,46 @@ describe("resolverRegraContagem", () => {
     expect(regra.aviso).toBeTruthy();
   });
 
+  it("o Juizado Especial Criminal conta em dias corridos, não úteis", () => {
+    // O JECrim casa com "juizado especial" e era classificado como Juizado
+    // cível por um teste genérico posto antes do criminal. O resultado era
+    // dias úteis num processo criminal — a data fatal esticada que o
+    // resolver existe para evitar.
+    const regra = resolverRegraContagem({
+      area: "Penal",
+      vara: "Juizado Especial Criminal da Comarca de Manaus",
+    });
+    expect(regra.modo).toBe("corridos");
+    expect(regra.fonte).toBe("cpp");
+    // Duas incertezas somadas: rito da Lei 9.099 e contagem criminal.
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toContain("Juizado");
+  });
+
+  it("Turma Recursal Criminal também conta em dias corridos", () => {
+    const regra = resolverRegraContagem({
+      vara: "Turma Recursal Criminal",
+    });
+    expect(regra.modo).toBe("corridos");
+    expect(regra.fonte).toBe("cpp");
+  });
+
+  it("o Juizado cível segue em dias úteis, com confiança alta no criminal", () => {
+    // Guarda contra a correção ter ido longe demais: Juizado sem qualquer
+    // indício criminal continua sendo Juizado cível.
+    const regra = resolverRegraContagem({
+      area: "Cível",
+      vara: "2º Juizado Especial Cível",
+    });
+    expect(regra.modo).toBe("uteis");
+    expect(regra.fonte).toBe("jec");
+  });
+
+  it("penal fora do Juizado mantém confiança alta", () => {
+    const regra = resolverRegraContagem({ area: "Penal", vara: "1ª Vara Criminal" });
+    expect(regra.confianca).toBe("alta");
+  });
+
   it("o Juizado vence o cível comum, senão a controvérsia some", () => {
     // Um processo cível que corre no Juizado seria classificado como cível
     // comum por qualquer regra posterior — e sairia com confiança alta.

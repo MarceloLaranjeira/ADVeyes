@@ -155,11 +155,13 @@ function areaMatches(area: string, candidates: string[]): boolean {
 /**
  * Decide o modo de contagem a partir do que se sabe do processo.
  *
- * A ordem importa e não é arbitrária. O Juizado vem primeiro porque é o
- * único caso em que a resposta é "não sei" — e um processo cível que corre
- * no Juizado seria classificado como cível comum por qualquer regra
- * posterior, escondendo a controvérsia. Depois vem o penal, que é o único
- * que muda o modo. Trabalhista só troca a fundamentação. O resto cai no CPC.
+ * A ordem importa e não é arbitrária. O penal vem primeiro porque é o único
+ * que muda o modo de contagem, e errá-lo estica a data fatal — inclusive no
+ * Juizado Especial Criminal, que casa com "juizado especial" e seria
+ * classificado como Juizado cível por um teste genérico posto antes dele.
+ * Depois vem o Juizado cível, que é o caso em que a resposta é "não sei" e
+ * precisa sair marcado como tal. Trabalhista só troca a fundamentação. O
+ * resto cai no CPC.
  *
  * Quando nada identifica o ramo, o retorno é o padrão do CPC com confiança
  * baixa: é o palpite certo na maioria dos casos, mas quem assina precisa
@@ -171,8 +173,43 @@ export function resolverRegraContagem(
   const area = normalize(input.area);
   const juizo = juizoText(input);
 
-  // Juizado Especial — rito próprio, contagem controvertida.
-  if (matchesAny(juizo, JEC_PATTERNS)) {
+  const ehCriminal = areaMatches(area, CRIMINAL_AREAS) ||
+    matchesAny(juizo, CRIMINAL_JUIZO_PATTERNS);
+  const ehJuizado = matchesAny(juizo, JEC_PATTERNS);
+
+  // Penal — prazos contínuos. É o ramo em que errar estica a data, então ele
+  // é avaliado antes de tudo, inclusive antes do Juizado.
+  //
+  // O Juizado Especial Criminal existe, e a versão anterior desta função o
+  // classificava como Juizado genérico porque a vara casa com "juizado
+  // especial" antes de qualquer teste criminal. O resultado era dias úteis
+  // num processo criminal — exatamente a data fatal esticada que o resolver
+  // foi escrito para evitar.
+  if (ehCriminal) {
+    return {
+      modo: "corridos",
+      fonte: "cpp",
+      // No JECrim somam-se duas incertezas: o rito da Lei 9.099 e a
+      // contagem criminal. Corridos é o padrão mais seguro, porque adianta
+      // a data fatal em vez de atrasá-la — mas quem assina precisa conferir.
+      confianca: ehJuizado ? "baixa" : "alta",
+      fundamento: ehJuizado
+        ? "CPP, art. 798 — prazos contínuos, aplicados ao rito criminal da " +
+          "Lei 9.099/1995."
+        : "CPP, art. 798 — os prazos são contínuos e peremptórios, não se " +
+          "interrompendo por férias, domingo ou dia feriado.",
+      aviso: ehJuizado
+        ? "Processo criminal em Juizado Especial: a contagem foi feita em " +
+          "dias corridos pelo CPP, que adianta a data fatal em relação aos " +
+          "dias úteis. A regra aplicável ao rito da Lei 9.099 é " +
+          "controvertida — confirme antes de usar como prazo fatal."
+        : "Prazo criminal contado em dias corridos. Se este ato seguir rito " +
+          "cível, ajuste o modo de contagem.",
+    };
+  }
+
+  // Juizado Especial cível — rito próprio, contagem controvertida.
+  if (ehJuizado) {
     return {
       modo: "uteis",
       fonte: "jec",
@@ -184,24 +221,6 @@ export function resolverRegraContagem(
         "Processo em Juizado Especial: a aplicação da contagem em dias " +
         "úteis do CPC ao rito da Lei 9.099 é controvertida. Confirme a " +
         "data antes de usá-la como prazo fatal.",
-    };
-  }
-
-  // Penal — prazos contínuos. É o ramo em que errar estica a data.
-  if (
-    areaMatches(area, CRIMINAL_AREAS) ||
-    matchesAny(juizo, CRIMINAL_JUIZO_PATTERNS)
-  ) {
-    return {
-      modo: "corridos",
-      fonte: "cpp",
-      confianca: "alta",
-      fundamento:
-        "CPP, art. 798 — os prazos são contínuos e peremptórios, não se " +
-        "interrompendo por férias, domingo ou dia feriado.",
-      aviso:
-        "Prazo criminal contado em dias corridos. Se este ato seguir rito " +
-        "cível, ajuste o modo de contagem.",
     };
   }
 
