@@ -1,8 +1,80 @@
+import { type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   authenticateTenantRequest,
   corsHeaders,
   json,
 } from "../_shared/tenant-auth.ts";
+import {
+  buildCalendar,
+  type HolidayInput,
+  parseIsoDate,
+  subtractBusinessDays,
+  toIsoDate,
+} from "../_shared/forensic-calendar.ts";
+
+/** Antecedencia padrao do prazo interno, em dias uteis. */
+const ANTECEDENCIA_PADRAO = 3;
+
+/**
+ * Prazo de trabalho do escritorio, alguns dias uteis antes do fatal.
+ *
+ * Contado em dias uteis pelo mesmo calendario forense do prazo fatal: tres
+ * dias corridos antes de uma segunda caem na sexta anterior, vespera com o
+ * fim de semana no meio; tres dias uteis caem na quarta da semana anterior.
+ *
+ * Devolve `null` quando nao da para calcular. Prazo interno e conveniencia
+ * operacional — se falhar, a tarefa nasce so com o prazo fatal, que e o que
+ * nao pode faltar.
+ */
+async function calcularPrazoInterno(
+  admin: SupabaseClient,
+  tenantId: string,
+  tribunal: string | null,
+  prazoFatal: Date,
+): Promise<string | null> {
+  try {
+    const fatalIso = toIsoDate(prazoFatal);
+    const ano = Number(fatalIso.slice(0, 4));
+
+    const { data: settings } = await admin
+      .from("controladoria_settings")
+      .select("antecedencia_dias_uteis")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    const antecedencia = typeof settings?.antecedencia_dias_uteis === "number"
+      ? settings.antecedencia_dias_uteis
+      : ANTECEDENCIA_PADRAO;
+
+    if (antecedencia <= 0) return fatalIso;
+
+    let consulta = admin
+      .from("forensic_holidays")
+      .select("holiday_date, description, partial_expedient")
+      .gte("holiday_date", `${ano - 1}-01-01`)
+      .lte("holiday_date", `${ano}-12-31`)
+      .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`);
+
+    consulta = tribunal
+      ? consulta.or(`tribunal.is.null,tribunal.eq.${tribunal}`)
+      : consulta.is("tribunal", null);
+
+    const { data: holidayRows } = await consulta;
+
+    const feriados: HolidayInput[] = (holidayRows ?? []).map((row) => ({
+      date: String(row.holiday_date).slice(0, 10),
+      description: row.description,
+      partialExpedient: row.partial_expedient === true,
+    }));
+
+    const calendario = buildCalendar([ano - 1, ano, ano + 1], feriados);
+    return toIsoDate(
+      subtractBusinessDays(parseIsoDate(fatalIso), antecedencia, calendario),
+    );
+  } catch {
+    return null;
+  }
+}
 
 interface ReviewRequest {
   tenantId?: string;
@@ -114,6 +186,12 @@ Deno.serve(async (request) => {
       prioridade: "alta",
       status: "pendente",
       data_limite: parsedDate.toISOString(),
+      data_limite_interna: await calcularPrazoInterno(
+        auth.admin,
+        tenantId,
+        publication.tribunal ?? null,
+        parsedDate,
+      ),
     })
     .select("id")
     .single();

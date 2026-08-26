@@ -95,11 +95,12 @@ Deno.serve(async (request) => {
   let disponibilizacao: string;
   let tribunal: string | null = body.tribunal?.trim() || null;
   let numeroProcesso: string | null = null;
+  let processoId: string | null = null;
 
   if (body.publicationId?.trim()) {
     const { data: publication, error: publicationError } = await auth.admin
       .from("publicacoes")
-      .select("id, numero_processo, tribunal, conteudo, data_publicacao")
+      .select("id, process_id, numero_processo, tribunal, conteudo, data_publicacao")
       .eq("tenant_id", tenantId)
       .eq("id", body.publicationId.trim())
       .maybeSingle();
@@ -109,6 +110,7 @@ Deno.serve(async (request) => {
     conteudo = publication.conteudo ?? "";
     tribunal = tribunal ?? publication.tribunal ?? null;
     numeroProcesso = publication.numero_processo ?? null;
+    processoId = publication.process_id ?? null;
 
     // Ver o comentário do topo: esta coluna é a disponibilização.
     const raw = publication.data_publicacao
@@ -151,17 +153,37 @@ Deno.serve(async (request) => {
   // O ramo mora no cadastro do processo, não na publicação, então é
   // preciso buscá-lo. Sem processo casado, o resolver responde com o
   // padrão e confiança baixa, que é o que ele deve fazer.
+  const alertasDoResolver: string[] = [];
+
   let processoDoPrazo:
     | { area: string | null; vara: string | null; adjudicating_body: string | null }
     | null = null;
 
-  if (numeroProcesso) {
-    const { data: processo } = await auth.admin
+  // O `process_id` da publicacao e a chave canonica; casar por numero e
+  // ultimo recurso. Numero repetido no mesmo escritorio — acontece em grau
+  // recursal e em processo redistribuido — faria `maybeSingle` falhar, e o
+  // resolver cairia no padrao sem ninguem perceber.
+  if (processoId || numeroProcesso) {
+    let consulta = auth.admin
       .from("processos")
       .select("area, vara, adjudicating_body")
-      .eq("tenant_id", tenantId)
-      .eq("numero", numeroProcesso)
+      .eq("tenant_id", tenantId);
+
+    consulta = processoId
+      ? consulta.eq("id", processoId)
+      : consulta.eq("numero", numeroProcesso as string).limit(1);
+
+    const { data: processo, error: processoError } = await consulta
       .maybeSingle();
+
+    // Falha na busca nao derruba o calculo, mas nao pode passar por
+    // "processo sem ramo": o resolver devolveria confianca alta indevida.
+    if (processoError) {
+      alertasDoResolver.push(
+        "Nao foi possivel identificar o processo desta publicacao, entao o " +
+          "ramo nao pode ser conferido. Confirme o modo de contagem.",
+      );
+    }
     processoDoPrazo = processo ?? null;
   }
 
@@ -264,6 +286,7 @@ Deno.serve(async (request) => {
   if (regra.aviso && body.override?.diasCorridos === undefined) {
     alertas.push(regra.aviso);
   }
+  alertas.push(...alertasDoResolver);
 
   return json({
     proposta: {

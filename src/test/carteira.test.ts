@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   apenasCarteiraAtiva,
+  carteiraAtiva,
   estaArquivado,
   situacaoNaCarteira,
 } from "@/lib/carteira";
@@ -79,5 +80,25 @@ describe("apenasCarteiraAtiva", () => {
       { arquivadoManual: false, arquivadoNoTribunal: true },
     ]);
     expect(carteira).toHaveLength(2);
+  });
+});
+
+describe("carteiraAtiva", () => {
+  it("filtra sem depender da caixa gravada no banco", () => {
+    // `situacaoNaCarteira` normaliza caixa antes de comparar. Se o filtro que
+    // vai ao banco fosse sensível a caixa, a linha gravada como "arquivado"
+    // passaria pela consulta e seria considerada arquivada pelo código — as
+    // duas metades da mesma regra discordando.
+    const chamadas: Array<[string, string, string]> = [];
+    const query = {
+      not: (coluna: string, operador: string, valor: string) => {
+        chamadas.push([coluna, operador, valor]);
+        return query;
+      },
+    };
+
+    carteiraAtiva(query);
+
+    expect(chamadas).toEqual([["status", "ilike", "Arquivado"]]);
   });
 });

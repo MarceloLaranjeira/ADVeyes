@@ -30,12 +30,18 @@ comment on column public.tarefas.data_limite_interna is
 alter table public.tarefas
   drop constraint if exists tarefas_prazo_interno_antes_do_fatal;
 
+-- Prazo interno so existe em relacao a um prazo fatal. Permitir interno com
+-- fatal nulo criava uma tarefa que entra nas consultas de prazo interno sem
+-- ter data fatal nenhuma — o painel cobraria antecedencia de algo que nao
+-- vence.
 alter table public.tarefas
   add constraint tarefas_prazo_interno_antes_do_fatal
   check (
     data_limite_interna is null
-    or data_limite is null
-    or data_limite_interna <= data_limite
+    or (
+      data_limite is not null
+      and data_limite_interna <= data_limite
+    )
   );
 
 -- O painel ordena e filtra pelo prazo interno, então ele precisa de índice
@@ -81,13 +87,20 @@ create policy controladoria_settings_tenant_read
   using (private.has_tenant_permission(tenant_id, 'legal', 'read'));
 
 -- Alterar a antecedência é decisão de quem administra o escritório.
+-- A acao e 'update', nao 'write'.
+--
+-- `private.has_tenant_permission` valida o par (modulo, acao) contra uma
+-- matriz fechada e devolve false para qualquer par desconhecido. A matriz
+-- reconhece read/create/update/delete no modulo legal — 'write' nao existe
+-- nela, entao a politica negaria a todos e ninguem conseguiria configurar a
+-- antecedencia, apesar dos grants da tabela.
 drop policy if exists controladoria_settings_tenant_write
   on public.controladoria_settings;
 create policy controladoria_settings_tenant_write
   on public.controladoria_settings
   for all to authenticated
-  using (private.has_tenant_permission(tenant_id, 'legal', 'write'))
-  with check (private.has_tenant_permission(tenant_id, 'legal', 'write'));
+  using (private.has_tenant_permission(tenant_id, 'legal', 'update'))
+  with check (private.has_tenant_permission(tenant_id, 'legal', 'update'));
 
 revoke all privileges on table public.controladoria_settings
   from public, anon, authenticated;
@@ -95,5 +108,17 @@ grant select on table public.controladoria_settings to authenticated;
 grant insert, update (antecedencia_dias_uteis, updated_at)
   on table public.controladoria_settings to authenticated;
 grant all privileges on table public.controladoria_settings to service_role;
+
+-- Canoniza o status de arquivamento.
+--
+-- `situacaoNaCarteira` normaliza caixa e espaco antes de comparar, mas o
+-- filtro que vai ao banco compara texto. Sem canonizar, uma linha gravada
+-- como "arquivado" ou " Arquivado " passa pelo filtro SQL e e considerada
+-- arquivada pelo codigo — as duas metades da mesma regra discordando.
+update public.processos
+set status = 'Arquivado'
+where status is not null
+  and lower(btrim(status)) = 'arquivado'
+  and status <> 'Arquivado';
 
 commit;

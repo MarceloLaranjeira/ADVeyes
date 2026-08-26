@@ -143,11 +143,17 @@ export function apenasCarteiraAtiva<T extends ProcessoArquivavel>(
  *   ).eq("tenant_id", tenantId);
  */
 export function carteiraAtiva<T>(query: T): T {
+  // `not(..., "ilike", ...)` e nao `neq`: `situacaoNaCarteira` normaliza caixa
+  // antes de comparar, e um filtro SQL sensivel a caixa deixaria passar a
+  // linha gravada como "arquivado" que o codigo considera arquivada — as duas
+  // metades da mesma regra discordando. O espaco em volta e resolvido na
+  // migration, que canoniza o valor gravado.
+  //
   // O tipo do query builder do Supabase é grande o bastante para estourar o
   // limite de recursão do TypeScript se `T` for restringido pela estrutura
-  // (`T extends { neq: ... }`). O genérico fica livre e a chamada vai por
+  // (`T extends { not: ... }`). O genérico fica livre e a chamada vai por
   // uma asserção estreita, que preserva o tipo do retorno para quem chama.
   return (query as unknown as {
-    neq: (column: string, value: string) => T;
-  }).neq("status", STATUS_ARQUIVADO);
+    not: (column: string, operator: string, value: string) => T;
+  }).not("status", "ilike", STATUS_ARQUIVADO);
 }
