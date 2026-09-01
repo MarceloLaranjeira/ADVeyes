@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Gavel, MapPin, Clock, User, Plus, Pencil, Trash2, Download } from "lucide-react";
+import { AlertTriangle, Clock, Database, Download, Gavel, Loader2, MapPin, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, User } from "lucide-react";
 import { exportAudienciasPDF } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { DepthCard } from "@/components/dashboard/DepthCard";
+import { cn } from "@/lib/utils";
+import { useTenant } from "@/contexts/TenantContext";
+import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
+import { loadHearingsWorkspace, type HearingSignalRow } from "@/services/hearings";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Audiencia {
   id: string;
@@ -25,6 +32,9 @@ interface Audiencia {
   processo_id?: string;
   processo_numero?: string;
   cliente_nome?: string;
+  source_provider?: string;
+  review_status?: string;
+  event_status?: string;
 }
 
 interface Processo {
@@ -48,7 +58,10 @@ const emptyForm = { tipo: "Instrução e Julgamento", data_hora: "", vara: "", j
 
 const Audiencias = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  const support = usePlatformSupport();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -56,17 +69,42 @@ const Audiencias = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [signals, setSignals] = useState<HearingSignalRow[]>([]);
+  const [coverageCount, setCoverageCount] = useState(0);
+  const tenantId = currentTenant?.tenantId ?? null;
+  const readOnly = support.isPlatformAccess && !support.active;
 
-  const fetchData = async () => {
-    const [{ data: aud }, { data: proc }] = await Promise.all([
-      supabase.from("audiencias").select("*").order("data_hora", { ascending: true }),
-      supabase.from("processos").select("id, numero, cliente_nome"),
-    ]);
-    if (aud) setAudiencias(aud);
-    if (proc) setProcessos(proc);
-  };
+  const fetchData = useCallback(async () => {
+    if (!tenantId) return;
+    setLoadingData(true);
+    setLoadError(null);
+    try {
+      const data = await loadHearingsWorkspace(tenantId);
+      setAudiencias(data.hearings as Audiencia[]);
+      setProcessos(data.processes);
+      setSignals(data.signals);
+      setCoverageCount(data.coverage.length);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Não foi possível carregar as audiências.");
+    } finally {
+      setLoadingData(false);
+    }
+  }, [tenantId]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { void fetchData(); }, [fetchData]);
+
+  const focusedId = searchParams.get("focus");
+  useEffect(() => {
+    if (!focusedId || !audiencias.some(item => item.id === focusedId)) return;
+    const timer = window.setTimeout(() => {
+      const card = document.getElementById(`audiencia-${focusedId}`);
+      if (typeof card?.scrollIntoView === "function") card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [audiencias, focusedId]);
 
   const openEdit = (a: Audiencia) => {
     setEditData(a);
@@ -93,12 +131,14 @@ const Audiencias = () => {
     e.preventDefault();
     if (!form.data_hora) { toast({ title: "Informe a data/hora", variant: "destructive" }); return; }
     setLoading(true);
+    if (!tenantId || readOnly) return;
     const payload = {
       ...form, user_id: user!.id,
+      tenant_id: tenantId,
       processo_id: form.processo_id || null,
     };
     const { error } = editData
-      ? await supabase.from("audiencias").update(payload).eq("id", editData.id)
+      ? await supabase.from("audiencias").update(payload).eq("tenant_id", tenantId).eq("id", editData.id)
       : await supabase.from("audiencias").insert(payload);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -111,8 +151,8 @@ const Audiencias = () => {
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
-    const { error } = await supabase.from("audiencias").delete().eq("id", deleteId);
+    if (!deleteId || !tenantId || readOnly) return;
+    const { error } = await supabase.from("audiencias").delete().eq("tenant_id", tenantId).eq("id", deleteId);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
     else { toast({ title: "Audiência excluída!" }); fetchData(); }
     setDeleteId(null);
@@ -133,14 +173,34 @@ const Audiencias = () => {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => exportAudienciasPDF(audiencias)} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
-            <Button onClick={openNew} className="gap-2"><Plus className="w-4 h-4" /> Nova Audiência</Button>
+            <Button variant="outline" onClick={() => void fetchData()} disabled={loadingData} className="gap-2"><RefreshCw className={cn("w-4 h-4", loadingData && "animate-spin")} /> Atualizar</Button>
+            <Button onClick={openNew} disabled={readOnly} className="gap-2"><Plus className="w-4 h-4" /> Nova Audiência</Button>
           </div>
         </div>
 
+        <div className="grid gap-3 md:grid-cols-3 mb-6">
+          <div className="rounded-lg border bg-card p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Gavel className="h-4 w-4" /> Compromissos</div><p className="mt-1 text-2xl font-semibold">{audiencias.length}</p></div>
+          <div className="rounded-lg border bg-card p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><AlertTriangle className="h-4 w-4 text-amber-600" /> Indícios para revisão</div><p className="mt-1 text-2xl font-semibold">{signals.length}</p></div>
+          <div className="rounded-lg border bg-card p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Database className="h-4 w-4" /> TJs com cobertura pública</div><p className="mt-1 text-2xl font-semibold">{coverageCount}</p></div>
+        </div>
+
+        {loadError && <Alert variant="destructive" className="mb-6"><AlertTriangle className="h-4 w-4" /><AlertTitle>Falha ao carregar</AlertTitle><AlertDescription>{loadError} <Button variant="link" onClick={() => void fetchData()}>Tentar novamente</Button></AlertDescription></Alert>}
+        {readOnly && <Alert className="mb-6"><ShieldCheck className="h-4 w-4" /><AlertTitle>Visualização da Conta Geral</AlertTitle><AlertDescription>Ative o suporte temporário para cadastrar, editar ou excluir audiências.</AlertDescription></Alert>}
+
+        {signals.length > 0 && <section className="mb-8 rounded-xl border bg-card p-5"><div className="mb-4"><h2 className="font-semibold">Indícios oficiais aguardando revisão</h2><p className="text-sm text-muted-foreground">Movimentações que mencionam audiência, mas não comprovam data e hora. Nenhum compromisso foi inventado.</p></div><div className="space-y-2">{signals.slice(0, 20).map(signal => <div key={signal.id} className="rounded-lg border bg-muted/30 p-3"><div className="flex items-center justify-between gap-3"><span className="font-medium">{signal.event_type}</span><span className="text-xs uppercase text-muted-foreground">{signal.source_provider}</span></div><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{signal.evidence}</p></div>)}</div>{signals.length > 20 && <p className="mt-3 text-sm text-muted-foreground">Mais {signals.length - 20} indícios disponíveis para revisão.</p>}</section>}
+
         <div className="space-y-4">
-          {audiencias.length === 0 && <p className="text-center text-muted-foreground py-12">Nenhuma audiência cadastrada</p>}
+          {loadingData && <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
+          {!loadingData && !loadError && audiencias.length === 0 && <p className="text-center text-muted-foreground py-12">Nenhuma audiência com data e hora confirmáveis. Confira os indícios acima.</p>}
           {audiencias.map((a) => (
-            <div key={a.id} className="bg-card rounded-lg border p-5 hover:shadow-md transition-all">
+            <DepthCard
+              key={a.id}
+              id={`audiencia-${a.id}`}
+              interactive
+              onActivate={() => openEdit(a)}
+              aria-label={`Abrir audiência ${a.tipo}${a.processo_numero ? ` do processo ${a.processo_numero}` : ""}`}
+              className={cn("p-5 hover:shadow-md transition-all", focusedId === a.id && "bg-primary/5 ring-2 ring-primary/40")}
+            >
               <div className="flex items-start justify-between">
                 <div className="flex gap-4">
                   <div className="w-14 h-14 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
@@ -159,11 +219,11 @@ const Audiencias = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColors[a.status] || "bg-muted text-muted-foreground"}`}>{a.status}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(a)}><Pencil className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(a.id)}><Trash2 className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="icon" disabled={readOnly} className="h-8 w-8" onClick={() => openEdit(a)}><Pencil className="w-4 h-4" /></Button>
+                  <Button variant="ghost" size="icon" disabled={readOnly} className="h-8 w-8 text-destructive" onClick={() => setDeleteId(a.id)}><Trash2 className="w-4 h-4" /></Button>
                 </div>
               </div>
-            </div>
+            </DepthCard>
           ))}
         </div>
 

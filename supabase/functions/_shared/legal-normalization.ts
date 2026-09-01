@@ -27,6 +27,8 @@ export interface NormalizedProcessMetadata {
   subjects: NormalizedSubject[];
   adjudicatingBody: string | null;
   proceduralSystem: string | null;
+  proceduralSystemCode: string | null;
+  proceduralSystemConflict: boolean;
   courtLevel: string | null;
   publicSecrecyLevel: number | null;
   filedAt: string | null;
@@ -593,6 +595,50 @@ export interface DataJudProcessPayload {
   [key: string]: unknown;
 }
 
+export interface NormalizedDataJudProceduralSystem {
+  code: string | null;
+  label: string | null;
+  originSystem: OriginSystem;
+  conflict: boolean;
+}
+
+const DATAJUD_SYSTEMS: Record<string, { label: string; originSystem: OriginSystem }> = {
+  "1": { label: "PJe", originSystem: "pje" },
+  "2": { label: "Projudi", originSystem: "projudi" },
+  "3": { label: "SAJ", originSystem: "other" },
+  "4": { label: "Eproc", originSystem: "other" },
+};
+
+/** Normaliza a tabela nacional de sistemas do DataJud sem inferir pelo tribunal. */
+export function normalizeDataJudProceduralSystem(
+  value: DataJudProcessPayload["sistema"],
+): NormalizedDataJudProceduralSystem {
+  const code = typeof value === "object" && value && !Array.isArray(value)
+    ? collapse(value.codigo) || null
+    : null;
+  const declaredLabel = typeof value === "string"
+    ? collapse(value)
+    : typeof value === "object" && value && !Array.isArray(value)
+    ? collapse(value.nome)
+    : "";
+  const mapped = code ? DATAJUD_SYSTEMS[code] : undefined;
+  const declaredOrigin = declaredLabel
+    ? resolveOriginSystem({ systemField: declaredLabel })
+    : "unknown";
+
+  return {
+    code,
+    label: declaredLabel || mapped?.label || null,
+    originSystem: declaredOrigin !== "unknown"
+      ? declaredOrigin
+      : mapped?.originSystem ?? "unknown",
+    conflict: Boolean(
+      declaredLabel && mapped && declaredOrigin !== "unknown" &&
+        declaredOrigin !== mapped.originSystem
+    ),
+  };
+}
+
 function objectText(
   value: unknown,
   field: "codigo" | "nome",
@@ -611,9 +657,7 @@ export function normalizeDataJudProcessMetadata(
   const courtBody = typeof source.orgaoJulgador === "string"
     ? collapse(source.orgaoJulgador)
     : objectText(source.orgaoJulgador, "nome");
-  const system = typeof source.sistema === "string"
-    ? collapse(source.sistema)
-    : objectText(source.sistema, "nome");
+  const system = normalizeDataJudProceduralSystem(source.sistema);
   const secrecy = Number(source.nivelSigilo);
 
   return {
@@ -628,7 +672,9 @@ export function normalizeDataJudProcessMetadata(
       }))
       .filter((subject) => Boolean(subject.name)),
     adjudicatingBody: courtBody || null,
-    proceduralSystem: system || null,
+    proceduralSystem: system.label,
+    proceduralSystemCode: system.code,
+    proceduralSystemConflict: system.conflict,
     courtLevel: collapse(source.grau) || null,
     publicSecrecyLevel: Number.isInteger(secrecy) && secrecy >= 0
       ? secrecy
@@ -881,6 +927,7 @@ export function normalizeDataJudMovements(
 ): NormalizedMovement[] {
   const tribunal = collapse(source.tribunal);
   const sourceName = tribunal ? `DataJud/CNJ — ${tribunal}` : "DataJud/CNJ";
+  const proceduralSystem = normalizeDataJudProceduralSystem(source.sistema);
 
   return (source.movimentos ?? [])
     .map((movement, index): NormalizedMovement | null => {
@@ -922,8 +969,7 @@ export function normalizeDataJudMovements(
           : title === rawTitle
           ? title
           : `Documento registrado: ${title}.`,
-        // O DataJud informa o tribunal, não o sistema processual de origem.
-        originSystem: "unknown",
+        originSystem: proceduralSystem.originSystem,
         sourceName,
         sourceUrl: null,
         tpuCode: movement.codigo == null ? null : String(movement.codigo),

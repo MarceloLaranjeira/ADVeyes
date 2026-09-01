@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { extractHearingCandidate } from "./legal-hearing-extraction.ts";
+import { buildMovementHearingRecords } from "./legal-movement-hearing.ts";
 import {
   deliverLegalAlert,
   resolveRecipients,
@@ -65,6 +66,8 @@ export async function ingestProcessMetadata(
     vara: current?.vara || metadata.adjudicatingBody || undefined,
     data_ajuizamento: current?.data_ajuizamento || metadata.filedAt || undefined,
     procedural_system: metadata.proceduralSystem,
+    procedural_system_code: metadata.proceduralSystemCode,
+    procedural_system_conflict: metadata.proceduralSystemConflict,
     court_level: metadata.courtLevel,
     public_secrecy_level: metadata.publicSecrecyLevel,
     legal_sync_status: "synced",
@@ -72,6 +75,8 @@ export async function ingestProcessMetadata(
     legal_data_source: metadata.provider,
     legal_metadata: {
       provider: metadata.provider,
+      procedural_system_code: metadata.proceduralSystemCode,
+      procedural_system_conflict: metadata.proceduralSystemConflict,
       source_updated_at: metadata.lastUpdatedAt,
       collected_at: new Date().toISOString(),
     },
@@ -460,7 +465,7 @@ export async function ingestMovements(
 
   const { data: process, error: processError } = await admin
     .from("processos")
-    .select("numero, cliente_nome")
+    .select("id, numero, cliente_nome, user_id, vara, tribunal")
     .eq("tenant_id", input.tenantId)
     .eq("id", input.processId)
     .maybeSingle();
@@ -549,7 +554,7 @@ export async function ingestMovements(
       onConflict: "tenant_id,process_id,provider,external_id",
       ignoreDuplicates: false,
     })
-    .select("id, external_id, movement_type, title, content, content_hash, occurred_at, document_type, document_url, full_text_available, source_name, source_url, provider_payload");
+    .select("id, external_id, provider, movement_type, title, content, description, notes, content_hash, occurred_at, document_type, document_url, full_text_available, source_name, source_url, provider_payload");
 
   if (error) throw error;
 
@@ -597,6 +602,21 @@ export async function ingestMovements(
     if (documentError) throw documentError;
   }
 
+  if (process?.user_id && data?.length) {
+    await createMovementHearingCandidates(admin, {
+      tenantId: input.tenantId,
+      process: {
+        id: input.processId,
+        numero: process.numero,
+        cliente_nome: process.cliente_nome,
+        user_id: process.user_id,
+        vara: process.vara,
+        tribunal: process.tribunal,
+      },
+      movements: data,
+    });
+  }
+
   const created = rows.filter((row) => !existingIds.has(row.external_id)).length;
   return {
     received: input.movements.length,
@@ -604,6 +624,76 @@ export async function ingestMovements(
     ignored: input.movements.length - created,
     createdIds: [],
   };
+}
+
+/** Materializa audiências comprovadas e mantém sinais incompletos em revisão. */
+export async function createMovementHearingCandidates(
+  admin: SupabaseClient,
+  input: {
+    tenantId: string;
+    process: {
+      id: string;
+      numero: string | null;
+      cliente_nome: string | null;
+      user_id: string;
+      vara: string | null;
+      tribunal?: string | null;
+    };
+    movements: Array<{
+      id: string;
+      external_id: string;
+      provider: "datajud" | "escavador" | "manual";
+      title: string | null;
+      content: string | null;
+      description: string | null;
+      notes: string | null;
+      occurred_at: string | null;
+      source_name: string | null;
+    }>;
+  },
+): Promise<{ signals: number; hearings: number }> {
+  let timezone = "America/Manaus";
+  let timezoneOffset = "-04:00";
+  if (input.process.tribunal) {
+    const { data: court } = await admin.from("legal_court_registry")
+      .select("timezone, utc_offset")
+      .eq("court_code", input.process.tribunal.toUpperCase())
+      .maybeSingle();
+    timezone = court?.timezone || timezone;
+    timezoneOffset = court?.utc_offset || timezoneOffset;
+  }
+
+  const records = input.movements.flatMap((movement) => {
+    const record = buildMovementHearingRecords({
+      tenantId: input.tenantId,
+      process: input.process,
+      movement,
+      timezone,
+      timezoneOffset,
+    });
+    return record ? [record] : [];
+  });
+  if (!records.length) return { signals: 0, hearings: 0 };
+
+  const { data: signals, error: signalError } = await admin
+    .from("legal_hearing_signals")
+    .upsert(records.map((record) => record.signalRow), {
+      onConflict: "tenant_id,source_provider,external_id",
+      ignoreDuplicates: false,
+    })
+    .select("id");
+  if (signalError) throw signalError;
+
+  const hearingRows = records.flatMap((record) => record.hearingRow ? [record.hearingRow] : []);
+  if (!hearingRows.length) return { signals: signals?.length ?? 0, hearings: 0 };
+  const { data: hearings, error: hearingError } = await admin.from("audiencias")
+    .upsert(hearingRows, {
+      onConflict: "tenant_id,source_provider,external_id",
+      ignoreDuplicates: false,
+    })
+    .select("id");
+  if (hearingError) throw hearingError;
+  return { signals: signals?.length ?? 0, hearings: hearings?.length ?? 0 };
 }
 
 export interface PublicationTaskResult {

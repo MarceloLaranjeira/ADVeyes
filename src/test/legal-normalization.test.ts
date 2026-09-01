@@ -6,6 +6,7 @@ import {
   formatCnj,
   nextAttemptDelayMs,
   normalizeDataJudParties,
+  normalizeDataJudProceduralSystem,
   normalizeDataJudProcessMetadata,
   normalizeDataJudMovements,
   normalizeDjenPublication,
@@ -360,6 +361,32 @@ describe("normalizeDataJudProcessMetadata", () => {
   });
 });
 
+describe("normalizeDataJudProceduralSystem", () => {
+  it.each([
+    [1, "PJe", "pje"],
+    [2, "Projudi", "projudi"],
+    [3, "SAJ", "other"],
+    [4, "Eproc", "other"],
+  ])("mapeia o código nacional %s sem depender do tribunal", (codigo, label, originSystem) => {
+    expect(normalizeDataJudProceduralSystem({ codigo })).toMatchObject({
+      code: String(codigo),
+      label,
+      originSystem,
+      conflict: false,
+    });
+  });
+
+  it("preserva o nome declarado e sinaliza divergência com o código", () => {
+    expect(normalizeDataJudProceduralSystem({ codigo: 1, nome: "PROJUDI" }))
+      .toMatchObject({
+        code: "1",
+        label: "PROJUDI",
+        originSystem: "projudi",
+        conflict: true,
+      });
+  });
+});
+
 describe("normalizeDataJudParties", () => {
   it("normaliza partes e advogados sem presumir quem é cliente", () => {
     const parties = normalizeDataJudParties({
@@ -599,6 +626,16 @@ describe("normalizeDataJudMovements", () => {
     });
 
     expect(movement.originSystem).toBe("unknown");
+  });
+
+  it("propaga para o andamento o sistema oficial declarado na capa", () => {
+    const [movement] = normalizeDataJudMovements({
+      tribunal: "TJPR",
+      sistema: { codigo: 2, nome: "Projudi" },
+      movimentos: [{ nome: "Audiência designada", dataHora: "2026-09-01T10:00:00Z" }],
+    });
+
+    expect(movement.originSystem).toBe("projudi");
   });
 });
 
