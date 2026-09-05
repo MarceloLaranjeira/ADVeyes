@@ -39,6 +39,10 @@ export class LegalPortalError extends Error {
       | "captcha_required"
       | "certificate_required"
       | "portal_unavailable"
+      | "login_page_changed"
+      | "post_login_navigation_changed"
+      | "agenda_navigation_changed"
+      | "agenda_page_changed"
       | "layout_changed"
       | "portal_timeout",
   ) {

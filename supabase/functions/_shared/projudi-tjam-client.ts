@@ -15,6 +15,26 @@ const REQUEST_TIMEOUT_MS = 20_000;
 
 interface PortalPage { url: string; html: string }
 
+type PortalDiagnosticStage =
+  | "login_page"
+  | "post_login"
+  | "authenticated_pages"
+  | "agenda_links"
+  | "agenda_pages";
+
+function diagnosticPath(value: string): string {
+  try {
+    const url = new URL(value);
+    return url.pathname.replace(/;jsessionid=[^/?#;]+/gi, "");
+  } catch {
+    return "invalid-url";
+  }
+}
+
+function logPortalDiagnostic(stage: PortalDiagnosticStage, details: Record<string, string | number | boolean>): void {
+  console.log(`[projudi_tjam] ${JSON.stringify({ stage, ...details })}`);
+}
+
 function decodeEntities(value: string): string {
   const named: Record<string, string> = {
     nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
@@ -95,7 +115,7 @@ class PortalSession {
       }
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
-        if (!location) throw new LegalPortalError("layout_changed");
+        if (!location) throw new LegalPortalError("post_login_navigation_changed");
         currentUrl = new URL(location, currentUrl).toString();
         currentInit = { method: response.status === 307 || response.status === 308 ? currentInit.method : "GET" };
         continue;
@@ -103,7 +123,7 @@ class PortalSession {
       if (!response.ok) throw new LegalPortalError("portal_unavailable");
       return { url: currentUrl, html: await responseHtml(response) };
     }
-    throw new LegalPortalError("layout_changed");
+    throw new LegalPortalError("post_login_navigation_changed");
   }
 }
 
@@ -111,7 +131,7 @@ function loginForm(html: string, pageUrl: string, credentials: LegalPortalCreden
   const form = html.match(/<form\b[^>]*(?:name|id)=["']formLogin["'][^>]*>/i)?.[0];
   const action = form ? attribute(form, "action") : null;
   const salt = html.match(/hex_md5\(["']([a-f0-9]{32,})["']\s*\+\s*login\)/i)?.[1];
-  if (!action || !salt) throw new LegalPortalError("layout_changed");
+  if (!action || !salt) throw new LegalPortalError("login_page_changed");
   const body = new URLSearchParams({
     login: credentials.login,
     senha: credentials.password,
@@ -146,6 +166,10 @@ function assertAuthenticated(html: string): void {
 
 async function authenticatedPages(session: PortalSession, credentials: LegalPortalCredentials): Promise<PortalPage[]> {
   const start = await session.request(LOGIN_URL);
+  logPortalDiagnostic("login_page", {
+    path: diagnosticPath(start.url),
+    bytes: start.html.length,
+  });
   const form = loginForm(start.html, start.url, credentials);
   const home = await session.request(form.url, {
     method: "POST",
@@ -153,6 +177,10 @@ async function authenticatedPages(session: PortalSession, credentials: LegalPort
     body: form.body.toString(),
   });
   assertAuthenticated(home.html);
+  logPortalDiagnostic("post_login", {
+    path: diagnosticPath(home.url),
+    bytes: home.html.length,
+  });
 
   // O Projudi clássico usa frameset. A agenda costuma estar no frame do menu,
   // que não necessariamente é o primeiro frame devolvido após o login.
@@ -160,41 +188,80 @@ async function authenticatedPages(session: PortalSession, credentials: LegalPort
   const visited = new Set([home.url]);
   for (let cursor = 0; cursor < pages.length && pages.length < 20; cursor += 1) {
     const parent = pages[cursor];
-    const frames = [...parent.html.matchAll(/<(?:frame|iframe)\b[^>]*>/gi)]
-      .map(match => attribute(match[0], "src"))
-      .filter((source): source is string => Boolean(source));
-    for (const source of frames) {
-      let url: URL;
-      try {
-        url = new URL(source, parent.url);
-      } catch {
-        continue;
-      }
-      if (url.origin !== ORIGIN || visited.has(url.toString())) continue;
-      visited.add(url.toString());
-      const page = await session.request(url.toString());
+    for (const targetUrl of discoverProjudiTjamPostLoginLinks(parent.html, parent.url)) {
+      if (visited.has(targetUrl)) continue;
+      visited.add(targetUrl);
+      const page = await session.request(targetUrl);
       assertAuthenticated(page.html);
       pages.push(page);
       if (pages.length >= 20) break;
     }
   }
+  logPortalDiagnostic("authenticated_pages", { pages: pages.length });
   return pages;
 }
 
-function navigableHref(tag: string, pageUrl: string): string | null {
-  let href = attribute(tag, "href");
-  if (!href || /^javascript:/i.test(href)) {
-    const onclick = attribute(tag, "onclick") ?? "";
-    href = onclick.match(/["']((?:https?:\/\/[^"']+|\/?projudi\/[^"']+|[^"']+\.do(?:\?[^"']*)?))["']/i)?.[1] ?? null;
-  }
-  if (!href || /^(?:#|javascript:|mailto:)/i.test(href)) return null;
+function safePortalNavigation(value: string | null, pageUrl: string): string | null {
+  if (!value) return null;
   try {
-    const url = new URL(href, pageUrl);
-    if (url.origin !== ORIGIN || /(?:logout|logoff|sair)\b/i.test(url.pathname + url.search)) return null;
+    const url = new URL(value, pageUrl);
+    if (url.protocol !== "https:" || url.origin !== ORIGIN ||
+        /(?:logout|logoff|sair)\b/i.test(url.pathname + url.search)) return null;
     return url.toString();
   } catch {
     return null;
   }
+}
+
+export function discoverProjudiTjamPostLoginLinks(html: string, pageUrl: string): string[] {
+  const active = activeHtml(html);
+  const candidates: string[] = [];
+
+  for (const match of active.matchAll(/<(?:frame|iframe)\b[^>]*>/gi)) {
+    const source = attribute(match[0], "src");
+    if (source) candidates.push(source);
+  }
+  for (const match of active.matchAll(/<meta\b[^>]*>/gi)) {
+    const tag = match[0];
+    if (!/^refresh$/i.test(attribute(tag, "http-equiv") ?? "")) continue;
+    const content = attribute(tag, "content") ?? "";
+    const target = content.match(/(?:^|;)\s*url\s*=\s*(.+)$/i)?.[1]
+      ?.trim().replace(/^["']|["']$/g, "");
+    if (target) candidates.push(target);
+  }
+  for (const match of active.matchAll(/(?:window\.)?location(?:\.href)?\s*=\s*(["'])(.*?)\1/gi)) {
+    if (match[2]) candidates.push(decodeEntities(match[2]));
+  }
+  for (const match of active.matchAll(/(?:window\.)?location\.(?:assign|replace)\(\s*(["'])(.*?)\1/gi)) {
+    if (match[2]) candidates.push(decodeEntities(match[2]));
+  }
+
+  return [...new Set(candidates
+    .map(candidate => safePortalNavigation(candidate.replace(/\\\//g, "/"), pageUrl))
+    .filter((candidate): candidate is string => Boolean(candidate)))];
+}
+
+function navigationLiteral(source: string | null, scriptAttribute = false): string | null {
+  if (!source) return null;
+  const normalized = decodeEntities(source).replace(/\\\//g, "/").trim();
+  if (!scriptAttribute && !/^(?:javascript:|#)/i.test(normalized)) return normalized;
+
+  for (const match of normalized.matchAll(/(["'])([\s\S]*?)\1/g)) {
+    const candidate = match[2]?.trim();
+    if (!candidate) continue;
+    if (/^(?:https?:\/\/|\/|\.\.?\/)/i.test(candidate) ||
+        /^[a-z0-9][^\s"'()]*\.(?:do|jsp)(?:[?#][^\s"']*)?$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function navigableHref(tag: string, pageUrl: string): string | null {
+  const href = navigationLiteral(attribute(tag, "href")) ??
+    navigationLiteral(attribute(tag, "onclick"), true);
+  if (!href || /^(?:#|javascript:|mailto:)/i.test(href)) return null;
+  return safePortalNavigation(href, pageUrl);
 }
 
 export function discoverProjudiTjamAgendaLinks(html: string, pageUrl: string): string[] {
@@ -329,7 +396,8 @@ export class ProjudiTjamClient implements LegalPortalAdapter {
     const session = new PortalSession();
     const authenticated = await authenticatedPages(session, credentials);
     const links = [...new Set(authenticated.flatMap(page => discoverProjudiTjamAgendaLinks(page.html, page.url)))];
-    if (!links.length) throw new LegalPortalError("layout_changed");
+    logPortalDiagnostic("agenda_links", { pages: authenticated.length, links: links.length });
+    if (!links.length) throw new LegalPortalError("agenda_navigation_changed");
 
     const hearings = new Map<string, LegalPortalHearing>();
     let recognizedAgenda = false;
@@ -350,7 +418,12 @@ export class ProjudiTjamClient implements LegalPortalAdapter {
         if (!visited.has(child) && !queue.includes(child) && queue.length < 40) queue.push(child);
       }
     }
-    if (!recognizedAgenda) throw new LegalPortalError("layout_changed");
+    logPortalDiagnostic("agenda_pages", {
+      visited: visited.size,
+      recognized: recognizedAgenda,
+      hearings: hearings.size,
+    });
+    if (!recognizedAgenda) throw new LegalPortalError("agenda_page_changed");
 
     return {
       provider: this.provider,

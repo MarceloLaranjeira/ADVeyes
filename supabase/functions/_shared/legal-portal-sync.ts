@@ -183,7 +183,13 @@ export async function syncPortalConnection(
 export function portalFailureStatus(code: string): string {
   if (code === "invalid_credentials") return "invalid";
   if (code === "captcha_required" || code === "certificate_required") return "action_required";
-  if (code === "layout_changed") return "paused";
+  if ([
+    "layout_changed",
+    "login_page_changed",
+    "post_login_navigation_changed",
+    "agenda_navigation_changed",
+    "agenda_page_changed",
+  ].includes(code)) return "paused";
   return "active";
 }
 

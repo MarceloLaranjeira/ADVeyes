@@ -115,7 +115,16 @@ Deno.serve(async request => {
     } catch (syncError) {
       const code = syncError instanceof LegalPortalError ? syncError.code : "operation_failed";
       await recordPortalFailure(admin, connection as PortalConnectionRow, code);
-      const permanent = ["invalid_credentials", "captcha_required", "certificate_required", "layout_changed"].includes(code);
+      const permanent = [
+        "invalid_credentials",
+        "captcha_required",
+        "certificate_required",
+        "layout_changed",
+        "login_page_changed",
+        "post_login_navigation_changed",
+        "agenda_navigation_changed",
+        "agenda_page_changed",
+      ].includes(code);
       await admin.from("legal_portal_sync_jobs").update({
         state: permanent ? "failed" : "retry",
         next_attempt_at: permanent ? now : retryAt(job.attempts + 1),
