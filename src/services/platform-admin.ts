@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/async-timeout";
+import type {
+  TenantBranding,
+  TenantMembership,
+} from "@/contexts/TenantContext";
 
 export interface PlatformTenantSummary {
   id: string;
@@ -13,12 +17,40 @@ export interface PlatformTenantSummary {
   candidateProcesses: number;
   monitoredProcesses: number;
   integrationFailures: number;
+  branding?: TenantBranding | null;
   subscription: {
     planCode: string | null;
     status: string;
     nextDueDate: string | null;
     trialEndsAt: string | null;
   } | null;
+}
+
+export function toPlatformTenantMembership(
+  tenant: PlatformTenantSummary,
+): TenantMembership {
+  const fallbackName = tenant.displayName || "ADVeyes";
+  const branding = tenant.branding ?? {
+    publicName: fallbackName,
+    shortName: fallbackName,
+    logoLightPath: null,
+    logoDarkPath: null,
+    faviconPath: null,
+    iconPath: null,
+    colorTokens: {},
+  };
+
+  return {
+    tenantId: tenant.id,
+    slug: tenant.slug,
+    displayName: tenant.displayName,
+    status: tenant.status,
+    role: "admin",
+    dataScope: "tenant",
+    accessMode: "platform",
+    platformContextVersion: 1,
+    branding,
+  };
 }
 
 export interface PlatformOverview {

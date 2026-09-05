@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canUseFeature, getTrialDaysLeft } from "@/lib/subscription-access";
+import {
+  canUseFeature,
+  getTrialDaysLeft,
+  type PlanFeature,
+} from "@/lib/subscription-access";
 
 describe("subscription access", () => {
   it("não libera recursos pagos enquanto o pagamento está pendente", () => {
@@ -29,7 +33,7 @@ describe("subscription access", () => {
     })).toBe(false);
   });
 
-  it("restringe webhooks ao plano Performance ativo", () => {
+  it("restringe webhooks aos planos Performance e Parceiro ativos", () => {
     expect(canUseFeature({
       feature: "api_webhooks",
       plan: "profissional",
@@ -42,6 +46,33 @@ describe("subscription access", () => {
       status: "active",
       trialDaysLeft: 0,
     })).toBe(true);
+    expect(canUseFeature({
+      feature: "api_webhooks",
+      plan: "parceiro",
+      status: "active",
+      trialDaysLeft: 0,
+    })).toBe(true);
+  });
+
+  it("libera todos os recursos para o plano Parceiro ativo", () => {
+    const features: PlanFeature[] = [
+      "adicionar_processo",
+      "adicionar_cliente",
+      "ia_juridica",
+      "exportar_relatorio",
+      "financeiro",
+      "equipe",
+      "api_webhooks",
+    ];
+
+    for (const feature of features) {
+      expect(canUseFeature({
+        feature,
+        plan: "parceiro",
+        status: "active",
+        trialDaysLeft: 0,
+      })).toBe(true);
+    }
   });
 
   it("calcula os dias restantes de trial arredondando para cima", () => {

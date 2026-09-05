@@ -14,6 +14,7 @@ import {
 import { useTenant } from "@/contexts/TenantContext";
 import {
   platformAdmin,
+  toPlatformTenantMembership,
   type PlatformOverview,
 } from "@/services/platform-admin";
 import {
@@ -66,24 +67,7 @@ const PlatformAdmin = () => {
   const openTenant = (tenantId: string) => {
     const tenant = overview?.tenants.find((item) => item.id === tenantId);
     if (!tenant) return;
-    selectPlatformTenant({
-      tenantId: tenant.id,
-      slug: tenant.slug,
-      displayName: tenant.displayName,
-      status: tenant.status,
-      role: "admin",
-      dataScope: "tenant",
-      accessMode: "platform",
-      branding: {
-        publicName: tenant.displayName,
-        shortName: tenant.displayName,
-        logoLightPath: null,
-        logoDarkPath: null,
-        faviconPath: null,
-        iconPath: null,
-        colorTokens: {},
-      },
-    });
+    selectPlatformTenant(toPlatformTenantMembership(tenant));
     navigate("/");
   };
 

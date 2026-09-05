@@ -32,6 +32,19 @@ interface TenantRow {
   created_at: string;
 }
 
+interface TenantBrandRow {
+  tenant_id: string;
+  public_name: string | null;
+  short_name: string | null;
+  logo_light_path: string | null;
+  logo_dark_path: string | null;
+  favicon_path: string | null;
+  icon_path: string | null;
+  color_tokens: Record<string, string> | null;
+  privacy_url: string | null;
+  terms_url: string | null;
+}
+
 interface LegalOverviewCountRow {
   tenant_id: string;
   active_members: number;
@@ -233,7 +246,12 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_action" }, 400);
   }
 
-  const [tenantsResult, subscriptionsResult, legalCountsResult] = await Promise.all([
+  const [
+    tenantsResult,
+    subscriptionsResult,
+    legalCountsResult,
+    brandsResult,
+  ] = await Promise.all([
     auth.admin
       .from("tenants")
       .select(
@@ -248,6 +266,12 @@ Deno.serve(async (request) => {
     auth.admin.rpc("platform_legal_overview_counts", {
       p_actor_user_id: auth.user.id,
     }),
+    auth.admin
+      .from("tenant_brand_settings")
+      .select(
+        "tenant_id, public_name, short_name, logo_light_path, logo_dark_path, favicon_path, icon_path, color_tokens, privacy_url, terms_url",
+      )
+      .not("published_at", "is", null),
   ]);
 
   const coreError = [tenantsResult.error, legalCountsResult.error].find(Boolean);
@@ -258,6 +282,7 @@ Deno.serve(async (request) => {
 
   [
     ["subscriptions", subscriptionsResult.error],
+    ["brands", brandsResult.error],
   ].forEach(([query, error]) => {
     if (error) {
       console.error(`platform-admin: optional ${query} query failed`);
@@ -278,10 +303,18 @@ Deno.serve(async (request) => {
       ],
     ),
   );
+  const brands = new Map(
+    (brandsResult.error ? [] : brandsResult.data ?? []).map((brand) => [
+      brand.tenant_id,
+      brand as TenantBrandRow,
+    ]),
+  );
 
   const tenants = (tenantsResult.data as TenantRow[] ?? []).map((tenant) => {
     const subscription = subscriptions.get(tenant.id);
     const counts = legalCounts.get(tenant.id);
+    const brand = brands.get(tenant.id);
+    const publicName = brand?.public_name?.trim() || tenant.display_name;
     return {
       id: tenant.id,
       displayName: tenant.display_name,
@@ -295,6 +328,17 @@ Deno.serve(async (request) => {
       monitoredProcesses: counts?.monitored_processes ?? 0,
       integrationFailures: counts?.integration_failures ?? 0,
       lastLegalSuccessAt: counts?.last_legal_success_at ?? null,
+      branding: {
+        publicName,
+        shortName: brand?.short_name?.trim() || publicName,
+        logoLightPath: brand?.logo_light_path ?? null,
+        logoDarkPath: brand?.logo_dark_path ?? null,
+        faviconPath: brand?.favicon_path ?? null,
+        iconPath: brand?.icon_path ?? null,
+        colorTokens: brand?.color_tokens ?? {},
+        privacyUrl: brand?.privacy_url ?? undefined,
+        termsUrl: brand?.terms_url ?? undefined,
+      },
       subscription: subscription
         ? {
           planCode: Array.isArray(subscription.billing_plans)
