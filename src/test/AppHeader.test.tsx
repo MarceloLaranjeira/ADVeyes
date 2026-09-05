@@ -7,6 +7,10 @@ vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ user: { email: "advogado@exemplo.com" }, signOut: vi.fn() }),
 }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenant: () => ({ currentTenant: { tenantId: "tenant-1" } }),
+}));
+
 vi.mock("@/components/notifications/NotificationPanel", () => ({
   NotificationPanel: () => <button aria-label="Notificações">Notificações</button>,
 }));
@@ -27,7 +31,8 @@ describe("AppHeader", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByPlaceholderText("Pesquisar contato, processo ou tarefa")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Pesquisar contato, processo, atividade ou audiência")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pesquisar" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Adicionar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Notificações" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Contratar" })).toBeInTheDocument();

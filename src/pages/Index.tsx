@@ -75,7 +75,7 @@ const Index = () => {
         <header className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Meu Painel</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Meu Painel</p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{greeting}</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {currentTenant?.displayName ?? "Escritório"} · {now.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
@@ -165,7 +165,7 @@ const Index = () => {
                         <button
                           type="button"
                           key={hearing.id}
-                          onClick={() => navigate("/controladoria?aba=audiencias")}
+                          onClick={() => navigate(`/audiencias?focus=${hearing.id}`)}
                           className="w-full rounded-xl border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <span className="block truncate text-sm font-semibold">{hearing.tipo}</span>
@@ -192,7 +192,7 @@ const Index = () => {
                   <CardContent className="p-4 sm:p-5">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <Bell className="h-4 w-4 text-primary" />
+                        <Bell className="h-4 w-4 text-slate-500" />
                         <h2 className="font-serif text-sm font-semibold">Atualizações não lidas</h2>
                       </div>
                       <button type="button" onClick={() => navigate("/publicacoes")} className="text-xs font-medium text-primary hover:underline">Ver todas</button>

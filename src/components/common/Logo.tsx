@@ -1,9 +1,14 @@
 import { useBrand } from "@/contexts/BrandContext";
+import type { TenantBranding } from "@/contexts/TenantContext";
 
 interface LogoProps {
   className?: string;
   dark?: boolean;          // invert colors for dark backgrounds
   size?: "sm" | "md" | "lg" | "xl";
+  branding?: Pick<
+    TenantBranding,
+    "publicName" | "shortName" | "logoLightPath" | "logoDarkPath" | "iconPath"
+  >;
 }
 
 const sizes = {
@@ -19,15 +24,16 @@ const sizes = {
  * linhas, que só cabem inteiras quando podem encolher pela largura.
  */
 const logoBoxes: Record<NonNullable<LogoProps["size"]>, string> = {
-  sm: "max-h-7 max-w-[140px]",
-  md: "max-h-10 max-w-[220px]",
-  lg: "max-h-14 max-w-[280px]",
-  xl: "max-h-20 max-w-[360px]",
+  sm: "h-7 w-full max-w-[140px]",
+  md: "h-10 w-full max-w-[220px]",
+  lg: "h-12 w-full max-w-[200px]",
+  xl: "h-20 w-full max-w-[360px]",
 };
 
 /** Scales of Justice SVG mark */
-export const LogoMark = ({ className = "", dark = false, size = "md" }: LogoProps) => {
-  const { brand } = useBrand();
+export const LogoMark = ({ className = "", dark = false, size = "md", branding }: LogoProps) => {
+  const { brand: activeBrand } = useBrand();
+  const brand = branding ?? activeBrand;
   const s = sizes[size].icon;
   const iconPath = brand.iconPath;
   const accent = dark ? "#ffffff" : "hsl(var(--primary))";
@@ -92,10 +98,21 @@ export const LogoMark = ({ className = "", dark = false, size = "md" }: LogoProp
   );
 };
 
-export const LogoFull = ({ className = "", dark = false, size = "md" }: LogoProps) => {
-  const { brand } = useBrand();
+export const LogoFull = ({ className = "", dark = false, size = "md", branding }: LogoProps) => {
+  const { brand: activeBrand } = useBrand();
+  const brand = branding ?? activeBrand;
   const s = sizes[size];
   const text = dark ? "text-white" : "text-foreground";
+  const displayName = size === "sm"
+    ? brand.shortName?.trim() || brand.publicName
+    : brand.publicName;
+  const compactLongName = displayName.length > 20;
+  const fullMarkSize = size === "sm" ? "sm" : "md";
+  const nameSize = displayName.length > 48
+    ? "text-[10px] leading-[1.05] tracking-[0.06em]"
+    : displayName.length > 28
+      ? "text-xs leading-tight tracking-wider"
+      : `${s.text} tracking-widest`;
   const logoPath = dark
     ? brand.logoDarkPath ?? brand.logoLightPath
     : brand.logoLightPath ?? brand.logoDarkPath;
@@ -103,34 +120,35 @@ export const LogoFull = ({ className = "", dark = false, size = "md" }: LogoProp
   if (logoPath) {
     return (
       <span
-        className={`inline-flex items-center justify-center ${logoBoxes[size]}`}
+        className={`inline-flex shrink-0 items-center justify-start ${logoBoxes[size]}`}
       >
         <img
           src={logoPath}
           alt={brand.publicName}
-          className={`h-auto w-auto max-h-full max-w-full object-contain ${className}`}
+          className={`block h-full w-full max-h-full max-w-full object-contain object-left ${className}`}
         />
       </span>
     );
   }
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      <LogoMark dark={dark} size={size} />
-      <div>
-        <div className={`font-serif font-bold tracking-widest uppercase ${s.text} ${text}`}>
-          {brand.publicName}
+    <div className={`flex min-w-0 items-center ${compactLongName ? "gap-2" : "gap-3"} ${logoBoxes[size]} ${className}`}>
+      <LogoMark branding={brand} className="shrink-0" dark={dark} size={fullMarkSize} />
+      <div className="min-w-0">
+        <div className={`brand-name-clamp font-serif font-bold uppercase ${nameSize} ${text}`}>
+          {displayName}
         </div>
-        <div className={`tracking-widest uppercase ${s.sub} opacity-60 ${text}`}>
+        {!compactLongName ? <div className={`tracking-widest uppercase ${s.sub} opacity-60 ${text}`}>
           Gestão Jurídica
-        </div>
+        </div> : null}
       </div>
     </div>
   );
 };
 
-export const LogoText = ({ className = "", dark = false, size = "md" }: LogoProps) => {
-  const { brand } = useBrand();
+export const LogoText = ({ className = "", dark = false, size = "md", branding }: LogoProps) => {
+  const { brand: activeBrand } = useBrand();
+  const brand = branding ?? activeBrand;
   const s = sizes[size];
   const text = dark ? "text-white" : "text-foreground";
   const accent = dark ? "text-white/80" : "text-primary";

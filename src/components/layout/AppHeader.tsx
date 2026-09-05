@@ -1,8 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  Search, Plus, ChevronDown, Bell, LogOut, User as UserIcon,
-} from "lucide-react";
+import { Plus, ChevronDown, Bell, LogOut, User as UserIcon } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
@@ -10,6 +8,7 @@ import {
 import { NotificationPanel } from "@/components/notifications/NotificationPanel";
 import { LogoFull } from "@/components/common/Logo";
 import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
 
 /**
  * Topbar global no estilo Astrea.
@@ -51,12 +50,12 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
           logo vertical ou de várias linhas encolhe pela largura em vez de ser
           cortada pela altura fixa que existia aqui antes.
         */}
-        <LogoFull size="lg" dark className="max-h-12" />
+        <LogoFull size="lg" dark />
       </Link>
 
       {/* No mobile a régua some, então a marca volta a ser um item comum. */}
       <Link to="/" className="flex lg:hidden items-center shrink-0">
-        <LogoFull size="sm" className="max-w-[140px]" />
+        <LogoFull size="sm" />
       </Link>
 
       <EnvironmentSwitcher
@@ -66,14 +65,7 @@ export const AppHeader = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
       {/* Busca global */}
       <div className="flex-1 max-w-2xl mx-auto">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Pesquisar contato, processo ou tarefa"
-            className="w-full h-10 pl-10 pr-4 text-sm rounded-lg bg-secondary border border-transparent focus:bg-white focus:border-primary focus:outline-none transition-colors"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       {/* Ações */}

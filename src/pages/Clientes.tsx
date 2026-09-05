@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Search, Plus, Phone, Mail, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,53 @@ const personTypeLabels: Record<string, string> = {
   desconhecido: "Tipo não informado",
 };
 
+interface ContactEnrichmentMetadata {
+  status?: "completed" | "not_found" | "retry" | "failed";
+  provider?: "brasilapi" | "opencnpj" | "serpro";
+  checked_at?: string;
+  fields?: string[];
+}
+
+function enrichmentMetadata(cliente: Cliente): ContactEnrichmentMetadata | null {
+  const metadata = cliente.source_metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const enrichment = (metadata as Record<string, unknown>).contact_enrichment;
+  return enrichment && typeof enrichment === "object" && !Array.isArray(enrichment)
+    ? enrichment as ContactEnrichmentMetadata
+    : null;
+}
+
+function hasFullCnpj(value: string | null): boolean {
+  const normalized = value?.toUpperCase().replace(/[^0-9A-Z]/g, "") ?? "";
+  return /^[0-9A-Z]{12}[0-9]{2}$/.test(normalized);
+}
+
+function enrichmentLabel(cliente: Cliente): string {
+  const enrichment = enrichmentMetadata(cliente);
+  if (!enrichment) {
+    return hasFullCnpj(cliente.cpf)
+      ? "Aguardando enriquecimento empresarial"
+      : "CNPJ não disponibilizado pela capa";
+  }
+  if (enrichment.status === "completed") {
+    const provider = enrichment.provider === "opencnpj"
+      ? "OpenCNPJ"
+      : enrichment.provider === "serpro" ? "SERPRO" : "BrasilAPI";
+    return enrichment.fields?.length
+      ? `Enriquecido por ${provider}`
+      : `Cadastro consultado em ${provider}, sem novos meios de contato`;
+  }
+  if (enrichment.status === "not_found") return "CNPJ não localizado nas fontes públicas";
+  if (enrichment.status === "retry") return "Consulta pública em retentativa automática";
+  return "Enriquecimento público indisponível";
+}
+
 const Clientes = () => {
   const { toast } = useToast();
   const { currentTenant } = useTenant();
+  const [searchParams] = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<Record<string, any> | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -44,6 +87,7 @@ const Clientes = () => {
   }, [currentTenant]);
 
   useEffect(() => { void fetchClientes(); }, [fetchClientes]);
+  useEffect(() => { setSearch(searchParams.get("q") ?? ""); }, [searchParams]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -105,7 +149,7 @@ const Clientes = () => {
                       </Badge>
                     )}
                   </div>
-                  {c.cpf && <p className="text-xs text-muted-foreground mt-0.5">CPF: {c.cpf}</p>}
+                  {c.cpf && <p className="text-xs text-muted-foreground mt-0.5">CPF/CNPJ: {c.cpf}</p>}
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditData(c); setShowForm(true); }}>
@@ -140,10 +184,23 @@ const Clientes = () => {
                       : 0} processo(s) relacionado(s)
                   </span>
                 </div>
-                {!c.telefone && !c.email && !c.endereco && !c.cpf && (
+                <div className="pt-1 text-xs text-muted-foreground">
+                  <span>{enrichmentLabel(c)}</span>
+                  {enrichmentMetadata(c)?.checked_at && (
+                    <span>
+                      {` · consultado em ${new Intl.DateTimeFormat("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      }).format(new Date(enrichmentMetadata(c)!.checked_at!))}`}
+                    </span>
+                  )}
+                </div>
+                {!c.telefone && !c.email && !c.endereco && (
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
                     <p className="text-xs text-muted-foreground italic">
-                      Dados de contato não disponibilizados pela capa pública.
+                      {hasFullCnpj(c.cpf)
+                        ? "O cadastro empresarial público ainda não forneceu telefone, e-mail ou endereço."
+                        : "Dados de contato não disponibilizados pela capa pública."}
                     </p>
                     <Button
                       type="button"

@@ -93,7 +93,8 @@
   .brand-name-clamp {
     display: -webkit-box;
     overflow: hidden;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
