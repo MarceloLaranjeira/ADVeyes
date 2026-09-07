@@ -86,7 +86,7 @@ export function ApiIntegrationSettings({ tenantId, canManage }: Props) {
       await load();
       toast({ title: "Credencial criada" });
     } catch (error) {
-      toast({ title: "Erro ao criar credencial", description: String(error), variant: "destructive" });
+      toast({ title: "Erro ao criar credencial", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setWorking(false);
     }
@@ -99,7 +99,7 @@ export function ApiIntegrationSettings({ tenantId, canManage }: Props) {
       await load();
       toast({ title: "Credencial revogada" });
     } catch (error) {
-      toast({ title: "Erro ao revogar", description: String(error), variant: "destructive" });
+      toast({ title: "Erro ao revogar", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setWorking(false);
     }
@@ -118,7 +118,7 @@ export function ApiIntegrationSettings({ tenantId, canManage }: Props) {
       await load();
       toast({ title: "Webhook criado" });
     } catch (error) {
-      toast({ title: "Erro ao criar webhook", description: String(error), variant: "destructive" });
+      toast({ title: "Erro ao criar webhook", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setWorking(false);
     }

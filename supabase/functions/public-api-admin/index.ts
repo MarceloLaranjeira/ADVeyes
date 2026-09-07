@@ -3,6 +3,8 @@ import {
   corsHeaders,
   failureResponse,
   json,
+  resolveTenantLegalAccess,
+  type TenantLegalAccess,
 } from "../_shared/tenant-auth.ts";
 import { API_SCOPES, isApiScope } from "../_shared/public-api-contract.ts";
 import {
@@ -59,19 +61,21 @@ Deno.serve(async (request) => {
   const tenantId = body.tenantId?.trim();
   if (!tenantId) return json({ error: "tenant_required" }, 400);
 
-  const { data: membership, error: membershipError } = await auth.admin
-    .from("tenant_memberships")
-    .select("role")
-    .eq("tenant_id", tenantId)
-    .eq("user_id", auth.user.id)
-    .eq("status", "active")
-    .maybeSingle();
-  if (membershipError) return failureResponse("public-api-admin: membership", membershipError);
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
-    return json({ error: "permission_denied" }, 403);
+  // A Conta Geral precisa enxergar a configuração para diagnosticar o
+  // escritório, mas emitir credencial é um ato auditável: exige uma sessão de
+  // suporte ativa, exatamente como nas demais funções administrativas.
+  let access: TenantLegalAccess | null;
+  try {
+    access = await resolveTenantLegalAccess(auth.admin, auth.user.id, tenantId);
+  } catch (accessError) {
+    return failureResponse("public-api-admin: access", accessError);
   }
+  if (!access || !access.canManageAll) return json({ error: "permission_denied" }, 403);
 
   const action = body.action ?? "list";
+  if (action !== "list" && !access.canMutate) {
+    return json({ error: "support_session_required" }, 403);
+  }
   if (action === "list") {
     const [tokensResult, endpointsResult, escavadorToken] = await Promise.all([
       auth.admin.from("api_tokens")
