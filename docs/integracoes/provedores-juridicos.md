@@ -13,6 +13,30 @@ Não são disparadas duas consultas pagas para a mesma finalidade no mesmo ciclo
 | 4 | Escavador | Último fallback pago | `ESCAVADOR_API_TOKEN` |
 | Bloqueado | Conecta/Sinapses | LexIA, Hannah, OMNIA e LIA3R | Somente com autorização institucional, endpoint e token oficiais |
 
+## Contatos derivados da capa pública
+
+Partes entregues pela capa são materializadas automaticamente em contatos
+canônicos do escritório. Nome, papel, polo, tipo de pessoa, origem e processos
+relacionados são conciliados sem duplicação. Telefone, e-mail e endereço só são
+preenchidos quando a própria fonte os fornece ou quando existe um CNPJ completo
+e válido para consulta empresarial pública.
+
+O enriquecimento empresarial usa:
+
+1. **BrasilAPI**, como fonte gratuita principal;
+2. **OpenCNPJ**, como contingência gratuita;
+3. **SERPRO**, adaptador reservado para ativação futura mediante contratação.
+
+O processamento é assíncrono e idempotente. Uma fila interna aplica retentativa
+progressiva e nunca bloqueia a importação processual. Campos já preenchidos pelo
+escritório não são sobrescritos, e cada resultado guarda fonte, data e campos
+efetivamente adicionados.
+
+Não existe pesquisa aproximada por nome. Documento mascarado ou ausente não
+dispara consulta, pois isso poderia vincular dados de homônimos. CPF de pessoa
+física não é enviado a corretores de dados; meios pessoais entram apenas por
+fonte autorizada, cadastro do titular ou consentimento.
+
 ## Cobertura Projudi e audiências
 
 O DataJud é consultado nacionalmente pelos índices públicos dos tribunais. O
@@ -25,6 +49,14 @@ pendente de confirmação. Menções sem data e hora entram em **Indícios para
 revisão** e nunca viram compromisso automaticamente. O TJAM está cadastrado
 como primeiro piloto de conector autenticado; os demais portais permanecem
 explicitamente não homologados até validação individual.
+
+Na tela **Audiências**, o cartão **Agenda oficial Projudi — Brasil** apresenta
+um seletor com os 27 TJs. O administrador escolhe o tribunal e, quando o
+adaptador estiver `pilot` ou `active`, informa o login e a senha do próprio
+advogado. A credencial é validada no portal selecionado e armazenada somente no
+Supabase Vault; senha e cookies nunca retornam ao navegador. Tribunais em
+homologação continuam com DataJud/DJEN ativos, mas os campos de credencial e o
+envio permanecem bloqueados até validação real do adaptador.
 
 O adaptador JUDIT usa o Hot Storage síncrono, sem `on_demand` por padrão. Assim,
 uma leitura de tela não força atualização cobrada no tribunal. O modo on-demand

@@ -19,7 +19,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
 import { loadHearingsWorkspace, type HearingSignalRow } from "@/services/hearings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { legalPortalMessage, legalPortalService, type LegalPortalOverview } from "@/services/legal-portal";
+import { isLegalPortalConnected, legalPortalMessage, legalPortalService, type LegalPortalOverview } from "@/services/legal-portal";
 import { defaultHearingFilters, filterHearings, paginateHearings, type HearingFilters } from "@/lib/hearing-filters";
 
 interface Audiencia {
@@ -84,6 +84,7 @@ const Audiencias = () => {
   const [portalCredentials, setPortalCredentials] = useState({ login: "", password: "" });
   const tenantId = currentTenant?.tenantId ?? null;
   const readOnly = support.isPlatformAccess && !support.active;
+  const portalConnected = isLegalPortalConnected(portal?.connection);
   const filters = useMemo<HearingFilters>(() => ({
     query: searchParams.get("q") ?? "",
     period: (["future", "7", "30", "custom", "all"].includes(searchParams.get("period") ?? "")
@@ -163,10 +164,9 @@ const Audiencias = () => {
       setPortal(result);
       setPortalCredentials({ login: "", password: "" });
       setConnectOpen(false);
-      await fetchData();
       toast({
         title: "Projudi/TJAM conectado",
-        description: `${result.sync?.received ?? 0} audiência(s) recebida(s) da agenda oficial.`,
+        description: "Acesso validado. A primeira sincronização foi colocada na fila e continuará em segundo plano.",
       });
     } catch (error) {
       toast({ title: "Não foi possível conectar", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
@@ -182,8 +182,10 @@ const Audiencias = () => {
     try {
       const result = await legalPortalService.sync(tenantId, selectedPortalCourt);
       setPortal(result);
-      await fetchData();
-      toast({ title: "Agenda sincronizada", description: `${result.sync?.received ?? 0} audiência(s) conferida(s) no Projudi.` });
+      toast({
+        title: "Sincronização iniciada",
+        description: "A agenda será atualizada em segundo plano. Use Atualizar para acompanhar o resultado.",
+      });
     } catch (error) {
       toast({ title: "Falha na sincronização", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
       await fetchPortalStatus();
@@ -306,11 +308,12 @@ const Audiencias = () => {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-semibold">Agenda oficial Projudi — Brasil</h2>
-                  {portal?.connection?.status === "active" && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Conectado</span>}
+                  {portalConnected && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Conectado</span>}
                 </div>
-                {portal?.connection?.status === "active" ? (
+                {portalConnected ? (
                   <p className="mt-1 text-sm text-muted-foreground">
                     {selectedPortalCourt} · usuário {portal.connection.loginMasked} · última sincronização {portal.connection.lastSuccessAt ? formatDate(portal.connection.lastSuccessAt) : "ainda não concluída"}.
+                    {portal.connection.sessionExpiresAt ? ` Sessão atual válida até ${formatDate(portal.connection.sessionExpiresAt)}.` : ""}
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-muted-foreground">Escolha o tribunal e conecte o acesso autorizado do advogado para importar data e horário da agenda interna.</p>
@@ -319,7 +322,7 @@ const Audiencias = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {portal?.connection?.status === "active" ? <>
+              {portalConnected ? <>
                 <Button variant="outline" onClick={() => void syncPortal()} disabled={portalLoading || !portal.access.canManage} className="gap-2"><RefreshCw className={cn("h-4 w-4", portalLoading && "animate-spin")} /> Sincronizar Projudi</Button>
                 <Button variant="outline" onClick={() => setConnectOpen(true)} disabled={portalLoading || !portal.access.canManage} className="gap-2"><KeyRound className="h-4 w-4" /> Trocar acesso</Button>
                 <Button variant="ghost" onClick={() => setDisconnectOpen(true)} disabled={portalLoading || !portal.access.canManage} className="gap-2 text-destructive"><Unplug className="h-4 w-4" /> Desconectar</Button>
@@ -433,7 +436,7 @@ const Audiencias = () => {
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Conectar Projudi do tribunal</DialogTitle></DialogHeader>
             <form onSubmit={connectPortal} className="space-y-4">
-              <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Acesso protegido</AlertTitle><AlertDescription>A senha é enviada somente à função segura do ADVeyes, validada no tribunal selecionado e armazenada criptografada no Supabase Vault. Cookies da sessão são descartados após a sincronização.</AlertDescription></Alert>
+              <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Acesso protegido</AlertTitle><AlertDescription>A senha e a sessão de até 120 minutos são armazenadas criptografadas no Supabase Vault e nunca retornam ao navegador. O ADveyes renova a sessão antes da expiração.</AlertDescription></Alert>
               <div className="space-y-2">
                 <Label htmlFor="projudi-court">Tribunal / estado</Label>
                 <Select value={selectedPortalCourt} onValueChange={value => { setSelectedPortalCourt(value); setPortalCredentials({ login: "", password: "" }); }}>
@@ -444,7 +447,7 @@ const Audiencias = () => {
               {selectedCourtEntry && !selectedCourtEntry.authenticatedAvailable && <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Conector em homologação</AlertTitle><AlertDescription>A cobertura pública DataJud/CNJ deste tribunal já funciona. Login e senha serão liberados somente após a validação do adaptador oficial, sem enviar credenciais ao portal errado.</AlertDescription></Alert>}
               <div className="space-y-2"><Label htmlFor="projudi-login">Login ou CPF/CNPJ</Label><Input id="projudi-login" autoComplete="username" disabled={!selectedCourtEntry?.authenticatedAvailable} value={portalCredentials.login} onChange={event => setPortalCredentials(current => ({ ...current, login: event.target.value }))} required /></div>
               <div className="space-y-2"><Label htmlFor="projudi-password">Senha</Label><Input id="projudi-password" type="password" autoComplete="current-password" disabled={!selectedCourtEntry?.authenticatedAvailable} value={portalCredentials.password} onChange={event => setPortalCredentials(current => ({ ...current, password: event.target.value }))} required /></div>
-              <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setConnectOpen(false)}>Cancelar</Button><Button type="submit" disabled={portalLoading || !selectedCourtEntry?.authenticatedAvailable}>{portalLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Validando no tribunal</> : "Conectar e importar"}</Button></div>
+              <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setConnectOpen(false)}>Cancelar</Button><Button type="submit" disabled={portalLoading || !selectedCourtEntry?.authenticatedAvailable}>{portalLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Validando no tribunal</> : "Conectar Projudi"}</Button></div>
             </form>
           </DialogContent>
         </Dialog>

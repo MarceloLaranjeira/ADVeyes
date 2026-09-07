@@ -106,6 +106,12 @@ export interface NormalizedPublication {
   recipientLawyers: Array<Record<string, unknown>>;
   courtBody: string | null;
   hearingEvidence: string | null;
+  availableOn: string | null;
+  djenHash: string | null;
+  communicationNumber: string | null;
+  documentType: string | null;
+  processClass: string | null;
+  active: boolean;
   payload: Record<string, unknown>;
 }
 
@@ -274,6 +280,8 @@ export interface DjenPublicationPayload {
   link?: string | null;
   tipoDocumento?: string | null;
   nomeClasse?: string | null;
+  numeroComunicacao?: number | string | null;
+  ativo?: boolean | null;
   destinatarios?: unknown[] | null;
   destinatarioadvogados?: unknown[] | null;
   [key: string]: unknown;
@@ -429,6 +437,12 @@ export function normalizeDjenPublication(
     recipientLawyers: recordArray(raw.destinatarioadvogados),
     courtBody: collapse(raw.nomeOrgao) || null,
     hearingEvidence: hearingEvidence(content),
+    availableOn: availableAt?.slice(0, 10) ?? null,
+    djenHash: collapse(raw.hash) || null,
+    communicationNumber: collapse(raw.numeroComunicacao) || null,
+    documentType: collapse(raw.tipoDocumento) || null,
+    processClass: collapse(raw.nomeClasse) || null,
+    active: raw.ativo !== false,
     payload: raw as Record<string, unknown>,
   };
 }
@@ -468,6 +482,12 @@ export function normalizeEscavadorPublication(
     recipientLawyers: [],
     courtBody: null,
     hearingEvidence: hearingEvidence(content),
+    availableOn: null,
+    djenHash: null,
+    communicationNumber: null,
+    documentType: null,
+    processClass: null,
+    active: true,
     payload: raw as Record<string, unknown>,
   };
 }

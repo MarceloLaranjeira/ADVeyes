@@ -1,7 +1,7 @@
 /* The generated Supabase types predate the tenant and legal movement migrations. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -35,6 +35,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { exportProcessoDetalhadoPDF, exportProcessosPDF } from "@/lib/pdf-export";
 import { buildProcessTimeline, isSafeExternalUrl } from "@/lib/process-timeline";
+import { classifyDeadline, formatDeadlineDate } from "@/lib/controladoria";
+import { legalOriginPath } from "@/lib/legal-navigation";
 
 // As tabelas jurídicas ainda não estão nos tipos gerados do Supabase.
 // `id` é declarado porque a timeline depende dele como chave estável.
@@ -52,6 +54,8 @@ const emptyCollections = {
   tasks: [] as RecordRow[],
   hours: [] as RecordRow[],
 };
+
+const DETAIL_TABS = new Set(["resumo", "andamentos", "intimacoes", "documentos", "compromissos", "partes", "financeiro", "tarefas", "prazos", "horas"]);
 
 function displayDate(value?: string | null, withTime = false) {
   if (!value) return "Não informado";
@@ -76,6 +80,7 @@ function EmptySection({ children }: { children: React.ReactNode }) {
 const ProcessoDetalhe = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const [processo, setProcesso] = useState<RecordRow | null>(null);
@@ -85,6 +90,9 @@ const ProcessoDetalhe = () => {
   const [partialFailure, setPartialFailure] = useState(false);
   const [editing, setEditing] = useState(false);
   const tenantId = currentTenant?.tenantId;
+  const requestedTab = searchParams.get("tab");
+  const activeTab = requestedTab && DETAIL_TABS.has(requestedTab) ? requestedTab : "resumo";
+  const focusedEventId = searchParams.get("focus");
 
   const load = useCallback(async () => {
     if (!id || !tenantId) return;
@@ -249,13 +257,17 @@ const ProcessoDetalhe = () => {
               <Badge variant="outline">{processo.status || "Em andamento"}</Badge>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">{processo.cliente_nome || "Cliente não identificado"} · {processo.vara || processo.adjudicating_body || "Vara não informada"}</p>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <p className="rounded-lg border bg-card px-3 py-2"><span className="font-semibold">Polo ativo:</span> {activePartiesText || "Não identificado"}</p>
+              <p className="rounded-lg border bg-card px-3 py-2"><span className="font-semibold">Polo passivo:</span> {passivePartiesText || "Não identificado"}</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
               className="gap-2"
               onClick={() => exportProcessoDetalhadoPDF({
-                tenantName: currentTenant?.name,
+                tenantName: currentTenant?.displayName,
                 processo: processo as any,
                 parties: collections.parties as any,
                 movements: collections.movements as any,
@@ -283,7 +295,7 @@ const ProcessoDetalhe = () => {
           </div>
         )}
 
-        <Tabs defaultValue="resumo" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={value => { const next = new URLSearchParams(searchParams); if (value === "resumo") next.delete("tab"); else next.set("tab", value); next.delete("focus"); setSearchParams(next, { replace: true }); }} className="space-y-6">
           <div className="overflow-x-auto rounded-xl border bg-muted/30 p-1">
             <TabsList className="h-auto min-w-max justify-start bg-transparent">
               <TabsTrigger value="resumo">Resumo</TabsTrigger>
@@ -342,7 +354,7 @@ const ProcessoDetalhe = () => {
             {processo.descricao && <section className="rounded-2xl border bg-card p-5 text-sm leading-6 shadow-sm"><h2 className="mb-2 font-semibold">Observações</h2><p className="whitespace-pre-wrap text-muted-foreground">{processo.descricao}</p></section>}
             <section>
               <div className="mb-4"><h2 className="text-lg font-semibold">Últimos andamentos</h2><p className="mt-1 text-sm text-muted-foreground">Movimentações oficiais e registros do escritório, em ordem cronológica.</p></div>
-              <ProcessoTimeline events={movementEvents} previewLimit={5} />
+              <ProcessoTimeline events={movementEvents} previewLimit={5} focusId={activeTab === "resumo" ? focusedEventId : null} />
             </section>
           </TabsContent>
 
@@ -355,11 +367,11 @@ const ProcessoDetalhe = () => {
               items={collections.manual as AndamentoManual[]}
               onChanged={load}
             />
-            <ProcessoTimeline events={movementEvents} />
+            <ProcessoTimeline events={movementEvents} focusId={focusedEventId} />
           </TabsContent>
 
           <TabsContent value="intimacoes">
-            <ProcessoTimeline events={publicationEvents} emptyMessage="Nenhuma intimação ou publicação oficial vinculada." />
+            <ProcessoTimeline events={publicationEvents} focusId={focusedEventId} emptyMessage="Nenhuma intimação ou publicação oficial vinculada." />
           </TabsContent>
 
           <TabsContent value="partes" className="space-y-3">
@@ -395,8 +407,8 @@ const ProcessoDetalhe = () => {
           </TabsContent>
 
           <TabsContent value="compromissos" className="space-y-3">{collections.hearings.length === 0 ? <EmptySection>Nenhuma audiência vinculada.</EmptySection> : collections.hearings.map((item) => <div key={item.id} className="rounded-xl border border-l-4 border-l-primary bg-card p-4"><div className="flex flex-wrap items-center gap-2"><CalendarDays className="h-4 w-4 text-primary" /><p className="font-medium">{item.tipo}</p>{item.review_status === "pending" && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">A confirmar</Badge>}</div><p className="mt-2 text-sm text-muted-foreground">{displayDate(item.data_hora, true)} · {item.local || "Local não informado"}</p>{item.source_evidence && <p className="mt-3 text-sm leading-6 text-muted-foreground">{item.source_evidence}</p>}</div>)}</TabsContent>
-          <TabsContent value="tarefas" className="space-y-3">{collections.tasks.length === 0 ? <EmptySection>Nenhuma tarefa vinculada.</EmptySection> : collections.tasks.map((item) => <div key={item.id} className="rounded-xl border bg-card p-4"><div className="flex items-center justify-between gap-3"><p className="font-medium">{item.titulo}</p><Badge variant="outline">{item.status}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{item.descricao || "Sem descrição"}</p></div>)}</TabsContent>
-          <TabsContent value="prazos" className="space-y-3">{collections.publications.filter((item) => item.possible_deadline || item.data_prazo).length === 0 ? <EmptySection>Nenhum prazo identificado para revisão.</EmptySection> : collections.publications.filter((item) => item.possible_deadline || item.data_prazo).map((item) => <div key={item.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="font-medium text-amber-900">{item.tipo || "Possível prazo"}</p><p className="mt-1 text-sm text-amber-800">Prazo sugerido: {displayDate(item.data_prazo)}</p></div>)}</TabsContent>
+          <TabsContent value="tarefas" className="space-y-3">{collections.tasks.length === 0 ? <EmptySection>Nenhuma tarefa vinculada.</EmptySection> : collections.tasks.map((item) => { const deadline = classifyDeadline(item.data_limite ?? null, new Date()); return <button type="button" key={item.id} onClick={() => navigate(item.tipo === "prazo" ? legalOriginPath({ kind: "prazo", id: item.id }) : `/tarefas?task=${item.id}`)} className="w-full rounded-xl border bg-card p-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex items-center justify-between gap-3"><p className="font-medium">{item.titulo}</p><Badge variant="outline">{item.status}</Badge></div><p className="mt-2 text-sm text-muted-foreground">{item.descricao || "Sem descrição"}</p>{item.tipo === "prazo" ? <p className={deadline.urgency === "vencido" ? "mt-2 text-sm font-semibold text-destructive" : "mt-2 text-sm font-semibold"}>Vencimento: {formatDeadlineDate(item.data_limite ?? null)} · {deadline.label}</p> : null}</button>; })}</TabsContent>
+          <TabsContent value="prazos" className="space-y-3">{collections.publications.filter((item) => item.possible_deadline || item.data_prazo).length === 0 ? <EmptySection>Nenhum prazo identificado para revisão.</EmptySection> : collections.publications.filter((item) => item.possible_deadline || item.data_prazo).map((item) => { const deadline = classifyDeadline(item.data_prazo ?? null, new Date()); return <button type="button" key={item.id} onClick={() => navigate(legalOriginPath({ kind: "intimacao", id: item.id }))} className="w-full rounded-xl border border-amber-200 bg-amber-50 p-4 text-left transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"><p className="font-medium text-amber-900">{item.tipo || "Possível prazo"}</p><p className="mt-1 text-sm text-amber-800">Prazo final: {formatDeadlineDate(item.data_prazo ?? null)} · {deadline.label}</p></button>; })}</TabsContent>
           <TabsContent value="horas" className="space-y-3">{collections.hours.length === 0 ? <EmptySection>Nenhuma hora trabalhada vinculada.</EmptySection> : collections.hours.map((item) => <div key={item.id} className="flex items-center justify-between rounded-xl border bg-card p-4"><div><p className="font-medium">{item.descricao}</p><p className="text-xs text-muted-foreground">{displayDate(item.data)} · {item.categoria}</p></div><p className="font-semibold">{Number(item.horas || 0).toLocaleString("pt-BR")} h</p></div>)}</TabsContent>
           <TabsContent value="documentos" className="space-y-3">{allDocuments.length === 0 ? <EmptySection>Nenhum despacho ou documento público disponível.</EmptySection> : allDocuments.map((item) => <div key={`${item.source_kind}:${item.id}`} className="flex items-start gap-3 rounded-xl border bg-card p-4"><FileText className="mt-0.5 h-5 w-5 shrink-0 text-primary" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{item.display_name}</p><Badge variant="outline">{item.source_kind === "tribunal" ? "Tribunal" : "Escritório"}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{item.display_type} · {displayDate(item.display_date, true)}</p>{item.text_content && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{item.text_content}</p>}{isSafeExternalUrl(item.display_url) && <a href={item.display_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Abrir documento oficial</a>}</div></div>)}</TabsContent>
         </Tabs>

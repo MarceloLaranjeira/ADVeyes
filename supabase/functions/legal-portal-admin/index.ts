@@ -11,7 +11,6 @@ import {
 import { LegalPortalError } from "../_shared/legal-portal-adapter.ts";
 import {
   deletePortalCredentials,
-  persistPortalSnapshot,
   type PortalConnectionRow,
   recordPortalFailure,
   storePortalCredentials,
@@ -42,6 +41,7 @@ function publicConnection(connection: Record<string, unknown> | null) {
     lastErrorCode: connection.last_error_code,
     lastErrorAt: connection.last_error_at,
     lastResult: connection.last_result,
+    sessionExpiresAt: connection.session_expires_at,
     configured: Boolean(connection.vault_secret_id),
   };
 }
@@ -66,7 +66,7 @@ async function loadCourtRegistry(admin: SupabaseClient) {
 
 async function loadConnection(admin: SupabaseClient, tenantId: string, selectedCourt: string): Promise<PortalConnectionRow | null> {
   const { data, error } = await admin.from("legal_portal_connections")
-    .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by")
+    .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by,session_expires_at")
     .eq("tenant_id", tenantId).eq("court_code", selectedCourt)
     .maybeSingle();
   if (error) throw error;
@@ -76,7 +76,7 @@ async function loadConnection(admin: SupabaseClient, tenantId: string, selectedC
 async function statusPayload(admin: SupabaseClient, tenantId: string, access: TenantLegalAccess, selectedCourt: string) {
   const courts = await loadCourtRegistry(admin);
   const { data: connection, error } = await admin.from("legal_portal_connections")
-    .select("id,provider,court_code,vault_secret_id,login_identifier_masked,status,capabilities,last_validated_at,last_success_at,last_error_code,last_error_at,last_result")
+    .select("id,provider,court_code,vault_secret_id,login_identifier_masked,status,capabilities,last_validated_at,last_success_at,last_error_code,last_error_at,last_result,session_expires_at")
     .eq("tenant_id", tenantId).eq("court_code", selectedCourt)
     .maybeSingle();
   if (error) throw error;
@@ -104,6 +104,49 @@ async function audit(admin: SupabaseClient, actorId: string, action: string, ten
     metadata: { tenant_id: tenantId, provider: "projudi_tjam", ...metadata },
   });
   if (error) console.error("legal-portal-admin: audit failed", error.code ?? "");
+}
+
+async function enqueueInitialSync(admin: SupabaseClient, connection: PortalConnectionRow, actorId: string) {
+  const { data: activeJob, error: activeJobError } = await admin
+    .from("legal_portal_sync_jobs")
+    .select("id")
+    .eq("tenant_id", connection.tenant_id)
+    .eq("connection_id", connection.id)
+    .in("state", ["pending", "retry", "leased", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (activeJobError) throw activeJobError;
+  if (activeJob) return;
+
+  const { error } = await admin.from("legal_portal_sync_jobs").insert({
+    tenant_id: connection.tenant_id,
+    connection_id: connection.id,
+    scope: "future",
+    state: "pending",
+    priority: 200,
+    idempotency_key: `manual:${connection.id}:${crypto.randomUUID()}`,
+    next_attempt_at: new Date().toISOString(),
+    created_by: actorId,
+  });
+  if (error) throw error;
+}
+
+function dispatchPortalWorker(): void {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (!supabaseUrl || !cronSecret) return;
+  const task = fetch(`${supabaseUrl}/functions/v1/legal-portal-worker`, {
+    method: "POST",
+    headers: { "x-cron-secret": cronSecret, "Content-Type": "application/json" },
+    body: "{}",
+  }).then(response => {
+    if (!response.ok) console.error("legal-portal-admin: worker dispatch failed", response.status);
+  }).catch(() => console.error("legal-portal-admin: worker dispatch unavailable"));
+  const runtime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };
+  }).EdgeRuntime;
+  runtime?.waitUntil(task);
 }
 
 Deno.serve(async request => {
@@ -165,38 +208,43 @@ Deno.serve(async request => {
           created_by: connection?.created_by ?? auth.user.id,
           updated_by: auth.user.id,
         }, { onConflict: "tenant_id,provider,court_code" })
-        .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by")
+        .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by,session_expires_at")
         .single();
       if (connectionError) throw connectionError;
       connection = savedConnection as PortalConnectionRow;
 
       try {
         const credentials = { login, password };
-        const snapshot = await new ProjudiTjamClient().fetchFutureHearings(credentials);
-        const secretId = await storePortalCredentials(auth.admin, connection.id, credentials);
+        const validation = await new ProjudiTjamClient().validateConnection(credentials);
+        const secretId = await storePortalCredentials(auth.admin, connection.id, {
+          ...credentials,
+          session: validation.session,
+        });
         connection = { ...connection, vault_secret_id: secretId, status: "active" };
         const { error: activeError } = await auth.admin.from("legal_portal_connections").update({
           vault_secret_id: secretId,
           status: "active",
-          capabilities: snapshot.capabilities,
-          last_validated_at: snapshot.fetchedAt,
+          capabilities: validation.capabilities,
+          last_validated_at: validation.validatedAt,
+          session_expires_at: validation.session.expiresAt,
           last_error_code: null,
           last_error_at: null,
+          last_result: null,
           updated_by: auth.user.id,
         }).eq("tenant_id", body.tenantId).eq("id", connection.id);
         if (activeError) throw activeError;
-        const result = await persistPortalSnapshot(auth.admin, connection, snapshot);
-        await auth.admin.from("legal_portal_connections").update({
-          last_success_at: result.fetchedAt,
-          last_result: result,
-        }).eq("tenant_id", body.tenantId).eq("id", connection.id);
-        await audit(auth.admin, auth.user.id, "legal_portal_connected", body.tenantId, {
-          received: result.received, created: result.created, updated: result.updated,
-        });
-        return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), sync: result });
+        await enqueueInitialSync(auth.admin, connection, auth.user.id);
+        dispatchPortalWorker();
+        await audit(auth.admin, auth.user.id, "legal_portal_connected", body.tenantId, { sync_queued: true });
+        return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), queued: true });
       } catch (error) {
         const code = error instanceof LegalPortalError ? error.code : "operation_failed";
-        await recordPortalFailure(auth.admin, connection, code);
+        await recordPortalFailure(
+          auth.admin,
+          connection,
+          code,
+          error instanceof LegalPortalError ? error.diagnostic : null,
+        );
         await audit(auth.admin, auth.user.id, "legal_portal_connection_failed", body.tenantId, { code });
         if (error instanceof LegalPortalError) return json({ error: code }, 422);
         throw error;
@@ -206,7 +254,14 @@ Deno.serve(async request => {
     const connection = await loadConnection(auth.admin, body.tenantId, selectedCourt);
     if (!connection) return json({ error: "portal_not_configured" }, 404);
 
-    if (body.action === "sync" || body.action === "test") {
+    if (body.action === "sync") {
+      await enqueueInitialSync(auth.admin, connection, auth.user.id);
+      dispatchPortalWorker();
+      await audit(auth.admin, auth.user.id, "legal_portal_sync", body.tenantId, { sync_queued: true });
+      return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), queued: true });
+    }
+
+    if (body.action === "test") {
       try {
         const result = await syncPortalConnection(auth.admin, connection);
         await audit(auth.admin, auth.user.id, `legal_portal_${body.action}`, body.tenantId, {
@@ -215,7 +270,12 @@ Deno.serve(async request => {
         return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), sync: result });
       } catch (error) {
         const code = error instanceof LegalPortalError ? error.code : "operation_failed";
-        await recordPortalFailure(auth.admin, connection, code);
+        await recordPortalFailure(
+          auth.admin,
+          connection,
+          code,
+          error instanceof LegalPortalError ? error.diagnostic : null,
+        );
         if (error instanceof LegalPortalError) return json({ error: code }, 422);
         throw error;
       }
@@ -227,6 +287,7 @@ Deno.serve(async request => {
       const { error } = await auth.admin.from("legal_portal_connections").update({
         vault_secret_id: null,
         status: "revoked",
+        session_expires_at: null,
         last_error_code: null,
         last_error_at: null,
         updated_by: auth.user.id,

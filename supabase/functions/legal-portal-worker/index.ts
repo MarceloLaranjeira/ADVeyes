@@ -40,27 +40,54 @@ Deno.serve(async request => {
     last_error_code: "worker_interrupted",
   }).in("state", ["leased", "running"]).lt("lease_expires_at", now);
 
+  // Falhas internas recém-diagnosticadas recebem uma tentativa rápida após
+  // correção de código. A partir da quarta tentativa, prevalece o backoff normal.
+  await admin.from("legal_portal_sync_jobs").update({ next_attempt_at: now })
+    .eq("state", "retry")
+    .eq("last_error_code", "operation_failed")
+    .lte("attempts", 3);
+
   const { data: connections, error: connectionError } = await admin
     .from("legal_portal_connections")
-    .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by,last_success_at")
-    .eq("status", "active")
+    .select("id,tenant_id,provider,court_code,vault_secret_id,login_identifier_masked,status,created_by,last_success_at,last_error_code")
+    .in("status", ["active", "paused"])
     .not("vault_secret_id", "is", null)
-    .or(`last_success_at.is.null,last_success_at.lt.${new Date(Date.now() - 30 * 60_000).toISOString()}`)
-    .limit(20);
+    .or(`last_success_at.is.null,last_success_at.lt.${new Date(Date.now() - 1 * 60_000).toISOString()}`)
+    .limit(100);
   if (connectionError) return json({ error: "operation_failed" }, 500);
 
-  const bucket = Math.floor(Date.now() / (30 * 60_000));
-  for (const connection of connections ?? []) {
-    await admin.from("legal_portal_sync_jobs").upsert({
+  const recoverableConnections = (connections ?? []).filter(connection =>
+    connection.status === "active" || [
+      "post_login_navigation_changed",
+      "agenda_navigation_changed",
+    ].includes(connection.last_error_code ?? "")
+  ).slice(0, 20);
+  for (const connection of recoverableConnections) {
+    const { data: activeJob, error: activeJobError } = await admin
+      .from("legal_portal_sync_jobs")
+      .select("id")
+      .eq("tenant_id", connection.tenant_id)
+      .eq("connection_id", connection.id)
+      .in("state", ["pending", "retry", "leased", "running"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeJobError) {
+      console.error("legal-portal-worker: active job lookup failed", activeJobError.code ?? "");
+      continue;
+    }
+    if (activeJob) continue;
+
+    await admin.from("legal_portal_sync_jobs").insert({
       tenant_id: connection.tenant_id,
       connection_id: connection.id,
       scope: "future",
       state: "pending",
       priority: 100,
-      idempotency_key: `future:${connection.id}:${bucket}`,
+      idempotency_key: `future:${connection.id}:${crypto.randomUUID()}`,
       next_attempt_at: now,
       created_by: connection.created_by,
-    }, { onConflict: "tenant_id,idempotency_key", ignoreDuplicates: true });
+    });
   }
 
   const { data: jobs, error: jobError } = await admin.from("legal_portal_sync_jobs")
@@ -114,14 +141,31 @@ Deno.serve(async request => {
       results.completed += 1;
     } catch (syncError) {
       const code = syncError instanceof LegalPortalError ? syncError.code : "operation_failed";
-      await recordPortalFailure(admin, connection as PortalConnectionRow, code);
+      const unexpected = syncError && typeof syncError === "object"
+        ? syncError as { name?: unknown; code?: unknown; message?: unknown }
+        : null;
+      const safeErrorText = (value: unknown) => String(value ?? "")
+        .replace(/[A-Za-z0-9_-]{48,}/g, "[redacted]")
+        .replace(/\s+/g, " ")
+        .slice(0, 500);
+      const diagnostic = syncError instanceof LegalPortalError
+        ? syncError.diagnostic
+        : unexpected
+          ? {
+            error_name: safeErrorText(unexpected.name),
+            error_code: safeErrorText(unexpected.code),
+            error_message: safeErrorText(unexpected.message),
+          }
+          : null;
+      await recordPortalFailure(admin, connection as PortalConnectionRow, code, diagnostic);
       const permanent = [
         "invalid_credentials",
+        "credential_missing",
         "captcha_required",
         "certificate_required",
+        "mfa_required",
         "layout_changed",
         "login_page_changed",
-        "post_login_navigation_changed",
         "agenda_navigation_changed",
         "agenda_page_changed",
       ].includes(code);

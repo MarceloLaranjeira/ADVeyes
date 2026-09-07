@@ -21,8 +21,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { classifyDeadline, formatDeadlineDate } from "@/lib/controladoria";
+import { legalOriginPath } from "@/lib/legal-navigation";
+import { djenCertificateUrl, djenLawyers, djenParties } from "@/lib/djen-publication";
 import { PropostaPrazoCard } from "@/components/processos/PropostaPrazoCard";
 import {
   deadlineService,
@@ -44,6 +48,7 @@ import {
   Scale,
   ShieldCheck,
   ListChecks,
+  XCircle,
 } from "lucide-react";
 import { decodeHtmlEntities } from "@/lib/html-entities";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -76,6 +81,17 @@ interface Publicacao {
   possible_deadline: boolean;
   source_name: string | null;
   source_url: string | null;
+  communication_type: string | null;
+  recipients: unknown;
+  recipient_lawyers: unknown;
+  court_body: string | null;
+  available_on: string | null;
+  djen_hash: string | null;
+  communication_number: string | null;
+  document_type: string | null;
+  process_class: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
 }
 
 interface Movimento {
@@ -168,6 +184,7 @@ const statusLabels: Record<string, string> = {
   urgente: "Revisar prazo",
   lida: "Lida",
   processada: "Processada",
+  cancelada: "Cancelada",
 };
 
 function formattedDate(value: string | null) {
@@ -179,7 +196,22 @@ function formattedDate(value: string | null) {
 
 function failureLabel(code: string | null) {
   if (!code) return null;
-  return failureLabels[code] ?? "Falha registrada";
+  return failureLabels[code] ?? `Falha: ${code}`;
+}
+
+function formattedDateOnly(value: string | null) {
+  if (!value) return "Data não informada";
+  const match = value.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "Data não informada";
+}
+
+function formattedNextRun(value: string | null) {
+  if (!value) return "sem fonte ativa";
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime()) && parsed.getTime() <= Date.now()) {
+    return "agora (fila pendente)";
+  }
+  return formattedDate(value);
 }
 
 interface PublicacoesProps {
@@ -189,6 +221,8 @@ interface PublicacoesProps {
 const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
   const isIntimations = mode === "intimacoes";
   const { currentTenant } = useTenant();
+  const support = usePlatformSupport();
+  const canMutate = currentTenant?.accessMode !== "platform" || support.active;
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -208,6 +242,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
   const [source, setSource] = useState("todas");
+  const [communicationType, setCommunicationType] = useState("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<Publicacao | null>(null);
   const [reviewForm, setReviewForm] = useState({
@@ -230,16 +265,15 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
     let publicationsQuery = supabase
       .from("publicacoes")
       .select(
-        "id, tenant_id, process_id, tipo, tribunal, numero_processo, cliente_nome, data_publicacao, conteudo, conteudo_simplificado, status, prazo_dias, data_prazo, tarefa_gerada, provider, origin_system, review_status, possible_deadline, source_name, source_url",
+        "id, tenant_id, process_id, tipo, tribunal, numero_processo, cliente_nome, data_publicacao, conteudo, conteudo_simplificado, status, prazo_dias, data_prazo, tarefa_gerada, provider, origin_system, review_status, possible_deadline, source_name, source_url, communication_type, recipients, recipient_lawyers, court_body, available_on, djen_hash, communication_number, document_type, process_class, cancelled_at, cancellation_reason",
       )
       .eq("tenant_id", tenantId)
       .order("data_publicacao", { ascending: false });
 
     if (isIntimations) {
-      publicationsQuery = publicationsQuery.eq(
-        "review_status",
-        "pending_review",
-      );
+      publicationsQuery = publicationsQuery
+        .eq("review_status", "pending_review")
+        .ilike("communication_type", "intima%");
     }
 
     const [
@@ -365,7 +399,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
   }, [activeTab, loadMovements]);
 
   useEffect(() => {
-    const publicationId = searchParams.get("publication");
+    const publicationId = searchParams.get("focus") ?? searchParams.get("publication");
     if (publicationId) setExpandedId(publicationId);
   }, [searchParams]);
 
@@ -376,6 +410,9 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
       if (source !== "todas" && publication.origin_system !== source) {
         return false;
       }
+      if (communicationType !== "todos" && publication.communication_type !== communicationType) {
+        return false;
+      }
       if (!normalized) return true;
       return [
         publication.numero_processo,
@@ -383,11 +420,40 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
         publication.tribunal,
         publication.conteudo,
         publication.source_name,
+        publication.communication_type,
+        publication.court_body,
+        publication.document_type,
+        publication.process_class,
       ].some((value) =>
         value?.toLocaleLowerCase("pt-BR").includes(normalized)
       );
     });
-  }, [publicacoes, search, source, status]);
+  }, [communicationType, publicacoes, search, source, status]);
+
+  const communicationTypes = useMemo(() => [...new Set(
+    publicacoes.map(item => item.communication_type).filter((value): value is string => Boolean(value)),
+  )].sort((a, b) => a.localeCompare(b, "pt-BR")), [publicacoes]);
+
+  const djenHealth = useMemo(() => {
+    const official = publicacoes.filter(item => item.provider === "djen");
+    return {
+      tribunals: new Set(official.map(item => item.tribunal).filter(Boolean)).size,
+      cancelled: official.filter(item => item.status === "cancelada").length,
+      lastAvailableOn: official.map(item => item.available_on ?? item.data_publicacao)
+        .filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+    };
+  }, [publicacoes]);
+
+  const focusedPublicationId = searchParams.get("focus") ?? searchParams.get("publication");
+  useEffect(() => {
+    if (!focusedPublicationId || !filteredPublications.some(item => item.id === focusedPublicationId)) return;
+    const timer = window.setTimeout(() => {
+      const card = document.getElementById(`intimacao-${focusedPublicationId}`);
+      if (typeof card?.scrollIntoView === "function") card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [filteredPublications, focusedPublicationId]);
 
   const filteredMovements = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase("pt-BR");
@@ -436,6 +502,10 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
 
   const synchronize = async () => {
     if (!currentTenant) return;
+    if (!canMutate) {
+      toast({ title: "Visualização somente leitura", description: "Ative o suporte temporário para sincronizar este escritório.", variant: "destructive" });
+      return;
+    }
     setSyncing(true);
     const { data, error } = await supabase.functions.invoke("legal-reconcile", {
       body: { tenantId: currentTenant.tenantId },
@@ -462,6 +532,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
 
   const markAsRead = async (publication: Publicacao) => {
     if (!currentTenant) return;
+    if (!canMutate) return;
     const { error } = await supabase
       .from("publicacoes")
       .update({ status: "lida" })
@@ -634,7 +705,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                 : `Acompanhamento real e isolado de ${currentTenant?.displayName}.`}
             </p>
           </div>
-          <Button onClick={() => void synchronize()} disabled={syncing}>
+          <Button onClick={() => void synchronize()} disabled={syncing || !canMutate} title={!canMutate ? "Ative o suporte temporário para sincronizar" : undefined}>
             <RefreshCw
               className={`mr-2 h-4 w-4 ${syncing ? "animate-spin" : ""}`}
             />
@@ -733,9 +804,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                 </p>
                 <p>
                   Próxima reconciliação:{" "}
-                  {syncPanel.nextRun
-                    ? formattedDate(syncPanel.nextRun)
-                    : "sem fonte ativa"}
+                  {formattedNextRun(syncPanel.nextRun)}
                 </p>
               </div>
             </div>
@@ -760,6 +829,17 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                 tone={syncPanel.stoppedCount > 0 ? "danger" : "neutral"}
               />
             </div>
+
+            {!isIntimations && (
+              <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">
+                <SyncMetric label="Tribunais no feed DJEN" value={djenHealth.tribunals} />
+                <SyncMetric label="Comunicações canceladas" value={djenHealth.cancelled} tone={djenHealth.cancelled > 0 ? "warning" : "neutral"} />
+                <div>
+                  <p className="text-xs text-muted-foreground">Última disponibilização importada</p>
+                  <p className="mt-1 font-medium">{formattedDateOnly(djenHealth.lastAvailableOn)}</p>
+                </div>
+              </div>
+            )}
 
             {syncPanel.pendingCount > 0 && (
               <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
@@ -827,18 +907,34 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
               />
             </div>
             {activeTab === "publicacoes" && (
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os status</SelectItem>
-                  <SelectItem value="nova">Novas</SelectItem>
-                  <SelectItem value="urgente">Revisar prazo</SelectItem>
-                  <SelectItem value="lida">Lidas</SelectItem>
-                  <SelectItem value="processada">Processadas</SelectItem>
-                </SelectContent>
-              </Select>
+              <>
+                {!isIntimations && (
+                  <Select value={communicationType} onValueChange={setCommunicationType}>
+                    <SelectTrigger className="w-52">
+                      <SelectValue placeholder="Tipo de comunicação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os tipos</SelectItem>
+                      {communicationTypes.map(type => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="nova">Novas</SelectItem>
+                    <SelectItem value="urgente">Revisar prazo</SelectItem>
+                    <SelectItem value="lida">Lidas</SelectItem>
+                    <SelectItem value="processada">Processadas</SelectItem>
+                    <SelectItem value="cancelada">Canceladas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
             )}
             <Select value={source} onValueChange={setSource}>
               <SelectTrigger className="w-44">
@@ -878,8 +974,20 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
               const missingOfficialContent = readableContent
                 .toLocaleLowerCase("pt-BR")
                 .includes("não foi possível extrair conteúdo");
+              const parties = djenParties(publication.recipients);
+              const lawyers = djenLawyers(publication.recipient_lawyers);
+              const certificateUrl = publication.provider === "djen"
+                ? djenCertificateUrl(publication.djen_hash)
+                : null;
               return (
-                <DepthCard key={publication.id}>
+                <DepthCard
+                  key={publication.id}
+                  id={`intimacao-${publication.id}`}
+                  interactive
+                  onActivate={() => setExpandedId(expanded ? null : publication.id)}
+                  aria-label={`Abrir intimação do processo ${publication.numero_processo ?? "não vinculado"}`}
+                  className={focusedPublicationId === publication.id ? "bg-primary/5 ring-2 ring-primary/40" : undefined}
+                >
                   <CardHeader className="pb-3">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
@@ -890,8 +998,11 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                           <Badge variant="secondary">
                             {publication.tribunal}
                           </Badge>
+                          {publication.communication_type && (
+                            <Badge variant="outline">{publication.communication_type}</Badge>
+                          )}
                           <Badge
-                            variant={publication.status === "urgente"
+                            variant={["urgente", "cancelada"].includes(publication.status)
                               ? "destructive"
                               : "outline"}
                           >
@@ -906,12 +1017,15 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                         <p className="text-xs text-muted-foreground">
                           {publication.cliente_nome ?? "Cliente ainda não vinculado"}
                           {" · "}
-                          {formattedDate(publication.data_publicacao)}
+                          Disponibilizada em {publication.available_on
+                            ? formattedDateOnly(publication.available_on)
+                            : formattedDate(publication.data_publicacao)}
                           {" · "}
                           Fonte:{" "}
                           {providerLabels[publication.provider] ??
                             publication.provider}
                         </p>
+                        {publication.data_prazo && (() => { const deadline = classifyDeadline(publication.data_prazo, new Date()); return <p className={deadline.urgency === "vencido" ? "text-xs font-semibold text-destructive" : "text-xs font-semibold text-foreground"}>Prazo final: {formatDeadlineDate(publication.data_prazo)} · {deadline.label}</p>; })()}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {taskByPublication.has(publication.id) && (
@@ -938,21 +1052,23 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                             Abrir processo
                           </Button>
                         )}
-                        {publication.possible_deadline &&
+                        {publication.status !== "cancelada" && publication.possible_deadline &&
                           publication.review_status === "pending_review" && (
                             <Button
                               size="sm"
+                              disabled={!canMutate}
                               onClick={() => openDeadlineReview(publication)}
                             >
                               <CalendarClock className="mr-2 h-4 w-4" />
                               Revisar possível prazo
                             </Button>
                           )}
-                        {publication.status !== "lida" &&
+                        {publication.status !== "cancelada" && publication.status !== "lida" &&
                           publication.status !== "processada" && (
                             <Button
                               variant="outline"
                               size="sm"
+                              disabled={!canMutate}
                               onClick={() => void markAsRead(publication)}
                             >
                               <CheckCheck className="mr-2 h-4 w-4" />
@@ -973,14 +1089,40 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {publication.status === "cancelada" && (
+                      <div className="mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                        <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div>
+                          <p className="font-medium">Comunicação cancelada pelo tribunal</p>
+                          <p>{publication.cancellation_reason ?? "O DJEN informou o cancelamento desta comunicação."}</p>
+                          {publication.cancelled_at && <p className="mt-1 text-xs">Cancelada em {formattedDate(publication.cancelled_at)}</p>}
+                        </div>
+                      </div>
+                    )}
                     <p className={expanded
                       ? "whitespace-pre-wrap text-sm leading-relaxed"
                       : "line-clamp-2 text-sm text-muted-foreground"}
                     >
                       {readableContent}
                     </p>
-                    {publication.source_url &&
+                    {expanded && publication.provider === "djen" && (
+                      <div className="mt-4 grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                        <OfficialField label="Órgão" value={publication.court_body} />
+                        <OfficialField label="Classe processual" value={publication.process_class} />
+                        <OfficialField label="Tipo de documento" value={publication.document_type} />
+                        <OfficialField label="Número da comunicação" value={publication.communication_number} />
+                        <OfficialField label="Destinatários" value={parties.length
+                          ? parties.map(item => `${item.name} (${item.side})`).join("; ")
+                          : null} />
+                        <OfficialField label="Advogados destinatários" value={lawyers.length
+                          ? lawyers.map(item => `${item.name}${item.registration ? ` — ${item.registration}` : ""}`).join("; ")
+                          : null} />
+                      </div>
+                    )}
+                    {(publication.source_url || certificateUrl) &&
                       (expanded || missingOfficialContent) && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                        {publication.source_url && (
                         <Button asChild variant="outline" size="sm" className="mt-3">
                           <a
                             href={publication.source_url}
@@ -991,6 +1133,16 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                             Abrir publicação no tribunal
                           </a>
                         </Button>
+                        )}
+                        {certificateUrl && (
+                          <Button asChild variant="outline" size="sm" className="mt-3">
+                            <a href={certificateUrl} target="_blank" rel="noreferrer">
+                              <ShieldCheck className="mr-2 h-4 w-4" />
+                              Abrir certidão oficial do DJEN
+                            </a>
+                          </Button>
+                        )}
+                        </div>
                       )}
                     {missingOfficialContent && (
                       <p className="mt-2 text-xs text-muted-foreground">
@@ -1018,7 +1170,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
           <div className="space-y-5">
             {movementGroups.map((group) => {
               return (
-                <DepthCard key={group.key}>
+                <DepthCard key={group.key} interactive={Boolean(group.processId || group.processNumber)} onActivate={() => navigate(legalOriginPath({ kind: "andamento", id: group.items[0]?.id ?? group.key, processId: group.processId, processNumber: group.processNumber }))} aria-label={`Abrir andamentos do processo ${group.processNumber ?? "não identificado"}`}>
                   <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -1182,6 +1334,13 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
     </AppLayout>
   );
 };
+
+const OfficialField = ({ label, value }: { label: string; value: string | null }) => (
+  <div>
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+    <p className="mt-1 break-words">{value ?? "Não informado pelo DJEN"}</p>
+  </div>
+);
 
 const SyncMetric = ({
   label,

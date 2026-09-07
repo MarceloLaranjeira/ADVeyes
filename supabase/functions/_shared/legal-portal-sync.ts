@@ -12,6 +12,7 @@ export interface PortalConnectionRow {
   login_identifier_masked: string | null;
   status: string;
   created_by: string | null;
+  session_expires_at?: string | null;
 }
 
 export interface PortalSyncResult {
@@ -20,6 +21,7 @@ export interface PortalSyncResult {
   updated: number;
   ignored: number;
   fetchedAt: string;
+  diagnostic?: Record<string, string | number | boolean>;
 }
 
 function normalizedProcessNumber(value: string | null | undefined): string {
@@ -42,7 +44,7 @@ export async function readPortalCredentials(
   admin: SupabaseClient,
   secretId: string | null,
 ): Promise<LegalPortalCredentials> {
-  if (!secretId) throw new LegalPortalError("invalid_credentials");
+  if (!secretId) throw new LegalPortalError("credential_missing");
   const { data, error } = await admin.rpc("legal_portal_read_secret", {
     p_secret_id: secretId,
   });
@@ -50,7 +52,15 @@ export async function readPortalCredentials(
   try {
     const parsed = JSON.parse(data) as Partial<LegalPortalCredentials>;
     if (!parsed.login?.trim() || !parsed.password) throw new Error("invalid");
-    return { login: parsed.login.trim(), password: parsed.password };
+    const session = parsed.session && typeof parsed.session === "object" &&
+        typeof parsed.session.entryUrl === "string" &&
+        typeof parsed.session.authenticatedAt === "string" &&
+        typeof parsed.session.refreshAt === "string" &&
+        typeof parsed.session.expiresAt === "string" &&
+        parsed.session.cookies && typeof parsed.session.cookies === "object"
+      ? parsed.session
+      : undefined;
+    return { login: parsed.login.trim(), password: parsed.password, session };
   } catch {
     throw new LegalPortalError("invalid_credentials");
   }
@@ -93,6 +103,18 @@ export async function persistPortalSnapshot(
     normalizedProcessNumber(process.numero), process,
   ]));
 
+  const { data: memberships, error: membershipError } = await admin
+    .from("tenant_memberships")
+    .select("user_id, role, created_at")
+    .eq("tenant_id", connection.tenant_id)
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+  if (membershipError) throw membershipError;
+  const activeUserIds = new Set((memberships ?? []).map(membership => membership.user_id));
+  const roleOrder: Record<string, number> = { owner: 0, admin: 1, lawyer: 2, assistant: 3, finance: 4 };
+  const fallbackMembership = [...(memberships ?? [])]
+    .sort((left, right) => (roleOrder[left.role] ?? 9) - (roleOrder[right.role] ?? 9))[0];
+
   const externalIds = snapshot.hearings.map(item => item.externalId);
   const { data: existing, error: existingError } = externalIds.length
     ? await admin.from("audiencias")
@@ -105,14 +127,18 @@ export async function persistPortalSnapshot(
   const existingIds = new Set((existing ?? []).map(row => row.external_id));
   const lockedIds = new Set((existing ?? []).filter(row => row.manual_locked).map(row => row.external_id));
 
-  const fallbackUserId = connection.created_by ?? (processes ?? [])[0]?.user_id ?? null;
+  const connectionCreator = connection.created_by && activeUserIds.has(connection.created_by)
+    ? connection.created_by
+    : null;
+  const processOwner = (processes ?? []).find(process => activeUserIds.has(process.user_id))?.user_id ?? null;
+  const fallbackUserId = connectionCreator ?? processOwner ?? fallbackMembership?.user_id ?? null;
   if (snapshot.hearings.length && !fallbackUserId) throw new Error("hearing_owner_unavailable");
 
   const rows = snapshot.hearings.filter(item => !lockedIds.has(item.externalId)).map(item => {
     const process = processMap.get(normalizedProcessNumber(item.processNumber)) ?? null;
     return {
       tenant_id: connection.tenant_id,
-      user_id: process?.user_id ?? fallbackUserId,
+      user_id: process?.user_id && activeUserIds.has(process.user_id) ? process.user_id : fallbackUserId,
       processo_id: process?.id ?? null,
       processo_numero: item.processNumber,
       cliente_nome: process?.cliente_nome ?? null,
@@ -157,6 +183,7 @@ export async function persistPortalSnapshot(
     updated: rows.filter(row => existingIds.has(row.external_id)).length,
     ignored: lockedIds.size,
     fetchedAt: snapshot.fetchedAt,
+    ...(snapshot.diagnostic ? { diagnostic: snapshot.diagnostic } : {}),
   };
 }
 
@@ -166,11 +193,17 @@ export async function syncPortalConnection(
 ): Promise<PortalSyncResult> {
   const credentials = await readPortalCredentials(admin, connection.vault_secret_id);
   const snapshot = await portalClient(connection.provider).fetchFutureHearings(credentials);
+  const secretId = await storePortalCredentials(admin, connection.id, {
+    ...credentials,
+    session: snapshot.session,
+  });
   const result = await persistPortalSnapshot(admin, connection, snapshot);
   const { error } = await admin.from("legal_portal_connections").update({
     status: "active",
+    vault_secret_id: secretId,
     capabilities: snapshot.capabilities,
     last_validated_at: result.fetchedAt,
+    session_expires_at: snapshot.session.expiresAt,
     last_success_at: result.fetchedAt,
     last_error_code: null,
     last_error_at: null,
@@ -180,27 +213,31 @@ export async function syncPortalConnection(
   return result;
 }
 
-export function portalFailureStatus(code: string): string {
+export function portalFailureStatus(code: string, hasStoredSecret = false): string {
+  if (code === "credential_missing") return "pending";
   if (code === "invalid_credentials") return "invalid";
-  if (code === "captcha_required" || code === "certificate_required") return "action_required";
+  if (code === "captcha_required" || code === "certificate_required" || code === "mfa_required") return "action_required";
   if ([
     "layout_changed",
     "login_page_changed",
-    "post_login_navigation_changed",
     "agenda_navigation_changed",
     "agenda_page_changed",
   ].includes(code)) return "paused";
-  return "active";
+  // Falhas transitórias só preservam o estado ativo de uma conexão que já
+  // possui credencial validada. Uma primeira tentativa incompleta fica pendente.
+  return hasStoredSecret ? "active" : "pending";
 }
 
 export async function recordPortalFailure(
   admin: SupabaseClient,
   connection: PortalConnectionRow,
   code: string,
+  diagnostic: Record<string, string | number | boolean> | null = null,
 ): Promise<void> {
   await admin.from("legal_portal_connections").update({
-    status: portalFailureStatus(code),
+    status: portalFailureStatus(code, Boolean(connection.vault_secret_id)),
     last_error_code: code,
     last_error_at: new Date().toISOString(),
+    last_result: diagnostic ? { code, diagnostic } : { code },
   }).eq("tenant_id", connection.tenant_id).eq("id", connection.id);
 }

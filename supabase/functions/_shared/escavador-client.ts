@@ -119,6 +119,14 @@ function unwrapPayload<T>(payload: unknown): T {
   return payload as T;
 }
 
+function nestedNext(payload: unknown): string | null | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const links = (payload as Record<string, unknown>).links;
+  if (!links || typeof links !== "object" || Array.isArray(links)) return null;
+  const next = (links as Record<string, unknown>).next;
+  return typeof next === "string" ? next : null;
+}
+
 async function getJson<T>(token: string, url: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
@@ -152,7 +160,7 @@ async function fetchPaginated<T>(input: {
     if (Array.isArray(pageItems)) {
       items.push(...pageItems);
     }
-    next = safeNextUrl(payload.links?.next ?? (raw as Record<string, unknown>)?.links?.next as string);
+    next = safeNextUrl(payload.links?.next ?? nestedNext(raw));
     page += 1;
   }
   // Se o limite de páginas for atingido, preserva os itens obtidos até o momento sem derrubar o ciclo.
@@ -334,7 +342,7 @@ export async function discoverLawyerProcesses(input: {
       }
     }
 
-    next = safeNextUrl(payload.links?.next ?? (raw as Record<string, unknown>)?.links?.next as string);
+    next = safeNextUrl(payload.links?.next ?? nestedNext(raw));
     page += 1;
   }
 

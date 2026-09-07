@@ -271,6 +271,8 @@ describe("normalizeDjenPublication", () => {
       link: "https://www4.tjmg.jus.br/consulta",
       tipoDocumento: "Apelação",
       nomeClasse: "Apelação Criminal",
+      numeroComunicacao: 8831,
+      ativo: true,
     }, { receivedAt });
 
     expect(normalized.externalId).toBe("651169325");
@@ -282,6 +284,12 @@ describe("normalizeDjenPublication", () => {
     expect(normalized.tribunal).toBe("TJMG");
     expect(normalized.possibleDeadline).toBe(true);
     expect(normalized.sourceName).toBe("TJMG - 5ª Câmara Criminal");
+    expect(normalized.availableOn).toBe("2026-07-31");
+    expect(normalized.djenHash).toBe("hash-oficial");
+    expect(normalized.communicationNumber).toBe("8831");
+    expect(normalized.documentType).toBe("Apelação");
+    expect(normalized.processClass).toBe("Apelação Criminal");
+    expect(normalized.active).toBe(true);
   });
 
   it("usa o hash como identidade e mantém origem desconhecida sem evidência", () => {
@@ -327,6 +335,16 @@ describe("normalizeDjenPublication", () => {
       { nome: "João Souza", numero_oab: "10099" },
     ]);
     expect(normalized.hearingEvidence).toContain("Audiência de conciliação");
+  });
+
+  it("preserva o cancelamento informado pelo feed principal", () => {
+    const normalized = normalizeDjenPublication({
+      id: 99,
+      texto: "Comunicação cancelada.",
+      ativo: false,
+    }, { receivedAt });
+
+    expect(normalized.active).toBe(false);
   });
 });
 
@@ -385,6 +403,7 @@ describe("normalizeDataJudProceduralSystem", () => {
         conflict: true,
       });
   });
+
 });
 
 describe("normalizeDataJudParties", () => {

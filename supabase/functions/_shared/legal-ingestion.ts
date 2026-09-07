@@ -18,6 +18,7 @@ import {
   type NormalizedPublication,
   type PublicationProvider,
 } from "./legal-normalization.ts";
+import { isValidCnpj, normalizeCnpj } from "./contact-enrichment.ts";
 
 export interface IngestionResult {
   received: number;
@@ -221,7 +222,7 @@ export async function reconcileProcessContacts(
 
   const { data: parties, error: partiesError } = await admin
     .from("process_parties")
-    .select("id, contact_id, display_name, normalized_name, person_type, document_hash, internal_classification, provider, external_id, source_references, contact_data")
+    .select("id, contact_id, display_name, normalized_name, person_type, document_masked, document_hash, internal_classification, provider, external_id, source_references, contact_data")
     .eq("tenant_id", input.tenantId)
     .eq("process_id", input.processId);
   if (partiesError) throw partiesError;
@@ -231,7 +232,7 @@ export async function reconcileProcessContacts(
   const names = [...new Set(processParties.map((party) => String(party.normalized_name)))];
   const { data: contacts, error: contactsError } = await admin
     .from("clientes")
-    .select("id, normalized_name, person_type, document_hash, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
+    .select("id, normalized_name, person_type, document_hash, cpf, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
     .eq("tenant_id", input.tenantId)
     .in("normalized_name", names);
   if (contactsError) throw contactsError;
@@ -239,6 +240,7 @@ export async function reconcileProcessContacts(
   interface ContactRow {
     id: string;
     document_hash: string | null;
+    cpf: string | null;
     telefone: string | null;
     email: string | null;
     endereco: string | null;
@@ -261,11 +263,19 @@ export async function reconcileProcessContacts(
   let created = 0;
   for (const party of processParties) {
     const key = `${party.normalized_name}|${party.person_type}`;
+    const publicCnpj = party.person_type !== "pessoa_fisica" &&
+        isValidCnpj(party.document_masked)
+      ? normalizeCnpj(party.document_masked)
+      : null;
     let contact = party.contact_id
       ? byId.get(party.contact_id)
       : byCanonicalKey.get(key);
     if (contact?.document_hash && party.document_hash &&
       contact.document_hash !== party.document_hash) {
+      contact = undefined;
+    }
+    const currentCnpj = normalizeCnpj(contact?.cpf);
+    if (contact && currentCnpj && publicCnpj && currentCnpj !== publicCnpj) {
       contact = undefined;
     }
 
@@ -282,6 +292,7 @@ export async function reconcileProcessContacts(
           source_provider: party.provider,
           external_id: null,
           document_hash: party.document_hash,
+          cpf: publicCnpj,
           telefone: party.contact_data?.phone ?? null,
           email: party.contact_data?.email ?? null,
           endereco: party.contact_data?.address ?? null,
@@ -291,7 +302,7 @@ export async function reconcileProcessContacts(
             source_references: party.source_references ?? {},
           },
         })
-        .select("id, document_hash, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
+        .select("id, document_hash, cpf, telefone, email, endereco, relationship_type, classification_locked, source_metadata")
         .single();
       if (insertError) throw insertError;
       contact = inserted as ContactRow;
@@ -311,6 +322,7 @@ export async function reconcileProcessContacts(
       ? party.contact_data as { phone?: string | null; email?: string | null; address?: string | null }
       : {};
     const patch = {
+      cpf: contact.cpf || publicCnpj || null,
       telefone: contact.telefone || contactData.phone || null,
       email: contact.email || contactData.email || null,
       endereco: contact.endereco || contactData.address || null,
@@ -344,6 +356,16 @@ export async function reconcileProcessContacts(
         .eq("id", party.id);
       if (linkError) throw linkError;
       linked += 1;
+    }
+
+    const enrichmentCnpj = normalizeCnpj(contact.cpf);
+    if (enrichmentCnpj && isValidCnpj(enrichmentCnpj)) {
+      const { error: queueError } = await admin.rpc("enqueue_contact_enrichment", {
+        p_tenant_id: input.tenantId,
+        p_contact_id: contact.id,
+        p_cnpj: enrichmentCnpj,
+      });
+      if (queueError) throw queueError;
     }
   }
 
@@ -400,7 +422,9 @@ export async function ingestPublications(
         data_publicacao: publication.publishedAt,
         conteudo: publication.content,
         conteudo_simplificado: publication.summary,
-        status: publication.possibleDeadline ? "urgente" : "nova",
+        status: publication.active
+          ? (publication.possibleDeadline ? "urgente" : "nova")
+          : "cancelada",
         provider: input.provider,
         external_id: publication.externalId,
         content_hash: contentHash,
@@ -408,13 +432,18 @@ export async function ingestPublications(
         source_name: publication.sourceName,
         source_url: publication.sourceUrl,
         provider_payload: publication.payload,
-        review_status: "pending_review",
-        possible_deadline: publication.possibleDeadline,
+        review_status: publication.active ? "pending_review" : "dismissed",
+        possible_deadline: publication.active && publication.possibleDeadline,
         communication_type: publication.communicationType,
         recipients: publication.recipients,
         recipient_lawyers: publication.recipientLawyers,
         court_body: publication.courtBody,
         hearing_evidence: publication.hearingEvidence,
+        available_on: publication.availableOn,
+        djen_hash: publication.djenHash,
+        communication_number: publication.communicationNumber,
+        document_type: publication.documentType,
+        process_class: publication.processClass,
         provenance: {
           provider: input.provider,
           source_name: publication.sourceName,
@@ -708,13 +737,13 @@ export async function createPublicationHearingCandidates(
 ): Promise<{ created: number }> {
   if (!input.publicationIds.length) return { created: 0 };
   const { data: publications, error } = await admin.from("publicacoes")
-    .select("id, user_id, process_id, numero_processo, cliente_nome, provider, external_id, court_body, hearing_evidence, conteudo")
+    .select("id, user_id, process_id, numero_processo, cliente_nome, provider, external_id, court_body, hearing_evidence, conteudo, status")
     .eq("tenant_id", input.tenantId)
     .in("id", input.publicationIds);
   if (error) throw error;
 
   const rows = (publications ?? []).flatMap((publication) => {
-    if (!publication.user_id) return [];
+    if (!publication.user_id || publication.status === "cancelada") return [];
     const candidate = extractHearingCandidate(
       publication.hearing_evidence || publication.conteudo,
     );
@@ -765,7 +794,7 @@ export async function createPublicationReviewTasks(
   const { data: publications, error } = await admin
     .from("publicacoes")
     .select(
-      "id, user_id, process_id, tribunal, numero_processo, tipo, conteudo",
+      "id, user_id, process_id, tribunal, numero_processo, tipo, communication_type, conteudo, status",
     )
     .eq("tenant_id", input.tenantId)
     .in("id", input.publicationIds);
@@ -774,6 +803,12 @@ export async function createPublicationReviewTasks(
   let linked = 0;
   let failed = 0;
   for (const publication of publications ?? []) {
+    const communicationType = String(publication.communication_type ?? publication.tipo ?? "")
+      .toLocaleLowerCase("pt-BR");
+    const requiresReview = ["intima", "cita", "pauta"].some(prefix =>
+      communicationType.startsWith(prefix)
+    );
+    if (publication.status === "cancelada" || !requiresReview) continue;
     try {
       const recipients = await resolveRecipients(admin, {
         tenantId: input.tenantId,

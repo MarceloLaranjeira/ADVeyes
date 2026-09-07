@@ -22,6 +22,7 @@ export interface LegalPortalConnection {
     updated?: number;
     ignored?: number;
   };
+  sessionExpiresAt: string | null;
   configured: boolean;
 }
 
@@ -46,10 +47,14 @@ export interface LegalPortalOverview {
     ignored: number;
     fetchedAt: string;
   };
+  queued?: boolean;
 }
 
 export const legalPortalMessages: Record<string, string> = {
   invalid_credentials: "O Projudi recusou o login ou a senha.",
+  credential_missing: "A credencial não foi armazenada. Conecte o Projudi novamente.",
+  session_expired: "A sessão de 120 minutos do Projudi expirou. O ADveyes tentará renová-la automaticamente.",
+  mfa_required: "O Projudi solicitou autenticação em dois fatores. Conclua a verificação para continuar.",
   captcha_required: "O Projudi exigiu CAPTCHA. A conexão precisa ser concluída com intervenção humana.",
   certificate_required: "O Projudi exigiu certificado digital para este acesso.",
   portal_unavailable: "O Projudi/TJAM não respondeu. Tente novamente em alguns minutos.",
@@ -76,6 +81,16 @@ export class LegalPortalServiceError extends Error {
 export const legalPortalMessage = (code: string | null | undefined) =>
   code ? legalPortalMessages[code] ?? legalPortalMessages.operation_failed : null;
 
+export function isLegalPortalConnected(
+  connection: LegalPortalConnection | null | undefined,
+): boolean {
+  return Boolean(
+    connection?.status === "active" &&
+      connection.configured &&
+      connection.lastValidatedAt,
+  );
+}
+
 async function invoke<T>(body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
   const { data, error } = await withTimeout(
     supabase.functions.invoke("legal-portal-admin", { body }),
@@ -101,7 +116,7 @@ export const legalPortalService = {
   status: (tenantId: string, courtCode = "TJAM") =>
     invoke<LegalPortalOverview>({ action: "status", tenantId, courtCode }),
   connect: (tenantId: string, courtCode: string, login: string, password: string) =>
-    invoke<LegalPortalOverview>({ action: "connect", tenantId, courtCode, login, password }, 50_000),
+    invoke<LegalPortalOverview>({ action: "connect", tenantId, courtCode, login, password }, 30_000),
   sync: (tenantId: string, courtCode: string) =>
     invoke<LegalPortalOverview>({ action: "sync", tenantId, courtCode }, 50_000),
   disconnect: (tenantId: string, courtCode: string) =>
