@@ -2,7 +2,7 @@ import { CalendarDays, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UpcomingHearing } from "@/types/controladoria";
 
-export function UpcomingBlock({ hearings }: { hearings: UpcomingHearing[] }): JSX.Element {
+export function UpcomingBlock({ hearings, onOpen }: { hearings: UpcomingHearing[]; onOpen: (hearing: UpcomingHearing) => void }): JSX.Element {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -18,14 +18,14 @@ export function UpcomingBlock({ hearings }: { hearings: UpcomingHearing[] }): JS
         ) : (
           <div className="space-y-2">
             {hearings.map(hearing => (
-              <div key={hearing.id} className="rounded-xl border p-3">
+              <button type="button" key={hearing.id} onClick={() => onOpen(hearing)} className="w-full rounded-xl border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <p className="text-sm font-semibold">{hearing.tipo}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {new Date(hearing.dataHora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
                   {hearing.processNumber ? ` · ${hearing.processNumber}` : ""}
                 </p>
                 {hearing.local && <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{hearing.local}</p>}
-              </div>
+              </button>
             ))}
           </div>
         )}

@@ -16,14 +16,18 @@ function item(
     sourceId: id,
     sourceType,
     date,
+    endDate: null,
     title: id,
     description: null,
+    type: "Evento",
     assigneeId: null,
     processId: null,
     processNumber: null,
     status: null,
     priority: null,
     location: null,
+    clientName: null,
+    googleEventId: null,
   };
 }
 

@@ -9,18 +9,18 @@ describe("classifyDeadline", () => {
     expect(classifyDeadline("2026-08-23", now)).toEqual({
       urgency: "vencido",
       days: -2,
-      label: "venceu há 2 dias",
+      label: "Venceu há 2 dias",
     });
   });
 
   it("distingue hoje, amanhã e os próximos", () => {
-    expect(classifyDeadline("2026-08-25", now)).toMatchObject({ urgency: "hoje", days: 0, label: "hoje" });
-    expect(classifyDeadline("2026-08-26", now)).toMatchObject({ urgency: "amanha", days: 1, label: "amanhã" });
-    expect(classifyDeadline("2026-08-29", now)).toMatchObject({ urgency: "proximo", days: 4, label: "faltam 4 dias" });
+    expect(classifyDeadline("2026-08-25", now)).toMatchObject({ urgency: "hoje", days: 0, label: "Vence hoje" });
+    expect(classifyDeadline("2026-08-26", now)).toMatchObject({ urgency: "amanha", days: 1, label: "Vence amanhã" });
+    expect(classifyDeadline("2026-08-29", now)).toMatchObject({ urgency: "proximo", days: 4, label: "Faltam 4 dias" });
   });
 
   it("usa singular quando falta ou passou um dia só", () => {
-    expect(classifyDeadline("2026-08-24", now).label).toBe("venceu há 1 dia");
+    expect(classifyDeadline("2026-08-24", now).label).toBe("Venceu ontem");
   });
 
   it("ignora a hora: o dia é o que conta para prazo", () => {
@@ -28,7 +28,8 @@ describe("classifyDeadline", () => {
   });
 
   it("aceita ausência de prazo sem inventar número", () => {
-    expect(classifyDeadline(null, now)).toEqual({ urgency: "sem_prazo", days: null, label: "sem prazo" });
+    expect(classifyDeadline(null, now)).toEqual({ urgency: "sem_prazo", days: null, label: "Vencimento não definido" });
+    expect(classifyDeadline("data-inválida", now)).toEqual({ urgency: "sem_prazo", days: null, label: "Vencimento não definido" });
   });
 });
 

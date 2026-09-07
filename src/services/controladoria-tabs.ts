@@ -65,7 +65,7 @@ export async function fetchTabPage(tab: ControladoriaTab, raw: TabQuery): Promis
       if (params.status) query = query.eq("status", params.status);
       break;
     case "intimacoes":
-      query = supabase.from("publicacoes").select("id, tipo, numero_processo, cliente_nome, data_publicacao, review_status, ciencia_em, process_id", { count: "exact" }).eq("tenant_id", params.tenantId) as unknown as FilterableQuery;
+      query = supabase.from("publicacoes").select("id, tipo, numero_processo, cliente_nome, data_publicacao, data_prazo, review_status, ciencia_em, process_id", { count: "exact" }).eq("tenant_id", params.tenantId) as unknown as FilterableQuery;
       dateColumn = "data_publicacao";
       if (params.status) query = params.status === "sem_ciencia" ? query.is("ciencia_em", null) : query.eq("review_status", params.status);
       break;

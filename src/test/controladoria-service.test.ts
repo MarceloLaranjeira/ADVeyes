@@ -15,7 +15,7 @@ function source(overrides: Record<string, unknown> = {}) {
       { id: "d2", titulo: "Contestação", data_limite: "2026-08-25", status: "pendente", responsavel_id: null, processo_id: null },
     ],
     publications: [
-      { id: "pub1", numero_processo: "0000777-88", cliente_nome: "Cliente", data_publicacao: "2026-08-23", tipo: "intimacao" },
+      { id: "pub1", numero_processo: "0000777-88", cliente_nome: "Cliente", data_publicacao: "2026-08-20", data_prazo: "2026-08-23", tipo: "intimacao" },
     ],
     hearings: [
       { id: "h1", tipo: "Instrução", data_hora: "2026-08-25T14:30:00Z", processo_id: "p1", processo_numero: "0000555-11", cliente_nome: null, local: "2ª Vara" },

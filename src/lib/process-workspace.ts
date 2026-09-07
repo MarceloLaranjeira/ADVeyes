@@ -16,7 +16,7 @@ import type {
   WaitingOn,
 } from "@/types/process-intelligence";
 
-export type ProcessTab = "central" | "pipeline" | "lista";
+export type ProcessTab = "central" | "pipeline" | "lista" | "consulta";
 export type ProcessSituation = "ativos" | "arquivados" | "todos";
 
 export interface ProcessRouteState {
@@ -26,7 +26,7 @@ export interface ProcessRouteState {
   filters: IntelligenceFilters;
 }
 
-const TABS = new Set<ProcessTab>(["central", "pipeline", "lista"]);
+const TABS = new Set<ProcessTab>(["central", "pipeline", "lista", "consulta"]);
 const SITUATIONS = new Set<ProcessSituation>(["ativos", "arquivados", "todos"]);
 const PHASES = new Set<ProcessPhase>([
   "conhecimento",
@@ -54,6 +54,7 @@ function focusFilters(focus: string | null): Partial<IntelligenceFilters> {
   if (focus === "stalled") return { stalledOnly: true };
   if (focus === "office") return { waitingOn: "escritorio" };
   if (focus === "critical") return { risk: "critico" };
+  if (focus === "pending") return { pendingOnly: true };
   return {};
 }
 
@@ -71,12 +72,13 @@ export function parseProcessRoute(params: URLSearchParams): ProcessRouteState {
     limit: Number.isFinite(limit) && limit > 0 ? limit : PROCESS_PAGE_SIZE,
     filters: {
       ...EMPTY_INTELLIGENCE_FILTERS,
-      search: params.get("q")?.trim() ?? "",
+      search: (params.get("q") ?? params.get("busca"))?.trim() ?? "",
       phase: phase && PHASES.has(phase) ? phase : "all",
       waitingOn: waitingOn && WAITING.has(waitingOn) ? waitingOn : "all",
       risk: risk && RISKS.has(risk) ? risk : "all",
       area: params.get("area") ?? "all",
       stalledOnly: params.get("parados") === "1",
+      pendingOnly: params.get("analise") === "pendente",
       ...focusFilters(params.get("focus")),
     },
   };
@@ -95,5 +97,6 @@ export function processRouteParams(state: ProcessRouteState): URLSearchParams {
   if (filters.risk !== "all") params.set("risco", filters.risk);
   if (filters.area !== "all") params.set("area", filters.area);
   if (filters.stalledOnly) params.set("parados", "1");
+  if (filters.pendingOnly) params.set("analise", "pendente");
   return params;
 }

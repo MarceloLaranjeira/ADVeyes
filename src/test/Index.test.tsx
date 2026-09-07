@@ -180,7 +180,7 @@ describe("Meu Painel", () => {
     render(<MemoryRouter><Index /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: /audiência de instrução/i }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/controladoria?aba=audiencias");
+    expect(navigateMock).toHaveBeenCalledWith("/audiencias?focus=h1");
   });
 
   it("mantém o skeleton enquanto o escritório existe e a consulta carrega", () => {

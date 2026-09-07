@@ -14,6 +14,7 @@ describe("estado da Central Processual na URL", () => {
         risk: "all",
         area: "all",
         stalledOnly: false,
+        pendingOnly: false,
       },
     });
   });
@@ -22,6 +23,8 @@ describe("estado da Central Processual na URL", () => {
     expect(parseProcessRoute(new URLSearchParams("focus=stalled")).filters.stalledOnly).toBe(true);
     expect(parseProcessRoute(new URLSearchParams("focus=office")).filters.waitingOn).toBe("escritorio");
     expect(parseProcessRoute(new URLSearchParams("focus=critical")).filters.risk).toBe("critico");
+    expect(parseProcessRoute(new URLSearchParams("focus=pending")).filters.pendingOnly).toBe(true);
+    expect(parseProcessRoute(new URLSearchParams("tab=consulta")).tab).toBe("consulta");
   });
 
   it("volta ao padrão diante de valor inválido", () => {
@@ -43,6 +46,7 @@ describe("estado da Central Processual na URL", () => {
         risk: "critico" as const,
         area: "Trabalhista",
         stalledOnly: true,
+        pendingOnly: true,
       },
     };
 

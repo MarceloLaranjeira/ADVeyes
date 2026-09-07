@@ -58,25 +58,25 @@ const CadastroConcluir = () => {
 
   if (platformAdminLoading || isPlatformAdmin) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#2563EB]" />
+      <main className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+    <main className="flex min-h-screen items-center justify-center bg-background p-6">
       <section className="w-full max-w-md rounded-3xl border bg-white p-8 shadow-xl shadow-slate-900/5">
         <LogoFull size="md" className="mb-8" />
-        <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-[#2563EB]"><Building2 /></div>
-        <h1 className="text-2xl font-semibold text-[#081B48]">Preparando seu escritório</h1>
+        <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary"><Building2 /></div>
+        <h1 className="text-2xl font-semibold text-foreground">Preparando seu escritório</h1>
         {loading ? (
-          <div className="mt-6"><div className="h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563EB]" /></div><p className="mt-3 text-sm text-slate-500">Configurando seu teste gratuito e ambiente seguro...</p></div>
+          <div className="mt-6"><div className="h-2 overflow-hidden rounded-full bg-primary/15"><div className="h-full w-2/3 animate-pulse rounded-full bg-primary" /></div><p className="mt-3 text-sm text-slate-500">Configurando seu teste gratuito e ambiente seguro...</p></div>
         ) : (
           <form className="mt-6 space-y-4" onSubmit={(event) => { event.preventDefault(); void finish(officeName.trim()); }}>
             <div className="space-y-2"><Label htmlFor="callbackOffice">Nome do escritório</Label><Input id="callbackOffice" value={officeName} onChange={(e) => setOfficeName(e.target.value)} minLength={2} required /></div>
             {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-            <Button className="w-full bg-[#2563EB]" type="submit">Continuar</Button>
+            <Button className="w-full" type="submit">Continuar</Button>
             <Button className="w-full" variant="ghost" type="button" onClick={() => navigate("/login")}>Voltar ao login</Button>
           </form>
         )}

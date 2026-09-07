@@ -10,6 +10,7 @@ import { LogoFull } from "@/components/common/Logo";
 const brandWithLogo = (logoLightPath: string) => ({
   brand: {
     publicName: "Albertino Advocacia",
+    shortName: "Albertino",
     logoLightPath,
     logoDarkPath: logoLightPath,
     iconPath: null,
@@ -54,6 +55,7 @@ describe("LogoFull com logo do escritório", () => {
     brandMock.mockReturnValue({
       brand: {
         publicName: "ADVeyes",
+        shortName: "ADVeyes",
         logoLightPath: null,
         logoDarkPath: null,
         iconPath: null,
@@ -62,5 +64,52 @@ describe("LogoFull com logo do escritório", () => {
 
     render(<LogoFull size="md" />);
     expect(screen.getByText("ADVeyes")).toBeInTheDocument();
+  });
+
+  it("usa o nome curto no cabeçalho compacto", () => {
+    brandMock.mockReturnValue({
+      brand: {
+        publicName: "Almeida, Barros e Companhia Advogados Associados",
+        shortName: "Almeida & Barros",
+        logoLightPath: null,
+        logoDarkPath: null,
+        iconPath: null,
+      },
+    });
+
+    render(<LogoFull size="sm" />);
+    expect(screen.getByText("Almeida & Barros")).toBeInTheDocument();
+    expect(screen.queryByText("Almeida, Barros e Companhia Advogados Associados")).not.toBeInTheDocument();
+  });
+
+  it("limita nomes longos a três linhas sem estourar a área da marca", () => {
+    brandMock.mockReturnValue({
+      brand: {
+        publicName: "Almeida, Barros, Carvalho, Souza e Pereira Advogados Associados",
+        shortName: "Almeida & Barros",
+        logoLightPath: null,
+        logoDarkPath: null,
+        iconPath: null,
+      },
+    });
+
+    render(<LogoFull size="lg" />);
+    const name = screen.getByText("Almeida, Barros, Carvalho, Souza e Pereira Advogados Associados");
+    expect(name.className).toContain("brand-name-clamp");
+    expect(name.className).toContain("text-[10px]");
+    expect(screen.getByRole("img", { name: /Logo Almeida/ })).toHaveAttribute("width", "40");
+  });
+
+  it("permite que a prévia use a identidade ainda não salva", () => {
+    brandMock.mockReturnValue(brandWithLogo("/brand/logo-salva.png"));
+
+    render(<LogoFull branding={{
+      publicName: "Nova Marca",
+      shortName: "Nova",
+      logoLightPath: null,
+      logoDarkPath: null,
+      iconPath: null,
+    }} />);
+    expect(screen.getByText("Nova Marca")).toBeInTheDocument();
   });
 });

@@ -96,16 +96,16 @@ const Login = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-3 sm:p-6 lg:p-10">
+    <main className="min-h-screen bg-background p-3 sm:p-6 lg:p-10">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-slate-900/10 lg:grid-cols-[1.02fr_0.98fr]">
-        <section className="relative hidden overflow-hidden bg-[#13273E] px-14 py-12 text-white lg:flex lg:flex-col">
-          <div className="absolute -right-40 -top-36 h-96 w-96 rounded-full bg-[#2563EB]/20 blur-3xl" />
-          <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-[#D4AF6A]/10 blur-3xl" />
+        <section className="relative hidden overflow-hidden bg-sidebar px-14 py-12 text-white lg:flex lg:flex-col">
+          <div className="absolute -right-40 -top-36 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sidebar-accent/40 blur-3xl" />
           <BrandLogo className="relative z-10 h-[88px] w-[300px]" />
 
           <div className="relative z-10 my-auto max-w-xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-blue-100">
-              <Sparkles className="h-4 w-4 text-[#D9B66F]" /> Gestão jurídica em um só lugar
+              <Sparkles className="h-4 w-4 text-blue-100" /> Gestão jurídica em um só lugar
             </div>
             <h1 className="text-4xl font-semibold leading-tight xl:text-5xl">
               Sua advocacia organizada todos os dias.
@@ -132,13 +132,13 @@ const Login = () => {
 
         <section className="flex items-center justify-center px-6 py-10 sm:px-12 xl:px-20">
           <div className="w-full max-w-lg">
-            <div className="mb-10 rounded-2xl bg-[#13273E] px-5 py-2 lg:hidden">
+            <div className="mb-10 rounded-2xl bg-sidebar px-5 py-2 lg:hidden">
               <BrandLogo className="h-16 w-56" />
             </div>
 
             <div className="mb-8">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#2563EB]">Bem-vindo de volta</p>
-              <h2 className="mt-2 text-3xl font-semibold text-[#081B48]">Entre no ADV Tá On Club</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Bem-vindo de volta</p>
+              <h2 className="mt-2 text-3xl font-semibold text-foreground">Entre no ADV Tá On Club</h2>
               <p className="mt-2 text-slate-500">Acesse o ambiente seguro do seu escritório.</p>
             </div>
 
@@ -160,7 +160,7 @@ const Login = () => {
                   <Label htmlFor="password">Senha</Label>
                   <button
                     type="button"
-                    className="text-xs font-medium text-[#2563EB] hover:underline"
+                    className="text-xs font-medium text-primary hover:underline"
                     onClick={() => void handleForgotPassword()}
                     disabled={loading}
                   >
@@ -180,7 +180,7 @@ const Login = () => {
               </div>
               <Button
                 type="submit"
-                className="h-12 w-full bg-[#2563EB] hover:bg-[#1d4ed8]"
+                className="h-12 w-full"
                 disabled={loading || loadingGoogle}
               >
                 {loading ? "Entrando..." : <>Entrar na plataforma <ArrowRight className="ml-2 h-4 w-4" /></>}
@@ -205,7 +205,7 @@ const Login = () => {
 
             <p className="mt-6 text-center text-sm text-slate-500">
               Ainda não tem conta?{" "}
-              <Link to="/cadastro" className="font-semibold text-[#2563EB] hover:underline">
+              <Link to="/cadastro" className="font-semibold text-primary hover:underline">
                 Criar conta grátis
               </Link>
             </p>

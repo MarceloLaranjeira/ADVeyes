@@ -70,11 +70,11 @@ describe("buildOperationalDashboard", () => {
     // certo aberto, em vez de espalhar o usuário por telas diferentes.
     expect(dashboard.attention[0]).toMatchObject({
       title: "Prazo vencido",
-      href: "/controladoria?foco=vencidos",
+      href: "/controladoria?aba=prazos&focus=late&foco=vencidos",
       days: -2,
     });
     expect(dashboard.attention.find(item => item.kind === "today"))
-      .toMatchObject({ href: "/controladoria?foco=hoje" });
+      .toMatchObject({ href: "/controladoria?aba=prazos&focus=today&foco=hoje" });
     expect(dashboard.attention.find(item => item.kind === "publication"))
       .toMatchObject({ href: "/controladoria?foco=sem-ciencia" });
     expect(dashboard.attention.find(item => item.kind === "finance"))

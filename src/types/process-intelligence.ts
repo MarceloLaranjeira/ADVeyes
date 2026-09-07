@@ -117,6 +117,8 @@ export interface ProcessIntelligenceItem {
   number: string;
   clientName: string | null;
   clientDocument: string | null;
+  activeParties: string | null;
+  passiveParties: string | null;
   area: string | null;
   status: string | null;
   court: string | null;
@@ -131,4 +133,3 @@ export const DEFAULT_PROCESS_INTELLIGENCE_THRESHOLDS: ProcessIntelligenceThresho
   counterpartyDays: 15,
   courtDays: 30,
 };
-

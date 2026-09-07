@@ -31,6 +31,7 @@ const activity: Activity = {
   tags: null,
   source_id: null,
   source_type: null,
+  tipo: "tarefa",
 };
 
 describe("activitiesService", () => {

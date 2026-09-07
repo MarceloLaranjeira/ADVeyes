@@ -26,6 +26,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     source_type: null,
     status: "pendente",
     tenant_id: "83100000-0000-0000-0000-000000000001",
+    tipo: "tarefa",
     titulo: "Tarefa",
     tags: null,
     updated_at: "2026-08-01T12:00:00Z",

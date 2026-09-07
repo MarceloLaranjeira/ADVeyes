@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { LogoFull } from "@/components/common/Logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,7 @@ import {
   uploadBrandLogo,
   type BrandSettings,
 } from "@/services/brand-settings";
-import { AlertTriangle, Image as ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, Upload } from "lucide-react";
 
 /**
  * Lê a logo enviada e devolve o aviso de margens transparentes, se houver.
@@ -137,6 +138,13 @@ export const IdentidadeVisual = () => {
   // 3:1 é o mínimo da WCAG para componentes de interface e texto grande,
   // que é o uso desta cor: botões, cabeçalhos e destaques.
   const lowContrast = contrast !== null && contrast < 3;
+  const previewBrand = useMemo(() => ({
+    publicName: settings.publicName?.trim() || currentTenant?.displayName || "ADVeyes",
+    shortName: settings.shortName?.trim() || settings.publicName?.trim() || currentTenant?.displayName || "ADVeyes",
+    logoLightPath: settings.logoLightPath,
+    logoDarkPath: settings.logoDarkPath,
+    iconPath: settings.iconPath,
+  }), [currentTenant?.displayName, settings.iconPath, settings.logoDarkPath, settings.logoLightPath, settings.publicName, settings.shortName]);
 
   const applyPrimary = (hex: string) => {
     setSettings((current) => ({
@@ -254,18 +262,7 @@ export const IdentidadeVisual = () => {
             */}
             <div className="space-y-2">
               <div className="flex h-16 w-60 items-center justify-start rounded-lg bg-sidebar px-5 py-2">
-                {settings.logoLightPath ? (
-                  <img
-                    src={settings.logoLightPath}
-                    alt="Logo do escritório"
-                    className="h-auto w-auto max-h-12 max-w-full object-contain"
-                  />
-                ) : (
-                  <span className="flex items-center gap-2 text-xs text-sidebar-foreground/70">
-                    <ImageIcon className="h-5 w-5" />
-                    Sem logo
-                  </span>
-                )}
+                <LogoFull branding={previewBrand} dark size="lg" />
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Como a marca aparece no cabeçalho do sistema.

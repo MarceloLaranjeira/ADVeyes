@@ -26,9 +26,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
 import { useControladoria } from "@/hooks/useControladoria";
 import { useActiveTeamMembers } from "@/hooks/useActiveTeamMembers";
 import { classifyDeadline } from "@/lib/controladoria";
+import { legalOriginPath } from "@/lib/legal-navigation";
 import {
   acknowledgePublication,
   assignDeadline,
@@ -77,7 +79,9 @@ export default function Controladoria() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currentTenant } = useTenant();
+  const support = usePlatformSupport();
   const tenantId = currentTenant?.tenantId ?? null;
+  const canMutate = currentTenant?.accessMode !== "platform" || support.active;
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -91,8 +95,9 @@ export default function Controladoria() {
   const activeCounter = focus ? focusMap[focus] ?? null : null;
   const query = useControladoria(tenantId, periodDays);
   const members = useActiveTeamMembers(tenantId);
-  const now = query.data ? new Date(query.data.generatedAt) : new Date();
-  const tabParam = searchParams.get("aba") as ControladoriaTab | null;
+  const generatedAt = query.data?.generatedAt;
+  const now = useMemo(() => generatedAt ? new Date(generatedAt) : new Date(), [generatedAt]);
+  const tabParam = (searchParams.get("aba") ?? searchParams.get("tab")) as ControladoriaTab | null;
   const activeTab = tabParam && CONTROLADORIA_TABS.includes(tabParam) ? tabParam : "prazos";
   const tabPage = Math.max(1, Number(searchParams.get("pagina")) || 1);
   const tabParams = {
@@ -127,6 +132,7 @@ export default function Controladoria() {
     error: tabQuery.isError,
     onRetry: () => void tabQuery.refetch(),
     onPage: (page: number) => updateSearch({ pagina: page === 1 ? null : String(page) }),
+    focusedId: searchParams.get("focus"),
   };
   const refreshControladoria = async () => {
     await Promise.all([query.refetch(), tabQuery.refetch()]);
@@ -162,21 +168,23 @@ export default function Controladoria() {
     if (succeeded) setReviewingPublication(null);
   };
   const deadlineActions = ({ id, assigneeId, status, title, processId, processNumber }: DeadlineTarget) => tenantId ? <div className="flex flex-wrap justify-end gap-2">
-    <Button size="sm" variant="outline" onClick={() => setProtocolo({ origin: { taskId: id, taskTitle: title, processId, processNumber } })}>Protocolar</Button>
-    <Select disabled={busyAction === `assign:${id}`} value={assigneeId ?? "none"} onValueChange={value => void runAction(`assign:${id}`, "Responsável atualizado", () => assignDeadline(tenantId, id, value === "none" ? null : value))}>
+    {!canMutate && <span className="self-center text-xs text-muted-foreground">Ative o suporte para editar</span>}
+    <Button size="sm" variant="outline" disabled={!canMutate} onClick={() => setProtocolo({ origin: { taskId: id, taskTitle: title, processId, processNumber } })}>Protocolar</Button>
+    <Select disabled={!canMutate || busyAction === `assign:${id}`} value={assigneeId ?? "none"} onValueChange={value => void runAction(`assign:${id}`, "Responsável atualizado", () => assignDeadline(tenantId, id, value === "none" ? null : value))}>
       <SelectTrigger className="h-8 w-40" aria-label="Alterar responsável"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem value="none">Sem responsável</SelectItem>{(members.data ?? []).map(member => <SelectItem key={member.userId} value={member.userId}>{member.name}</SelectItem>)}</SelectContent>
     </Select>
-    <Select disabled={busyAction === `status:${id}`} value={status ?? "pendente"} onValueChange={value => void runAction(`status:${id}`, "Status atualizado", () => changeDeadlineStatus(tenantId, id, value as ActivityStatus))}>
+    <Select disabled={!canMutate || busyAction === `status:${id}`} value={status ?? "pendente"} onValueChange={value => void runAction(`status:${id}`, "Status atualizado", () => changeDeadlineStatus(tenantId, id, value as ActivityStatus))}>
       <SelectTrigger className="h-8 w-36" aria-label="Alterar status"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem value="pendente">A fazer</SelectItem><SelectItem value="em_andamento">Fazendo</SelectItem><SelectItem value="em_revisao">Revisão</SelectItem><SelectItem value="concluída">Concluída</SelectItem></SelectContent>
     </Select>
   </div> : null;
   const publicationActions = (item: ActionItem) => tenantId && user?.id ? <div className="flex flex-wrap gap-2">
-    <Button size="sm" variant="outline" disabled={busyAction === `ack:${item.id}`} onClick={() => void runAction(`ack:${item.id}`, "Ciência registrada", () => acknowledgePublication(tenantId, item.id, user.id))}>Dar ciência</Button>
-    <Button size="sm" onClick={() => openDeadlineReview(item)}>Gerar prazo</Button>
+    {!canMutate && <span className="self-center text-xs text-muted-foreground">Ative o suporte para editar</span>}
+    <Button size="sm" variant="outline" disabled={!canMutate || busyAction === `ack:${item.id}`} onClick={() => void runAction(`ack:${item.id}`, "Ciência registrada", () => acknowledgePublication(tenantId, item.id, user.id))}>Dar ciência</Button>
+    <Button size="sm" disabled={!canMutate} onClick={() => openDeadlineReview(item)}>Gerar prazo</Button>
   </div> : null;
-  const publicationRowActions = (row: TabRow) => publicationActions({ id: row.id, kind: "intimacao", title: String(row.tipo ?? "Intimação"), dueDate: row.data_publicacao ? String(row.data_publicacao) : null, processNumber: row.numero_processo ? String(row.numero_processo) : null, processId: row.process_id ? String(row.process_id) : null, clientName: row.cliente_nome ? String(row.cliente_nome) : null, assigneeId: null, assigneeName: null, status: row.ciencia_em ? "com_ciencia" : "sem_ciencia" });
+  const publicationRowActions = (row: TabRow) => publicationActions({ id: row.id, kind: "intimacao", title: String(row.tipo ?? "Intimação"), dueDate: row.data_prazo ? String(row.data_prazo) : null, publishedAt: row.data_publicacao ? String(row.data_publicacao) : null, processNumber: row.numero_processo ? String(row.numero_processo) : null, processId: row.process_id ? String(row.process_id) : null, clientName: row.cliente_nome ? String(row.cliente_nome) : null, assigneeId: null, assigneeName: null, status: row.ciencia_em ? "com_ciencia" : "sem_ciencia" });
 
   const action = useMemo(() => {
     if (!query.data) return [];
@@ -225,10 +233,10 @@ export default function Controladoria() {
             {query.data.warnings.length > 0 && <div role="status" className="flex gap-3 rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><div><p className="font-semibold">Alguns blocos não puderam ser atualizados</p><p className="text-xs text-muted-foreground">{query.data.warnings.join(" · ")}</p></div></div>}
             <ControladoriaCounters counters={query.data.counters} active={activeCounter} onSelect={selectCounter} />
             <section className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-              <ActionList items={action} now={now} onOpenProcess={processNumber => navigate(processNumber ? `/processos?busca=${encodeURIComponent(processNumber)}` : "/processos")}>
+              <ActionList items={action} now={now} onOpenItem={item => navigate(legalOriginPath({ kind: item.kind, id: item.id }))}>
                 {item => item.kind === "intimacao" ? publicationActions(item) : deadlineActions({ id: item.id, assigneeId: item.assigneeId, status: item.status, title: item.title, processId: item.processId ?? null, processNumber: item.processNumber })}
               </ActionList>
-              <div className="space-y-4"><UpcomingBlock hearings={query.data.upcoming} /><DoneBlock done={query.data.done} periodDays={periodDays} /></div>
+              <div className="space-y-4"><UpcomingBlock hearings={query.data.upcoming} onOpen={hearing => navigate(legalOriginPath({ kind: "audiencia", id: hearing.id }))} /><DoneBlock done={query.data.done} periodDays={periodDays} /></div>
             </section>
 
             <section aria-labelledby="dominios-controladoria" className="space-y-3">
@@ -236,7 +244,7 @@ export default function Controladoria() {
                 <h2 id="dominios-controladoria" className="font-serif text-xl font-semibold">Visão por domínio</h2>
                 <p className="text-sm text-muted-foreground">Consulte o histórico completo sem sair do posto de comando.</p>
               </div>
-              <Tabs value={activeTab} onValueChange={value => updateSearch({ aba: value === "prazos" ? null : value, pagina: null })}>
+              <Tabs value={activeTab} onValueChange={value => updateSearch({ aba: value === "prazos" ? null : value, tab: null, pagina: null, focus: null })}>
                 <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1">
                   <TabsTrigger value="prazos">Prazos</TabsTrigger>
                   <TabsTrigger value="intimacoes">Intimações</TabsTrigger>

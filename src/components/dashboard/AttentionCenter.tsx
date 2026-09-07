@@ -37,13 +37,13 @@ export function AttentionCenter({ data }: AttentionCenterProps) {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
+              <span className="h-2 w-2 rounded-full bg-slate-700" aria-hidden="true" />
               <h2 className="font-serif text-lg font-semibold">Centro de atenção</h2>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Prioridades ordenadas por risco e proximidade</p>
           </div>
-          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => navigate("/tarefas")}>
-            Ver atividades <ArrowRight className="h-3.5 w-3.5" />
+          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" onClick={() => navigate("/controladoria")}>
+            Abrir Controladoria <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
 
@@ -82,4 +82,3 @@ export function AttentionCenter({ data }: AttentionCenterProps) {
     </Card>
   );
 }
-

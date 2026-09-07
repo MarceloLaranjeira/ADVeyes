@@ -33,6 +33,7 @@ export interface IntelligenceFilters {
   risk: IntelligenceRisk | "all";
   area: string;
   stalledOnly: boolean;
+  pendingOnly: boolean;
 }
 
 export const EMPTY_INTELLIGENCE_FILTERS: IntelligenceFilters = {
@@ -42,19 +43,21 @@ export const EMPTY_INTELLIGENCE_FILTERS: IntelligenceFilters = {
   risk: "all",
   area: "all",
   stalledOnly: false,
+  pendingOnly: false,
 };
 
 export function filterProcessIntelligence(items: ProcessIntelligenceItem[], filters: IntelligenceFilters) {
   const search = filters.search.trim().toLocaleLowerCase("pt-BR");
   return items.filter(item => {
     const intelligence = item.intelligence;
-    if (search && ![item.number, item.clientName, item.clientDocument, item.lawyer, item.court, intelligence?.waitingReason, intelligence?.nextAction]
+    if (search && ![item.number, item.clientName, item.clientDocument, item.activeParties, item.passiveParties, item.lawyer, item.court, intelligence?.waitingReason, intelligence?.nextAction]
       .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR").includes(search)) return false;
     if (filters.phase !== "all" && intelligence?.phase !== filters.phase) return false;
     if (filters.waitingOn !== "all" && intelligence?.waitingOn !== filters.waitingOn) return false;
     if (filters.risk !== "all" && intelligence?.risk !== filters.risk) return false;
     if (filters.area !== "all" && item.area !== filters.area) return false;
     if (filters.stalledOnly && !intelligence?.isStalled) return false;
+    if (filters.pendingOnly && intelligence) return false;
     return true;
   });
 }

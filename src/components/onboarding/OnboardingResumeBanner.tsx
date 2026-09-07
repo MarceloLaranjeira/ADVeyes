@@ -19,10 +19,10 @@ export function OnboardingResumeBanner() {
   return (
     <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#081B48] text-white"><Scale className="h-5 w-5" /></span>
-        <div><p className="font-semibold text-[#081B48]">Conclua a configuração do seu escritório</p><p className="mt-0.5 text-sm text-slate-600">Cadastre sua OAB para localizar processos e acompanhar publicações oficiais.</p></div>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-white"><Scale className="h-5 w-5" /></span>
+        <div><p className="font-semibold text-foreground">Conclua a configuração do seu escritório</p><p className="mt-0.5 text-sm text-slate-600">Cadastre sua OAB para localizar processos e acompanhar publicações oficiais.</p></div>
       </div>
-      <Button className="shrink-0 bg-[#2563EB]" onClick={() => navigate("/onboarding")}>Continuar <ArrowRight className="ml-2 h-4 w-4" /></Button>
+      <Button className="shrink-0" onClick={() => navigate("/onboarding")}>Continuar <ArrowRight className="ml-2 h-4 w-4" /></Button>
     </div>
   );
 }

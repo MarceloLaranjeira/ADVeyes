@@ -3,14 +3,15 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControladoriaData } from "@/types/controladoria";
 
-const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
+const { queryMock, tenantMock, supportMock } = vi.hoisted(() => ({ queryMock: vi.fn(), tenantMock: vi.fn(), supportMock: vi.fn() }));
 
 vi.mock("@/hooks/useControladoria", () => ({ useControladoria: queryMock }));
 vi.mock("@/hooks/useActiveTeamMembers", () => ({ useActiveTeamMembers: () => ({ data: [] }) }));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: { rows: [], page: 1, pageSize: 20, total: 0 }, isLoading: false, isError: false, refetch: vi.fn() }),
 }));
-vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ currentTenant: { tenantId: "tenant-1" } }) }));
+vi.mock("@/contexts/TenantContext", () => ({ useTenant: tenantMock }));
+vi.mock("@/contexts/PlatformSupportContext", () => ({ usePlatformSupport: supportMock }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 
@@ -30,7 +31,11 @@ const data: ControladoriaData = {
 };
 
 describe("Controladoria", () => {
-  beforeEach(() => queryMock.mockReturnValue({ data, isLoading: false, isError: false, isFetching: false, refetch: vi.fn() }));
+  beforeEach(() => {
+    queryMock.mockReturnValue({ data, isLoading: false, isError: false, isFetching: false, refetch: vi.fn() });
+    tenantMock.mockReturnValue({ currentTenant: { tenantId: "tenant-1", accessMode: "membership" } });
+    supportMock.mockReturnValue({ active: false });
+  });
 
   it("mostra os cinco contadores com seus números", () => {
     render(<MemoryRouter><Controladoria /></MemoryRouter>);
@@ -48,7 +53,7 @@ describe("Controladoria", () => {
   it("lista o que exige ação com quantos dias faltam", () => {
     render(<MemoryRouter><Controladoria /></MemoryRouter>);
     expect(screen.getByText("Apelação")).toBeInTheDocument();
-    expect(screen.getByText("venceu há 1 dia")).toBeInTheDocument();
+    expect(screen.getAllByText(/Venceu ontem/).length).toBeGreaterThan(0);
   });
 
   it("filtra a lista ao clicar em um contador, sem trocar de tela", () => {
@@ -76,5 +81,13 @@ describe("Controladoria", () => {
     queryMock.mockReturnValue({ data: { ...data, action: [] }, isLoading: false, isError: false, isFetching: false, refetch: vi.fn() });
     render(<MemoryRouter><Controladoria /></MemoryRouter>);
     expect(screen.getByText("Nada exige ação agora")).toBeInTheDocument();
+  });
+
+  it("bloqueia ações mutáveis da Conta Geral sem suporte ativo", () => {
+    tenantMock.mockReturnValue({ currentTenant: { tenantId: "tenant-1", accessMode: "platform" } });
+    render(<MemoryRouter><Controladoria /></MemoryRouter>);
+    expect(screen.getByRole("button", { name: "Dar ciência" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Gerar prazo" })).toBeDisabled();
+    expect(screen.getAllByText("Ative o suporte para editar").length).toBeGreaterThan(0);
   });
 });

@@ -39,6 +39,7 @@ export default function SolicitarAcesso() {
   const [oab, setOab] = useState("");
 
   const tenantName = lookup?.valid ? lookup.tenant_name : "este escritório";
+  const invalidReason = lookup?.valid === false ? lookup.reason : null;
 
   const check = useCallback(async () => {
     if (!token) {
@@ -129,12 +130,12 @@ export default function SolicitarAcesso() {
               <div className="text-center">
                 <ShieldQuestion className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
                 <h1 className="text-lg font-semibold">
-                  {lookup?.reason === "revoked_token"
+                  {invalidReason === "revoked_token"
                     ? "Este link foi revogado"
                     : "Link inválido"}
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {lookup?.reason === "revoked_token"
+                  {invalidReason === "revoked_token"
                     ? "Peça um link novo a quem administra o escritório."
                     : "Confira o endereço recebido ou peça um link novo."}
                 </p>

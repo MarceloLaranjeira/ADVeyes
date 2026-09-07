@@ -8,7 +8,7 @@ const Section = ({
   children: React.ReactNode;
 }) => (
   <section>
-    <h2 className="mb-3 font-serif text-xl font-bold text-[#1a2a5e]">{title}</h2>
+    <h2 className="mb-3 font-serif text-xl font-bold text-foreground">{title}</h2>
     <div className="space-y-3">{children}</div>
   </section>
 );
@@ -144,4 +144,3 @@ const PoliticaPrivacidade = () => (
 );
 
 export default PoliticaPrivacidade;
-

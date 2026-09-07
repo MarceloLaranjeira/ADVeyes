@@ -3907,10 +3907,14 @@ export type Database = {
       }
       publicacoes: {
         Row: {
+          available_on: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
           ciencia_em: string | null
           ciencia_por: string | null
           cliente_nome: string | null
           communication_type: string | null
+          communication_number: string | null
           content_hash: string
           conteudo: string
           conteudo_simplificado: string | null
@@ -3918,6 +3922,8 @@ export type Database = {
           created_at: string | null
           data_prazo: string | null
           data_publicacao: string | null
+          djen_hash: string | null
+          document_type: string | null
           external_id: string | null
           hearing_evidence: string | null
           id: string
@@ -3926,6 +3932,7 @@ export type Database = {
           possible_deadline: boolean
           prazo_dias: number | null
           process_id: string | null
+          process_class: string | null
           provenance: Json
           provider: string
           provider_payload: Json
@@ -3943,10 +3950,14 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          available_on?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           ciencia_em?: string | null
           ciencia_por?: string | null
           cliente_nome?: string | null
           communication_type?: string | null
+          communication_number?: string | null
           content_hash: string
           conteudo: string
           conteudo_simplificado?: string | null
@@ -3954,6 +3965,8 @@ export type Database = {
           created_at?: string | null
           data_prazo?: string | null
           data_publicacao?: string | null
+          djen_hash?: string | null
+          document_type?: string | null
           external_id?: string | null
           hearing_evidence?: string | null
           id?: string
@@ -3962,6 +3975,7 @@ export type Database = {
           possible_deadline?: boolean
           prazo_dias?: number | null
           process_id?: string | null
+          process_class?: string | null
           provenance?: Json
           provider?: string
           provider_payload?: Json
@@ -3979,10 +3993,14 @@ export type Database = {
           user_id: string
         }
         Update: {
+          available_on?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           ciencia_em?: string | null
           ciencia_por?: string | null
           cliente_nome?: string | null
           communication_type?: string | null
+          communication_number?: string | null
           content_hash?: string
           conteudo?: string
           conteudo_simplificado?: string | null
@@ -3990,6 +4008,8 @@ export type Database = {
           created_at?: string | null
           data_prazo?: string | null
           data_publicacao?: string | null
+          djen_hash?: string | null
+          document_type?: string | null
           external_id?: string | null
           hearing_evidence?: string | null
           id?: string
@@ -3998,6 +4018,7 @@ export type Database = {
           possible_deadline?: boolean
           prazo_dias?: number | null
           process_id?: string | null
+          process_class?: string | null
           provenance?: Json
           provider?: string
           provider_payload?: Json

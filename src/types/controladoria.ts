@@ -13,6 +13,7 @@ export interface ActionItem {
   kind: ActionKind;
   title: string;
   dueDate: string | null;
+  publishedAt?: string | null;
   processNumber: string | null;
   processId?: string | null;
   clientName: string | null;
