@@ -1,0 +1,444 @@
+openapi: 3.1.0
+info:
+  title: ADVeyes Public API
+  version: 1.0.0
+  description: API server-to-server multi-escritório para contatos, processos, tarefas e webhooks.
+servers:
+  - url: https://adveyes.automatikus.com.br/api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Sistema
+  - name: Contatos
+  - name: Processos
+  - name: Tarefas
+  - name: Webhooks
+paths:
+  /:
+    get:
+      tags: [Sistema]
+      summary: Verifica a disponibilidade da API
+      security: []
+      responses:
+        "200":
+          description: API disponível
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status: { type: string, const: ok }
+                      version: { type: string, const: v1 }
+  /contacts:
+    get:
+      tags: [Contatos]
+      summary: Lista contatos
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/UpdatedAfter"
+        - $ref: "#/components/parameters/Search"
+      responses:
+        "200": { $ref: "#/components/responses/ContactList" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Contatos]
+      summary: Cria um contato
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactWrite" }
+      responses:
+        "201": { $ref: "#/components/responses/ContactOne" }
+        default: { $ref: "#/components/responses/Problem" }
+  /contacts/{id}:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Contatos]
+      summary: Obtém um contato
+      responses:
+        "200": { $ref: "#/components/responses/ContactOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [Contatos]
+      summary: Atualiza um contato
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactWrite" }
+      responses:
+        "200": { $ref: "#/components/responses/ContactOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Contatos]
+      summary: Arquiva um contato
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "204": { description: Contato arquivado }
+        default: { $ref: "#/components/responses/Problem" }
+  /processes:
+    get:
+      tags: [Processos]
+      summary: Lista processos
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/UpdatedAfter"
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Status"
+      responses:
+        "200": { $ref: "#/components/responses/ProcessList" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Processos]
+      summary: Cria um processo
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProcessWrite" }
+      responses:
+        "201": { $ref: "#/components/responses/ProcessOne" }
+        default: { $ref: "#/components/responses/Problem" }
+  /processes/{id}:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Processos]
+      summary: Obtém um processo
+      responses:
+        "200": { $ref: "#/components/responses/ProcessOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [Processos]
+      summary: Atualiza um processo
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProcessWrite" }
+      responses:
+        "200": { $ref: "#/components/responses/ProcessOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Processos]
+      summary: Arquiva um processo
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "204": { description: Processo arquivado }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks:
+    get:
+      tags: [Tarefas]
+      summary: Lista tarefas
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/UpdatedAfter"
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Status"
+        - name: process_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/TaskList" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Tarefas]
+      summary: Cria uma tarefa
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskWrite" }
+      responses:
+        "201": { $ref: "#/components/responses/TaskOne" }
+        default: { $ref: "#/components/responses/Problem" }
+  /tasks/{id}:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    get:
+      tags: [Tarefas]
+      summary: Obtém uma tarefa
+      responses:
+        "200": { $ref: "#/components/responses/TaskOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [Tarefas]
+      summary: Atualiza uma tarefa
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskWrite" }
+      responses:
+        "200": { $ref: "#/components/responses/TaskOne" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Tarefas]
+      summary: Arquiva uma tarefa
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "204": { description: Tarefa arquivada }
+        default: { $ref: "#/components/responses/Problem" }
+  /webhook-endpoints:
+    get:
+      tags: [Webhooks]
+      summary: Lista endpoints de webhook
+      responses:
+        "200":
+          description: Endpoints do escritório
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/WebhookEndpoint" } }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Webhooks]
+      summary: Cria um endpoint e retorna seu segredo uma única vez
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url, event_types]
+              properties:
+                name: { type: string }
+                url: { type: string, format: uri, pattern: "^https://" }
+                event_types: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+      responses:
+        "201":
+          description: Endpoint criado; salve `data.secret`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/WebhookEndpoint"
+                      - type: object
+                        properties: { secret: { type: string, writeOnly: true } }
+        default: { $ref: "#/components/responses/Problem" }
+  /webhook-endpoints/{id}:
+    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    patch:
+      tags: [Webhooks]
+      summary: Atualiza ou pausa um endpoint
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                active: { type: boolean }
+                event_types: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+      responses:
+        "200":
+          description: Endpoint atualizado
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [Webhooks]
+      summary: Desativa um endpoint
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "204": { description: Endpoint desativado }
+        default: { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ADVeyes API token
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 200 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    UpdatedAfter:
+      name: updated_after
+      in: query
+      schema: { type: string, format: date-time }
+    Search:
+      name: q
+      in: query
+      schema: { type: string }
+    Status:
+      name: status
+      in: query
+      schema: { type: string }
+  schemas:
+    Timestamps:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+        deleted_at: { type: [string, "null"], format: date-time, readOnly: true }
+    ContactWrite:
+      type: object
+      properties:
+        name: { type: string }
+        document: { type: [string, "null"] }
+        email: { type: [string, "null"], format: email }
+        phone: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        person_type: { type: [string, "null"] }
+        relationship_type: { type: [string, "null"] }
+    Contact:
+      allOf: [{ $ref: "#/components/schemas/Timestamps" }, { $ref: "#/components/schemas/ContactWrite" }]
+    ProcessWrite:
+      type: object
+      properties:
+        number: { type: string }
+        contact_id: { type: [string, "null"], format: uuid }
+        client_name: { type: [string, "null"] }
+        area: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        court: { type: [string, "null"] }
+        court_division: { type: [string, "null"] }
+        lawyer: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        plaintiffs: { type: [string, "null"] }
+        defendants: { type: [string, "null"] }
+        filed_at: { type: [string, "null"], format: date }
+    Process:
+      allOf:
+        - $ref: "#/components/schemas/Timestamps"
+        - $ref: "#/components/schemas/ProcessWrite"
+        - type: object
+          properties: { last_movement: { type: [string, "null"] } }
+    TaskWrite:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: [string, "null"] }
+        type: { type: [string, "null"] }
+        category: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        priority: { type: [string, "null"] }
+        due_at: { type: [string, "null"], format: date-time }
+        process_id: { type: [string, "null"], format: uuid }
+        assignee_id: { type: [string, "null"], format: uuid }
+        points: { type: [integer, "null"] }
+        tags: { type: array, items: { type: string } }
+    Task:
+      allOf:
+        - $ref: "#/components/schemas/Timestamps"
+        - $ref: "#/components/schemas/TaskWrite"
+        - type: object
+          properties: { completed_at: { type: [string, "null"], format: date-time } }
+    ContactPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Contact" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ProcessPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Process" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    TaskPage:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Task" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    PageMeta:
+      type: object
+      properties: { next_cursor: { type: [string, "null"] } }
+    WebhookEvent:
+      type: string
+      enum: ["*", contact.created, contact.updated, contact.deleted, process.created, process.updated, process.deleted, task.created, task.updated, task.completed, task.deleted]
+    WebhookEndpoint:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url: { type: string, format: uri }
+        event_types: { type: array, items: { $ref: "#/components/schemas/WebhookEvent" } }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Problem:
+      type: object
+      required: [type, title, status, code, request_id]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        request_id: { type: string, format: uuid }
+        field: { type: string }
+  responses:
+    Problem:
+      description: Erro no formato RFC 9457
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ContactOne:
+      description: Contato
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { data: { $ref: "#/components/schemas/Contact" } }
+    ContactList:
+      description: Página de contatos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ContactPage" }
+    ProcessOne:
+      description: Processo
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { data: { $ref: "#/components/schemas/Process" } }
+    ProcessList:
+      description: Página de processos
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ProcessPage" }
+    TaskOne:
+      description: Tarefa
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { data: { $ref: "#/components/schemas/Task" } }
+    TaskList:
+      description: Página de tarefas
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/TaskPage" }
