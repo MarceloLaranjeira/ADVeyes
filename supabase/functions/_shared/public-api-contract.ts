@@ -134,7 +134,7 @@ export const RESOURCE_CONTRACTS: Record<ApiResource, ResourceContract> = {
 };
 
 export interface ParsedApiRoute {
-  resource: ApiResource | "webhook-endpoints" | "health";
+  resource: ApiResource | "webhook-endpoints" | "health" | "tenants";
   id: string | null;
 }
 
@@ -163,10 +163,47 @@ export function parsePublicApiPath(pathname: string): ParsedApiRoute | null {
   if (
     resource !== "contacts" && resource !== "processes" &&
     resource !== "tasks" && resource !== "webhook-endpoints" &&
-    resource !== "health"
+    resource !== "health" && resource !== "tenants"
   ) return null;
   if (resource === "health" && id) return null;
+  // A rota de escritórios existe só para a credencial de plataforma descobrir
+  // quais tenants existem. Nunca serve um escritório individual.
+  if (resource === "tenants" && id) return null;
   return { resource, id: id || null };
+}
+
+export interface RequestTenantScope {
+  isPlatform: boolean;
+  tokenTenantId: string | null;
+  headerTenantId: string | null;
+  resource: ParsedApiRoute["resource"];
+}
+
+/**
+ * Decide sobre qual escritório a requisição age.
+ *
+ * Uma credencial de escritório permanece presa ao tenant que a emitiu, mesmo
+ * que o cliente envie o cabeçalho. Uma credencial de plataforma não carrega
+ * tenant e precisa escolher um em cada requisição, para que nenhuma chamada
+ * atravesse escritórios sem intenção explícita e registrável.
+ */
+export function resolveRequestTenant(scope: RequestTenantScope): string | null {
+  if (scope.resource === "tenants") {
+    if (!scope.isPlatform) {
+      throw new PublicApiContractError("platform_token_required", 403);
+    }
+    return null;
+  }
+  if (!scope.isPlatform) {
+    if (scope.headerTenantId && scope.headerTenantId !== scope.tokenTenantId) {
+      throw new PublicApiContractError("tenant_not_allowed", 403);
+    }
+    return scope.tokenTenantId;
+  }
+  if (!scope.headerTenantId) {
+    throw new PublicApiContractError("tenant_header_required", 400);
+  }
+  return scope.headerTenantId;
 }
 
 export function isApiScope(value: string): value is ApiScope {

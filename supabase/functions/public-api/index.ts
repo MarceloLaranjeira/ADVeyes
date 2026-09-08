@@ -9,6 +9,7 @@ import {
   PublicApiContractError,
   RESOURCE_CONTRACTS,
   requireScope,
+  resolveRequestTenant,
   type ApiResource,
 } from "../_shared/public-api-contract.ts";
 import {
@@ -33,6 +34,15 @@ const WEBHOOK_EVENTS = new Set([
 interface TokenContext {
   id: string;
   tenantId: string;
+  scopes: string[];
+  actorUserId: string;
+}
+
+/** Token como está gravado: o de plataforma não carrega escritório. */
+interface RawTokenContext {
+  id: string;
+  tenantId: string | null;
+  isPlatform: boolean;
   scopes: string[];
   actorUserId: string;
 }
@@ -93,14 +103,14 @@ function serverClient(): SupabaseClient | null {
 async function authenticate(
   request: Request,
   admin: SupabaseClient,
-): Promise<TokenContext | null> {
+): Promise<RawTokenContext | null> {
   const authorization = request.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer adv_")) return null;
   const rawToken = authorization.slice("Bearer ".length).trim();
   if (rawToken.length < 60 || rawToken.length > 160) return null;
   const tokenHash = await sha256Hex(rawToken);
   const { data, error } = await admin.from("api_tokens")
-    .select("id, tenant_id, scopes, expires_at, revoked_at, created_by")
+    .select("id, tenant_id, is_platform, scopes, expires_at, revoked_at, created_by")
     .eq("token_hash", tokenHash)
     .maybeSingle();
   if (error || !data || data.revoked_at || Date.parse(data.expires_at) <= Date.now()) {
@@ -108,10 +118,47 @@ async function authenticate(
   }
   return {
     id: data.id,
-    tenantId: data.tenant_id,
+    tenantId: data.tenant_id ?? null,
+    isPlatform: Boolean(data.is_platform),
     scopes: data.scopes ?? [],
     actorUserId: data.created_by,
   };
+}
+
+/**
+ * A credencial de plataforma aponta para um escritório por cabeçalho, então o
+ * alvo precisa ser conferido a cada chamada: um tenant removido ou cancelado
+ * não pode continuar respondendo por um identificador antigo.
+ */
+async function assertTenantServable(
+  admin: SupabaseClient,
+  tenantId: string,
+): Promise<void> {
+  const { data, error } = await admin.from("tenants")
+    .select("id, status").eq("id", tenantId).maybeSingle();
+  if (error) throw error;
+  if (!data || data.status === "canceled") {
+    throw new PublicApiContractError("tenant_not_found", 404);
+  }
+}
+
+async function listTenants(
+  admin: SupabaseClient,
+  method: string,
+): Promise<ApiResult> {
+  if (method !== "GET") throw new PublicApiContractError("method_not_allowed", 405);
+  const { data, error } = await admin.from("tenants")
+    .select("id, display_name, slug, status, created_at")
+    .neq("status", "canceled")
+    .order("display_name", { ascending: true });
+  if (error) throw error;
+  return success((data ?? []).map((tenant) => ({
+    id: tenant.id,
+    name: tenant.display_name,
+    slug: tenant.slug,
+    status: tenant.status,
+    created_at: tenant.created_at,
+  })));
 }
 
 async function rateLimited(admin: SupabaseClient, tokenId: string): Promise<boolean> {
@@ -433,52 +480,70 @@ Deno.serve(async (request) => {
     return response(success({ status: "ok", version: "v1" }), requestId);
   }
 
-  const token = await authenticate(request, admin);
-  if (!token) return response(problem("unauthorized", 401, requestId), requestId);
+  const rawToken = await authenticate(request, admin);
+  if (!rawToken) return response(problem("unauthorized", 401, requestId), requestId);
   let result: ApiResult;
   const normalizedRoute = `/api/v1/${route.resource}${route.id ? `/${route.id}` : ""}`;
   let reservation: { key: string; hash: string } | null = null;
+  let effectiveTenantId: string | null = rawToken.tenantId;
   try {
-    if (await rateLimited(admin, token.id)) {
+    if (await rateLimited(admin, rawToken.id)) {
       result = problem("rate_limited", 429, requestId);
       result.headers = { "Retry-After": "60" };
     } else {
-      const method = request.method.toUpperCase();
-      const mutating = ["POST", "PATCH", "DELETE"].includes(method);
-      const rawBody = method === "POST" || method === "PATCH" ? await request.text() : "";
-      let parsedBody: unknown = {};
-      if (rawBody) {
-        try {
-          parsedBody = JSON.parse(rawBody);
-        } catch {
-          throw new PublicApiContractError("invalid_json", 400);
+      effectiveTenantId = resolveRequestTenant({
+        isPlatform: rawToken.isPlatform,
+        tokenTenantId: rawToken.tenantId,
+        headerTenantId: request.headers.get("X-Tenant-Id")?.trim() || null,
+        resource: route.resource,
+      });
+      if (route.resource === "tenants") {
+        result = await listTenants(admin, request.method.toUpperCase());
+      } else {
+        if (rawToken.isPlatform) await assertTenantServable(admin, effectiveTenantId as string);
+        const token: TokenContext = {
+          id: rawToken.id,
+          tenantId: effectiveTenantId as string,
+          scopes: rawToken.scopes,
+          actorUserId: rawToken.actorUserId,
+        };
+        const method = request.method.toUpperCase();
+        const mutating = ["POST", "PATCH", "DELETE"].includes(method);
+        const rawBody = method === "POST" || method === "PATCH" ? await request.text() : "";
+        let parsedBody: unknown = {};
+        if (rawBody) {
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch {
+            throw new PublicApiContractError("invalid_json", 400);
+          }
         }
-      }
-      if (mutating) {
-        const key = request.headers.get("Idempotency-Key")?.trim() ?? "";
-        if (key.length < 8 || key.length > 200) {
-          throw new PublicApiContractError("idempotency_key_required", 400);
-        }
-        const hash = await sha256Hex(`${method}\n${normalizedRoute}\n${rawBody}`);
-        reservation = { key, hash };
-        const replay = await reserveIdempotency({
-          admin, token, method, route: normalizedRoute, key, requestHash: hash,
-        });
-        if (replay) {
-          result = replay;
+        if (mutating) {
+          const key = request.headers.get("Idempotency-Key")?.trim() ?? "";
+          if (key.length < 8 || key.length > 200) {
+            throw new PublicApiContractError("idempotency_key_required", 400);
+          }
+          const hash = await sha256Hex(`${method}\n${normalizedRoute}\n${rawBody}`);
+          reservation = { key, hash };
+          const replay = await reserveIdempotency({
+            admin, token, method, route: normalizedRoute, key, requestHash: hash,
+          });
+          if (replay) {
+            result = replay;
+          } else if (route.resource === "webhook-endpoints") {
+            result = await webhookResource(admin, token, method, route.id, parsedBody);
+          } else {
+            result = await mutateResource(admin, token, route.resource, method, route.id, parsedBody);
+          }
         } else if (route.resource === "webhook-endpoints") {
           result = await webhookResource(admin, token, method, route.id, parsedBody);
+        } else if (method === "GET") {
+          result = route.id
+            ? await getResource(admin, token, route.resource, route.id)
+            : await listResource(admin, token, route.resource, url);
         } else {
-          result = await mutateResource(admin, token, route.resource, method, route.id, parsedBody);
+          throw new PublicApiContractError("method_not_allowed", 405);
         }
-      } else if (route.resource === "webhook-endpoints") {
-        result = await webhookResource(admin, token, method, route.id, parsedBody);
-      } else if (method === "GET") {
-        result = route.id
-          ? await getResource(admin, token, route.resource, route.id)
-          : await listResource(admin, token, route.resource, url);
-      } else {
-        throw new PublicApiContractError("method_not_allowed", 405);
       }
     }
   } catch (error) {
@@ -499,14 +564,14 @@ Deno.serve(async (request) => {
     await admin.from("api_idempotency_keys").update({
       response_status: result.status,
       response_body: result.body,
-    }).eq("api_token_id", token.id).eq("method", request.method.toUpperCase())
+    }).eq("api_token_id", rawToken.id).eq("method", request.method.toUpperCase())
       .eq("route", normalizedRoute).eq("idempotency_key", reservation.key)
       .eq("request_hash", reservation.hash);
   }
   await Promise.all([
     admin.from("api_request_logs").insert({
-      tenant_id: token.tenantId,
-      api_token_id: token.id,
+      tenant_id: effectiveTenantId,
+      api_token_id: rawToken.id,
       request_id: requestId,
       method: request.method.toUpperCase(),
       route: normalizedRoute,
@@ -514,7 +579,7 @@ Deno.serve(async (request) => {
       duration_ms: Date.now() - startedAt,
     }),
     admin.from("api_tokens").update({ last_used_at: new Date().toISOString() })
-      .eq("id", token.id),
+      .eq("id", rawToken.id),
   ]);
   return response(result, requestId);
 });

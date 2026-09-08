@@ -7,6 +7,8 @@ import {
   getEscavadorStatus,
   providerSecretNames,
 } from "../_shared/provider-secrets.ts";
+import { API_SCOPES, isApiScope } from "../_shared/public-api-contract.ts";
+import { createApiToken, sha256Hex } from "../_shared/public-api-crypto.ts";
 
 interface PlatformAdminRequest {
   action?:
@@ -16,10 +18,17 @@ interface PlatformAdminRequest {
     | "set_escavador_token"
     | "support_status"
     | "start_support"
-    | "end_support";
+    | "end_support"
+    | "list_platform_tokens"
+    | "create_platform_token"
+    | "revoke_platform_token";
   tenantId?: string;
   reason?: string;
   token?: string;
+  name?: string;
+  scopes?: string[];
+  expiresInDays?: number;
+  tokenId?: string;
 }
 
 interface TenantRow {
@@ -89,6 +98,82 @@ Deno.serve(async (request) => {
       return json({ isPlatformAdmin: false });
     }
     return json({ error: "permission_denied" }, 403);
+  }
+
+  if (action === "list_platform_tokens") {
+    const { data, error } = await auth.admin.from("api_tokens")
+      .select("id, name, token_prefix, scopes, expires_at, last_used_at, revoked_at, created_at")
+      .is("tenant_id", null)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("platform-admin: platform token list failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+    return json({ availableScopes: API_SCOPES, tokens: data ?? [] });
+  }
+
+  if (action === "create_platform_token") {
+    const name = body.name?.trim() ?? "";
+    const scopes = body.scopes;
+    const expiresInDays = body.expiresInDays ?? 90;
+    if (name.length < 2 || name.length > 80) return json({ error: "invalid_name" }, 400);
+    if (
+      !Array.isArray(scopes) || scopes.length < 1 || scopes.length > API_SCOPES.length ||
+      !scopes.every((scope) => typeof scope === "string" && isApiScope(scope))
+    ) return json({ error: "invalid_scopes" }, 400);
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+      return json({ error: "invalid_expiration" }, 400);
+    }
+
+    const generated = createApiToken("live");
+    const tokenHash = await sha256Hex(generated.token);
+    const { data, error } = await auth.admin.from("api_tokens").insert({
+      tenant_id: null,
+      is_platform: true,
+      name,
+      token_prefix: generated.prefix,
+      token_hash: tokenHash,
+      scopes: [...new Set(scopes)],
+      expires_at: new Date(Date.now() + expiresInDays * 86_400_000).toISOString(),
+      created_by: auth.user.id,
+    }).select("id, name, token_prefix, scopes, expires_at, created_at").single();
+    if (error) {
+      console.error("platform-admin: platform token creation failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+
+    // Uma credencial que alcanca todos os escritorios precisa deixar rastro de
+    // quem a emitiu, alem do log de uso da propria API.
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.api_token_created",
+      target_type: "api_token",
+      target_id: data.id,
+      metadata: { scopes: data.scopes, expires_at: data.expires_at },
+    });
+    return json({ token: generated.token, record: data }, 201);
+  }
+
+  if (action === "revoke_platform_token") {
+    const tokenId = typeof body.tokenId === "string" ? body.tokenId : "";
+    if (!tokenId) return json({ error: "invalid_payload" }, 400);
+    const { data, error } = await auth.admin.from("api_tokens")
+      .update({ revoked_at: new Date().toISOString() })
+      .is("tenant_id", null).eq("id", tokenId).is("revoked_at", null)
+      .select("id").maybeSingle();
+    if (error) {
+      console.error("platform-admin: platform token revoke failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+    if (!data) return json({ error: "token_not_found" }, 404);
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.api_token_revoked",
+      target_type: "api_token",
+      target_id: tokenId,
+      metadata: {},
+    });
+    return json({ revoked: true });
   }
 
   if (action === "session") {

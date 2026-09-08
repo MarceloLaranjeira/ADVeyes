@@ -2,13 +2,17 @@ openapi: 3.1.0
 info:
   title: ADVeyes Public API
   version: 1.0.0
-  description: API server-to-server multi-escritório para contatos, processos, tarefas e webhooks.
+  description: >
+    API server-to-server multi-escritório para contatos, processos, tarefas e
+    webhooks. Credenciais de escritório ficam restritas ao próprio escritório;
+    a credencial de plataforma alcança todos e seleciona o alvo por requisição.
 servers:
   - url: https://adveyes.automatikus.com.br/api/v1
 security:
   - bearerAuth: []
 tags:
   - name: Sistema
+  - name: Plataforma
   - name: Contatos
   - name: Processos
   - name: Tarefas
@@ -32,11 +36,40 @@ paths:
                     properties:
                       status: { type: string, const: ok }
                       version: { type: string, const: v1 }
+  /tenants:
+    get:
+      tags: [Plataforma]
+      summary: Lista os escritórios alcançáveis pela credencial
+      description: >
+        Exclusivo da credencial de plataforma. Use para descobrir escritórios
+        novos sem precisar cadastrar uma credencial por escritório. Cada id
+        retornado serve como valor do cabeçalho X-Tenant-Id nas demais rotas.
+      responses:
+        "200":
+          description: Escritórios disponíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        name: { type: string }
+                        slug: { type: string }
+                        status: { type: string }
+                        created_at: { type: string, format: date-time }
+        "403": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
   /contacts:
     get:
       tags: [Contatos]
       summary: Lista contatos
       parameters:
+        - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/UpdatedAfter"
@@ -47,7 +80,7 @@ paths:
     post:
       tags: [Contatos]
       summary: Cria um contato
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -57,7 +90,7 @@ paths:
         "201": { $ref: "#/components/responses/ContactOne" }
         default: { $ref: "#/components/responses/Problem" }
   /contacts/{id}:
-    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/ResourceId" }]
     get:
       tags: [Contatos]
       summary: Obtém um contato
@@ -67,7 +100,7 @@ paths:
     patch:
       tags: [Contatos]
       summary: Atualiza um contato
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -79,7 +112,7 @@ paths:
     delete:
       tags: [Contatos]
       summary: Arquiva um contato
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       responses:
         "204": { description: Contato arquivado }
         default: { $ref: "#/components/responses/Problem" }
@@ -88,6 +121,7 @@ paths:
       tags: [Processos]
       summary: Lista processos
       parameters:
+        - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/UpdatedAfter"
@@ -99,7 +133,7 @@ paths:
     post:
       tags: [Processos]
       summary: Cria um processo
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -109,7 +143,7 @@ paths:
         "201": { $ref: "#/components/responses/ProcessOne" }
         default: { $ref: "#/components/responses/Problem" }
   /processes/{id}:
-    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/ResourceId" }]
     get:
       tags: [Processos]
       summary: Obtém um processo
@@ -119,7 +153,7 @@ paths:
     patch:
       tags: [Processos]
       summary: Atualiza um processo
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -131,7 +165,7 @@ paths:
     delete:
       tags: [Processos]
       summary: Arquiva um processo
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       responses:
         "204": { description: Processo arquivado }
         default: { $ref: "#/components/responses/Problem" }
@@ -140,6 +174,7 @@ paths:
       tags: [Tarefas]
       summary: Lista tarefas
       parameters:
+        - $ref: "#/components/parameters/TenantId"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/UpdatedAfter"
@@ -154,7 +189,7 @@ paths:
     post:
       tags: [Tarefas]
       summary: Cria uma tarefa
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -164,7 +199,7 @@ paths:
         "201": { $ref: "#/components/responses/TaskOne" }
         default: { $ref: "#/components/responses/Problem" }
   /tasks/{id}:
-    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/ResourceId" }]
     get:
       tags: [Tarefas]
       summary: Obtém uma tarefa
@@ -174,7 +209,7 @@ paths:
     patch:
       tags: [Tarefas]
       summary: Atualiza uma tarefa
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -186,7 +221,7 @@ paths:
     delete:
       tags: [Tarefas]
       summary: Arquiva uma tarefa
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       responses:
         "204": { description: Tarefa arquivada }
         default: { $ref: "#/components/responses/Problem" }
@@ -207,7 +242,7 @@ paths:
     post:
       tags: [Webhooks]
       summary: Cria um endpoint e retorna seu segredo uma única vez
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -234,11 +269,11 @@ paths:
                         properties: { secret: { type: string, writeOnly: true } }
         default: { $ref: "#/components/responses/Problem" }
   /webhook-endpoints/{id}:
-    parameters: [{ $ref: "#/components/parameters/ResourceId" }]
+    parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/ResourceId" }]
     patch:
       tags: [Webhooks]
       summary: Atualiza ou pausa um endpoint
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       requestBody:
         required: true
         content:
@@ -256,7 +291,7 @@ paths:
     delete:
       tags: [Webhooks]
       summary: Desativa um endpoint
-      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      parameters: [{ $ref: "#/components/parameters/TenantId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
       responses:
         "204": { description: Endpoint desativado }
         default: { $ref: "#/components/responses/Problem" }
@@ -266,11 +301,24 @@ components:
       type: http
       scheme: bearer
       bearerFormat: ADVeyes API token
+      description: >
+        Dois tipos de credencial. A de escritório age apenas sobre o escritório
+        que a emitiu. A de plataforma não carrega escritório e escolhe um em
+        cada requisição pelo cabeçalho X-Tenant-Id.
   parameters:
     ResourceId:
       name: id
       in: path
       required: true
+      schema: { type: string, format: uuid }
+    TenantId:
+      name: X-Tenant-Id
+      in: header
+      required: false
+      description: >
+        Escritório alvo da requisição. Obrigatório para a credencial de
+        plataforma; ignorado pela credencial de escritório, que já está presa ao
+        próprio escritório e recebe 403 se apontar para outro.
       schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key

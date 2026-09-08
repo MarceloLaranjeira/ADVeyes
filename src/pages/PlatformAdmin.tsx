@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DepthCard } from "@/components/dashboard/DepthCard";
+import { PlatformApiCredential } from "@/components/platform/PlatformApiCredential";
 import { EnvironmentSwitcher } from "@/components/layout/EnvironmentSwitcher";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
@@ -265,6 +266,8 @@ const PlatformAdmin = () => {
                 </Table>
               </CardContent>
             </DepthCard>
+
+            <PlatformApiCredential />
           </>
         )}
       </div>

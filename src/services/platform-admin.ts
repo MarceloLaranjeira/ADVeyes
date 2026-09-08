@@ -102,6 +102,22 @@ async function invokePlatformAdmin<T>(body: Record<string, unknown>) {
   return data as T;
 }
 
+export interface PlatformToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  scopes: string[];
+  expires_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+}
+
+export interface PlatformTokenList {
+  availableScopes: string[];
+  tokens: PlatformToken[];
+}
+
 export const platformAdmin = {
   async session() {
     return invokePlatformAdmin<{ isPlatformAdmin: boolean }>({
@@ -145,6 +161,30 @@ export const platformAdmin = {
     return invokePlatformAdmin<PlatformSupportStatus>({
       action: "end_support",
       tenantId,
+    });
+  },
+
+  async listPlatformTokens() {
+    return invokePlatformAdmin<PlatformTokenList>({
+      action: "list_platform_tokens",
+    });
+  },
+
+  async createPlatformToken(input: {
+    name: string;
+    scopes: string[];
+    expiresInDays: number;
+  }) {
+    return invokePlatformAdmin<{ token: string; record: PlatformToken }>({
+      action: "create_platform_token",
+      ...input,
+    });
+  },
+
+  async revokePlatformToken(tokenId: string) {
+    return invokePlatformAdmin<{ revoked: true }>({
+      action: "revoke_platform_token",
+      tokenId,
     });
   },
 };
