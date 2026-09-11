@@ -161,9 +161,16 @@ Deno.serve(async (request) => {
     | null = null;
 
   // O `process_id` da publicacao e a chave canonica; casar por numero e
-  // ultimo recurso. Numero repetido no mesmo escritorio — acontece em grau
-  // recursal e em processo redistribuido — faria `maybeSingle` falhar, e o
-  // resolver cairia no padrao sem ninguem perceber.
+  // ultimo recurso, e numero repetido no mesmo escritorio acontece — grau
+  // recursal, processo redistribuido.
+  //
+  // Uma versao anterior punha `.limit(1)` aqui justamente para `maybeSingle`
+  // nao falhar na duplicata. Estava errado: escolher uma linha entre duas,
+  // sem criterio, significa que um numero que aparece como penal e como
+  // civel pode devolver o ramo errado — com confianca alta e sem aviso.
+  // Deixar o `maybeSingle` falhar e melhor, porque o tratamento de erro
+  // abaixo empurra o alerta e o resolver cai no padrao de confianca baixa.
+  // Entre nao saber e achar que sabe, num modulo de prazo, nao saber ganha.
   if (processoId || numeroProcesso) {
     let consulta = auth.admin
       .from("processos")
@@ -172,7 +179,7 @@ Deno.serve(async (request) => {
 
     consulta = processoId
       ? consulta.eq("id", processoId)
-      : consulta.eq("numero", numeroProcesso as string).limit(1);
+      : consulta.eq("numero", numeroProcesso as string);
 
     const { data: processo, error: processoError } = await consulta
       .maybeSingle();
@@ -205,7 +212,11 @@ Deno.serve(async (request) => {
   // util. So vale quando o CPP esta de fato sendo aplicado — se o ato
   // determinou dias uteis, ou se o advogado sobrepos o modo, o termo inicial
   // volta a seguir o CPC.
-  const regimePenal = regra.fonte === "cpp" && diasCorridos;
+  // O override do advogado tambem desliga o regime, e nao so o modo: quando
+  // ele escolhe a contagem, quem decide deixou de ser o CPP, e aplicar o
+  // termo inicial do art. 798 §1 seria afirmar uma tese que ele nao afirmou.
+  const regimePenal = regra.fonte === "cpp" && diasCorridos &&
+    body.override?.diasCorridos === undefined;
 
   // O que a tela deve mostrar: quem de fato decidiu o modo. O ramo perde
   // para o qualificador do ato, e os dois perdem para o advogado.

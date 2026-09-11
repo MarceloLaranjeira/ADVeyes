@@ -316,3 +316,47 @@ describe("classe processual importada do tribunal em processos.area", () => {
     expect(regra.aviso).toContain("dias corridos");
   });
 });
+
+describe("fragmento curto não pode capturar classe de outro ramo", () => {
+  // O casamento por substring parecia bastar enquanto os termos eram longos.
+  // Assim que entraram fragmentos curtos virou defeito: classe cível contada
+  // pelo CPP encurta a data fatal, que é o erro mais perigoso dos dois.
+
+  it("não confunde Inquérito Civil com inquérito policial", () => {
+    const regra = resolverRegraContagem({ area: "Inquérito Civil" });
+    expect(regra.fonte).not.toBe("cpp");
+    expect(regra.modo).toBe("uteis");
+  });
+
+  it("não confunde Jurisdição Voluntária com júri", () => {
+    const regra = resolverRegraContagem({ area: "Jurisdição Voluntária" });
+    expect(regra.fonte).not.toBe("cpp");
+    expect(regra.modo).toBe("uteis");
+  });
+
+  it("continua reconhecendo os termos criminais inteiros", () => {
+    for (const area of [
+      "Inquérito Policial",
+      "Tribunal do Júri",
+      "Queixa-crime",
+      "Habeas Corpus",
+    ]) {
+      expect(resolverRegraContagem({ area }).fonte, area).toBe("cpp");
+    }
+  });
+
+  it("trata termo circunstanciado como JECrim mesmo sem o juízo dizer", () => {
+    const regra = resolverRegraContagem({ area: "Termo Circunstanciado" });
+    expect(regra.fonte).toBe("cpp");
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toContain("9.099");
+  });
+
+  it("não dá confiança alta a processo eleitoral", () => {
+    // Prazo eleitoral é em boa parte contínuo e peremptório. Sem regra
+    // própria escrita por advogado, o certo é pedir conferência.
+    const regra = resolverRegraContagem({ area: "Ação de Investigação Judicial Eleitoral" });
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toBeTruthy();
+  });
+});

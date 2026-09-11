@@ -143,9 +143,15 @@ const CIVIL_AREAS = [
   "responsabilidade civil",
   "bancario",
   "saude",
-  "eleitoral",
   "fazenda publica",
 ];
+
+// Eleitoral ficou deliberadamente fora da lista cível. Boa parte dos prazos
+// eleitorais é contínua e peremptória, inclusive em fins de semana, e tratá-la
+// como CPC devolveria dias úteis com confiança alta e sem aviso — a data fatal
+// esticada, que é o erro que este módulo existe para não cometer. Sem uma
+// regra própria escrita por quem responde pelo parecer, o certo é cair no ramo
+// não identificado e pedir conferência.
 
 function areaIdentificada(area: string): boolean {
   return areaMatches(area, CIVIL_AREAS);
@@ -196,7 +202,8 @@ const CRIMINAL_AREAS = [
   "penal",
   "criminal",
   "crime",
-  "inquerito",
+  // "inquerito" sozinho casaria com "Inquérito Civil", que é cível.
+  "inquerito policial",
   "habeas corpus",
   "termo circunstanciado",
   "juri",
@@ -225,8 +232,22 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Casa termo inteiro, não pedaço de palavra.
+ *
+ * `includes` parecia suficiente enquanto os termos eram longos, e passou a
+ * ser um defeito assim que entraram fragmentos curtos: "Inquérito Civil"
+ * casava com `inquerito` e "Jurisdição Voluntária" casava com `juri` — duas
+ * classes cíveis contadas pelo CPP, em dias corridos, o erro que encurta a
+ * data em vez de esticá-la. A fronteira é qualquer caractere que não seja
+ * letra ou dígito, o que preserva termos compostos ("termo circunstanciado")
+ * e o hífen de "queixa-crime".
+ */
 function areaMatches(area: string, candidates: string[]): boolean {
-  return candidates.some((candidate) => area.includes(candidate));
+  return candidates.some((candidate) =>
+    new RegExp(`(?:^|[^a-z0-9])${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[^a-z0-9]|$)`)
+      .test(area)
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -256,7 +277,12 @@ export function resolverRegraContagem(
 
   const ehCriminal = areaMatches(area, CRIMINAL_AREAS) ||
     matchesAny(juizo, CRIMINAL_JUIZO_PATTERNS);
-  const ehJuizado = matchesAny(juizo, JEC_PATTERNS);
+  // O termo circunstanciado é o instrumento do JECrim: quando ele aparece na
+  // área, o rito da Lei 9.099 está identificado mesmo que o juízo não diga.
+  // Sem isto, a classe importada saía como penal comum, confiança alta, sem
+  // o aviso que o rito especial exige.
+  const ehJuizado = areaMatches(area, ["termo circunstanciado"]) ||
+    matchesAny(juizo, JEC_PATTERNS);
 
   // Penal — prazos contínuos. É o ramo em que errar estica a data, então ele
   // é avaliado antes de tudo, inclusive antes do Juizado.
