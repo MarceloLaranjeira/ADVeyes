@@ -59,6 +59,25 @@ language plpgsql
 set search_path = pg_catalog
 as $$
 begin
+  -- O cliente nunca escreve estes dois campos, em nenhum caminho.
+  --
+  -- A versão anterior só corrigia quem/quando no UPDATE que mudava
+  -- `arquivado_manual`. Isso deixava duas portas abertas: um INSERT podia
+  -- nascer com autoria forjada, e um UPDATE que mexesse em qualquer outra
+  -- coluna podia reescrever a trilha sem tocar na decisão. Numa perda de
+  -- prazo por processo fora da carteira, é esta trilha que responde desde
+  -- quando e por decisão de quem — ela não pode aceitar valor de fora.
+  if tg_op = 'INSERT' then
+    if new.arquivado_manual is null then
+      new.arquivado_manual_em := null;
+      new.arquivado_manual_por := null;
+    else
+      new.arquivado_manual_em := now();
+      new.arquivado_manual_por := auth.uid();
+    end if;
+    return new;
+  end if;
+
   if new.arquivado_manual is distinct from old.arquivado_manual then
     if new.arquivado_manual is null then
       new.arquivado_manual_em := null;
@@ -67,6 +86,11 @@ begin
       new.arquivado_manual_em := now();
       new.arquivado_manual_por := auth.uid();
     end if;
+  else
+    -- Decisão inalterada: a trilha permanece exatamente como estava,
+    -- independentemente do que o cliente tenha mandado nestes campos.
+    new.arquivado_manual_em := old.arquivado_manual_em;
+    new.arquivado_manual_por := old.arquivado_manual_por;
   end if;
   return new;
 end;
@@ -74,8 +98,11 @@ $$;
 
 drop trigger if exists processos_registrar_override_arquivamento
   on public.processos;
+-- Sem `of arquivado_manual`: a cláusula restringia o gatilho ao UPDATE que
+-- toca a coluna, que é justamente o caminho que NÃO precisa ser vigiado. É o
+-- update das outras colunas que podia carregar uma trilha forjada.
 create trigger processos_registrar_override_arquivamento
-  before update of arquivado_manual on public.processos
+  before insert or update on public.processos
   for each row
   execute function private.registrar_override_arquivamento();
 

@@ -43,7 +43,10 @@ const PAGINA = 1000;
  * Trava de segurança: nenhuma carteira legítima passa disto.
  *
  * Um servidor que devolvesse sempre a mesma página faria o laço rodar para
- * sempre. Preferimos uma lista truncada a uma aba travada.
+ * sempre. Atingir o teto é sinal de defeito, não de escritório grande — e a
+ * saída é erro, não lista curta: devolver uma carteira truncada como se
+ * estivesse completa esconde processo, que é exatamente o que este módulo
+ * existe para não fazer. Melhor a tela falhar dizendo por quê.
  */
 const MAXIMO_DE_LINHAS = 100_000;
 
@@ -71,7 +74,10 @@ async function lerTudo(
     if (pagina.length === 0) return todas;
     todas.push(...pagina);
   }
-  return todas;
+  throw new Error(
+    `Leitura interrompida em ${MAXIMO_DE_LINHAS} linhas. A carteira estaria ` +
+      "incompleta, então nada é exibido — avise o suporte.",
+  );
 }
 
 export const processIntelligenceService = {
@@ -117,13 +123,18 @@ export const processIntelligenceService = {
           .eq("tenant_id", tenantId)
           .order("process_id", { ascending: true })
           .range(de, ate)),
+      // As partes são enriquecimento, não o dado principal: a lista se
+      // desenha a partir de `polo_ativo`/`polo_passivo` quando elas faltam.
+      // Antes da paginação a consulta era opcional de propósito; ao entrar no
+      // mesmo `Promise.all` ela passou a poder derrubar a carteira inteira
+      // por um erro numa tabela acessória. O `catch` devolve a opcionalidade.
       lerTudo((de, ate) =>
         client
           .from("process_parties")
           .select("process_id, display_name, side")
           .eq("tenant_id", tenantId)
           .order("process_id", { ascending: true })
-          .range(de, ate)),
+          .range(de, ate)).catch(() => [] as Row[]),
     ]);
     const processes = { data: linhasProcessos };
     const intelligence = { data: linhasInteligencia };

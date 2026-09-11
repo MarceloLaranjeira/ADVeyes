@@ -207,3 +207,17 @@ describe("overrideParaStatus", () => {
     expect(overrideParaStatus("Em andamento", undefined)).toBe(null);
   });
 });
+
+describe("fase não identificada não é classificação do tribunal", () => {
+  it("não gera divergência com o tribunal", () => {
+    // `nao_identificada` é o padrão da inteligência processual: quer dizer
+    // que a análise não concluiu, não que o tribunal considere o processo em
+    // andamento. Tratá-la como classificação fazia a tela afirmar uma
+    // discordância que não existe.
+    const situacao = situacaoNaCarteira({
+      arquivadoManual: true,
+      fase: null,
+    });
+    expect(situacao.divergente).toBe(false);
+  });
+});

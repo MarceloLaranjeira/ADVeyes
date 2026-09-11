@@ -49,25 +49,36 @@ export function ArquivamentoControl({
   const queryClient = useQueryClient();
   const [salvando, setSalvando] = useState(false);
 
-  const situacao = situacaoNaCarteira({ status, arquivadoManual, fase });
-
-  // Nada a mostrar num processo ativo sobre o qual ninguém se pronunciou:
-  // seria ruído no cabeçalho de todo processo normal da carteira.
-  if (!situacao.arquivado && !situacao.divergente && arquivadoManual === null) {
-    return null;
-  }
+  // `nao_identificada` é o valor padrão da inteligência processual: significa
+  // que a análise não chegou a uma conclusão, não que o tribunal considere o
+  // processo em andamento. Passá-la adiante como classificação fazia o
+  // controle afirmar uma divergência com o tribunal que não existe.
+  const faseClassificada = fase === "nao_identificada" ? null : fase;
+  const situacao = situacaoNaCarteira({
+    status,
+    arquivadoManual,
+    fase: faseClassificada,
+  });
 
   const gravar = async (valor: boolean | null) => {
     setSalvando(true);
+    // `select()` no fim não é enfeite: quando a RLS barra a escrita, o
+    // PostgREST responde sucesso com zero linhas afetadas, sem erro. Sem
+    // pedir a linha de volta e conferir que ela veio, a tela dizia "Processo
+    // arquivado" para quem não tem permissão de gravar — e o processo seguia
+    // como estava. Erro silencioso numa decisão que tira processo da
+    // carteira é o pior lugar para um falso positivo.
+    //
     // A coluna é nova e ainda não entrou nos tipos gerados do Supabase.
-    const { error } = await (supabase as unknown as {
+    const { data, error } = await (supabase as unknown as {
       from: (tabela: string) => {
         update: (valores: Record<string, unknown>) => {
           eq: (coluna: string, valor: string) => {
-            eq: (
-              coluna: string,
-              valor: string,
-            ) => Promise<{ error: unknown }>;
+            eq: (coluna: string, valor: string) => {
+              select: (
+                colunas: string,
+              ) => Promise<{ data: unknown[] | null; error: unknown }>;
+            };
           };
         };
       };
@@ -75,9 +86,20 @@ export function ArquivamentoControl({
       .from("processos")
       .update({ arquivado_manual: valor })
       .eq("tenant_id", tenantId)
-      .eq("id", processoId);
+      .eq("id", processoId)
+      .select("id");
 
     setSalvando(false);
+
+    if (!error && (data ?? []).length === 0) {
+      toast({
+        title: "Sem permissão para alterar o arquivamento",
+        description:
+          "A alteração não foi gravada. Fale com quem administra o escritório.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (error) {
       toast({
@@ -122,7 +144,13 @@ export function ArquivamentoControl({
               <Badge variant="secondary">Na carteira ativa</Badge>
             )}
             <span className="text-xs text-muted-foreground">
-              {situacao.origem === "manual"
+              {/*
+                `arquivadoManual` vem antes de `origem` porque `false` é uma
+                decisão tão explícita quanto `true`. Ler só a origem mostrava
+                um processo reativado pelo escritório como "sem arquivamento
+                registrado", escondendo quem respondeu pelo estado atual.
+              */}
+              {arquivadoManual !== null
                 ? "por decisão do escritório"
                 : situacao.origem === "tribunal"
                   ? "pelo andamento do tribunal"

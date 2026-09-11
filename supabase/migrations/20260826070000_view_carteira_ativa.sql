@@ -42,13 +42,32 @@ where
     and lower(regexp_replace(coalesce(p.status, ''), '^[[:space:]]+|[[:space:]]+$', '', 'g'))
         is distinct from 'arquivado'
     and coalesce(pi.phase, '') is distinct from 'arquivado_encerrado'
+    -- A terceira fonte do tribunal: a baixa informada pelo provedor.
+    --
+    -- `situacaoNaCarteira` no cliente já considerava `arquivadoNoTribunal`, e
+    -- a view não — então um processo que o Escavador marcou como INATIVO
+    -- continuava nos contadores enquanto a listagem o escondia, que é
+    -- exatamente a divergência que esta view existe para fechar.
+    --
+    -- `not exists` e não mais um `left join`: um processo pode ter mais de
+    -- uma descoberta confirmada, e um segundo join multiplicaria a linha,
+    -- inflando justamente as contagens que dependem daqui.
+    and not exists (
+      select 1
+      from public.process_discoveries d
+      where d.tenant_id = p.tenant_id
+        and d.confirmed_process_id = p.id
+        and d.state = 'confirmed'
+        and upper(coalesce(d.process_status, '')) = 'INATIVO'
+    )
   );
 
 comment on view public.processos_carteira_ativa is
   'Processos da carteira ativa, com as três fontes de arquivamento já '
-  'combinadas: sobreposição manual do escritório, status legado e fase '
-  'deduzida pelo tribunal. Espelha `situacaoNaCarteira` no cliente. '
-  '`security_invoker` para que a RLS de `processos` continue valendo.';
+  'combinadas: sobreposição manual do escritório, status legado, fase '
+  'deduzida das movimentações e baixa informada pelo provedor. Espelha '
+  '`situacaoNaCarteira` no cliente. `security_invoker` para que a RLS de '
+  '`processos` continue valendo.';
 
 grant select on public.processos_carteira_ativa to authenticated;
 
