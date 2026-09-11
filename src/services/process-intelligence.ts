@@ -1,6 +1,7 @@
 /* Generated Supabase types predate the process-intelligence migrations. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtiva, estaArquivado } from "@/lib/carteira";
 import type { ProcessIntelligenceItem, ProcessIntelligenceManualOverride, ProcessIntelligenceRecord } from "@/types/process-intelligence";
 
 type Row = Record<string, unknown>;
@@ -22,30 +23,151 @@ function mapRecord(row: Row): ProcessIntelligenceRecord {
   };
 }
 
+/**
+ * Tamanho pedido por página ao varrer uma tabela inteira.
+ *
+ * O PostgREST corta a resposta num teto de linhas configurado no servidor,
+ * e o corte é silencioso — vem uma resposta bem-sucedida, só que curta. Sem
+ * paginar, uma carteira grande devolveria apenas as primeiras linhas por
+ * `updated_at`, e qualquer filtro aplicado depois descartaria parte dessa
+ * página sem repor o que ficou de fora: processo ativo sumindo da tela por
+ * causa de arquivado recém-movimentado.
+ *
+ * O valor é o que se *pede*, não o que se recebe. Se o servidor estiver
+ * configurado com teto menor, cada página vem curta — e é por isso que o
+ * avanço abaixo é pelo número de linhas devolvidas, não por esta constante.
+ */
+const PAGINA = 1000;
+
+/**
+ * Erro da trava de segurança, com tipo próprio.
+ *
+ * Existe para não ser confundido com falha de rede. A consulta de partes é
+ * opcional e engole os próprios erros; sem um tipo para distinguir, ela
+ * engoliria também o aviso de que a leitura foi truncada — que é justamente
+ * o que não pode passar em silêncio.
+ */
+class LeituraTruncadaError extends Error {}
+
+/**
+ * Trava de segurança: nenhuma carteira legítima passa disto.
+ *
+ * Um servidor que devolvesse sempre a mesma página faria o laço rodar para
+ * sempre. Atingir o teto é sinal de defeito, não de escritório grande — e a
+ * saída é erro, não lista curta: devolver uma carteira truncada como se
+ * estivesse completa esconde processo, que é exatamente o que este módulo
+ * existe para não fazer. Melhor a tela falhar dizendo por quê.
+ */
+const MAXIMO_DE_LINHAS = 100_000;
+
+/**
+ * Lê todas as linhas de uma consulta, página por página.
+ *
+ * `montar` recebe a faixa e devolve a consulta já filtrada, porque o
+ * `range` precisa ser aplicado por último, depois dos demais predicados.
+ *
+ * O avanço é pelo tamanho real da página recebida. Avançar por `PAGINA`
+ * assumiria que o servidor honra o que foi pedido: num deployment com teto
+ * abaixo de 1000, a primeira resposta já viria curta, seria lida como
+ * "última página" e todo o resto da carteira desapareceria em silêncio.
+ * Terminar só na página vazia é o único sinal de fim que não depende dessa
+ * suposição.
+ */
+async function lerTudo(
+  montar: (de: number, ate: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
+): Promise<Row[]> {
+  const todas: Row[] = [];
+  while (todas.length < MAXIMO_DE_LINHAS) {
+    const { data, error } = await montar(todas.length, todas.length + PAGINA - 1);
+    if (error) throw error;
+    const pagina = data ?? [];
+    if (pagina.length === 0) return todas;
+    todas.push(...pagina);
+  }
+  throw new LeituraTruncadaError(
+    `Leitura interrompida em ${MAXIMO_DE_LINHAS} linhas. A carteira estaria ` +
+      "incompleta, então nada é exibido — avise o suporte.",
+  );
+}
+
 export const processIntelligenceService = {
-  async list(tenantId: string): Promise<ProcessIntelligenceItem[]> {
+  /**
+   * Carteira do escritório para a listagem e para a Controladoria.
+   *
+   * Arquivado sai por padrão. Quem quiser ver processo encerrado pede em
+   * voz alta, com `incluirArquivados` — a exceção é explícita na chamada,
+   * nunca um filtro que cada tela reinventa.
+   *
+   * O arquivamento tem duas fontes em tabelas diferentes, e cada uma é
+   * aplicada onde consegue ser: a decisão do escritório e o status legado
+   * vivem em `processos` e descem para o banco; a fase deduzida vive em
+   * `process_intelligence_current` e só pode ser avaliada depois do join.
+   */
+  async list(
+    tenantId: string,
+    { incluirArquivados = false }: { incluirArquivados?: boolean } = {},
+  ): Promise<ProcessIntelligenceItem[]> {
     const client = supabase as any;
-    const [processes, intelligence, parties] = await Promise.all([
-      client.from("processos").select("id, numero, cliente_nome, polo_ativo, polo_passivo, area, status, tribunal, vara, adjudicating_body, advogado, updated_at, created_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false }),
-      client.from("process_intelligence_current").select("*").eq("tenant_id", tenantId),
-      client.from("process_parties").select("process_id, display_name, side").eq("tenant_id", tenantId),
+    // A metade do arquivamento que mora em `processos` desce para o banco:
+    // filtrar lá reduz o que precisa vir pela rede e, junto da paginação,
+    // impede que arquivado recém-movimentado ocupe a primeira página e
+    // empurre processo ativo para fora do resultado. A fase do tribunal
+    // mora em outra tabela e continua sendo aplicada depois do join.
+    const selecionarProcessos = (de: number, ate: number) => {
+      const base = client
+        .from("processos")
+        .select("id, numero, cliente_nome, polo_ativo, polo_passivo, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at")
+        .eq("tenant_id", tenantId);
+      return (incluirArquivados ? base : carteiraAtiva(base))
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(de, ate);
+    };
+
+    const [linhasProcessos, linhasInteligencia, linhasPartes] = await Promise.all([
+      lerTudo(selecionarProcessos),
+      lerTudo((de, ate) =>
+        client
+          .from("process_intelligence_current")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("process_id", { ascending: true })
+          .range(de, ate)),
+      // As partes são enriquecimento, não o dado principal: a lista se
+      // desenha a partir de `polo_ativo`/`polo_passivo` quando elas faltam.
+      // Antes da paginação a consulta era opcional de propósito; ao entrar no
+      // mesmo `Promise.all` ela passou a poder derrubar a carteira inteira
+      // por um erro numa tabela acessória. O `catch` devolve a opcionalidade.
+      lerTudo((de, ate) =>
+        client
+          .from("process_parties")
+          .select("process_id, display_name, side")
+          .eq("tenant_id", tenantId)
+          .order("process_id", { ascending: true })
+          .range(de, ate)).catch((erro: unknown) => {
+        // A truncagem passa: ela diz que a carteira está incompleta, e isso
+        // vale mais do que os nomes das partes. Só o erro comum de consulta
+        // — a tabela acessória indisponível — é engolido.
+        if (erro instanceof LeituraTruncadaError) throw erro;
+        return [] as Row[];
+      }),
     ]);
-    if (processes.error) throw processes.error;
-    if (intelligence.error) throw intelligence.error;
+    const processes = { data: linhasProcessos };
+    const intelligence = { data: linhasInteligencia };
     const byProcess = new Map<string, ProcessIntelligenceRecord>((intelligence.data ?? []).map((row: Row) => [String(row.process_id), mapRecord(row)]));
+
     const partiesByProcess = new Map<string, { ativo: string[]; passivo: string[] }>();
-    if (!parties.error) {
-      (parties.data ?? []).forEach((party: Row) => {
-        const processId = String(party.process_id ?? "");
-        const side = party.side === "ativo" || party.side === "passivo" ? party.side : null;
-        const name = String(party.display_name ?? "").trim();
-        if (!processId || !side || !name) return;
-        const grouped = partiesByProcess.get(processId) ?? { ativo: [], passivo: [] };
-        grouped[side].push(name);
-        partiesByProcess.set(processId, grouped);
-      });
-    }
-    return (processes.data ?? []).map((row: Row) => ({
+    linhasPartes.forEach((party: Row) => {
+      const processId = String(party.process_id ?? "");
+      const side = party.side === "ativo" || party.side === "passivo" ? party.side : null;
+      const name = String(party.display_name ?? "").trim();
+      if (!processId || !side || !name) return;
+      const grouped = partiesByProcess.get(processId) ?? { ativo: [], passivo: [] };
+      grouped[side].push(name);
+      partiesByProcess.set(processId, grouped);
+    });
+
+    const itens = (processes.data ?? []).map((row: Row) => ({
       id: String(row.id), number: String(row.numero ?? ""), clientName: row.cliente_nome as string | null,
       clientDocument: null,
       activeParties: (row.polo_ativo as string | null) || partiesByProcess.get(String(row.id))?.ativo.join(", ") || null,
@@ -54,6 +176,23 @@ export const processIntelligenceService = {
       court: row.tribunal as string | null, courtUnit: (row.adjudicating_body ?? row.vara) as string | null,
       lawyer: row.advogado as string | null, updatedAt: String(row.updated_at ?? row.created_at), intelligence: byProcess.get(String(row.id)) ?? null,
     }));
+
+    // O override do advogado nao cabe em `ProcessIntelligenceItem`, que e o
+    // contrato da tela. Fica ao lado, indexado por processo, so para a
+    // decisao de carteira.
+    const overridePorProcesso = new Map<string, boolean | null>(
+      (processes.data ?? []).map((row: Row) => [
+        String(row.id),
+        typeof row.arquivado_manual === "boolean" ? row.arquivado_manual : null,
+      ]),
+    );
+
+    return itens.filter((item: ProcessIntelligenceItem) =>
+      incluirArquivados || !estaArquivado({
+        status: item.status,
+        arquivadoManual: overridePorProcesso.get(item.id) ?? null,
+        fase: item.intelligence?.phase ?? null,
+      }));
   },
 
   async analyze(tenantId: string, processId: string) {

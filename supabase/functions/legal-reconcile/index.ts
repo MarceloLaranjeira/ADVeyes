@@ -360,6 +360,14 @@ async function reconcileOabSource(
       title_passive_party: item.titulo_polo_passivo ?? null,
       tribunal: item.unidade_origem?.tribunal_sigla ?? null,
       court_unit: item.unidade_origem?.nome ?? null,
+      // Mesma leitura de `legal-discover-lawyer-processes`. Os dois caminhos
+      // gravam descoberta do Escavador a partir do mesmo payload, e só o
+      // outro registrava a baixa — aqui o campo ficava nulo, e um processo
+      // que o tribunal já arquivou entrava na carteira ativa como se
+      // estivesse correndo.
+      process_status: item.fontes_tribunais_estao_arquivadas
+        ? "INATIVO"
+        : "ATIVO",
       last_movement_at: item.data_ultima_movimentacao ?? null,
       provider_fetched_at: new Date().toISOString(),
       provider_payload: item,

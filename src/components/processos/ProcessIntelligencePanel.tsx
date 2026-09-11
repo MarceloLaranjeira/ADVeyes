@@ -8,7 +8,7 @@ import { PHASE_LABELS, RISK_LABELS, WAITING_LABELS } from "@/lib/process-intelli
 import { usePlatformSupport } from "@/contexts/PlatformSupportContext";
 
 export function ProcessIntelligencePanel({ tenantId, processId }: { tenantId: string; processId: string }) {
-  const query = useProcessIntelligence(tenantId);
+  const query = useProcessIntelligence(tenantId, { incluirArquivados: true });
   const { toast } = useToast();
   const support = usePlatformSupport();
   const item = query.items.find(candidate => candidate.id === processId);

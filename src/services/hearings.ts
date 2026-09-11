@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtivaQuery } from "@/lib/carteira-query";
 import type { Database } from "@/integrations/supabase/types";
 
 type Tables = Database["public"]["Tables"];
@@ -10,6 +11,12 @@ export interface HearingsWorkspace {
   hearings: HearingRow[];
   signals: HearingSignalRow[];
   processes: Array<Pick<Tables["processos"]["Row"], "id" | "numero" | "cliente_nome">>;
+  /**
+   * Processos fora da carteira ativa que já estão vinculados a alguma
+   * audiência. Separados de `processes` de propósito: servem para não perder
+   * o vínculo ao editar, nunca para oferecer em audiência nova.
+   */
+  archivedLinked: Array<Pick<Tables["processos"]["Row"], "id" | "numero" | "cliente_nome">>;
   coverage: CourtCoverageRow[];
 }
 
@@ -20,7 +27,7 @@ export async function loadHearingsWorkspace(tenantId: string): Promise<HearingsW
     supabase.from("legal_hearing_signals").select("*")
       .eq("tenant_id", tenantId).eq("review_status", "pending")
       .order("created_at", { ascending: false }),
-    supabase.from("processos").select("id, numero, cliente_nome")
+    carteiraAtivaQuery().select("id, numero, cliente_nome")
       .eq("tenant_id", tenantId).order("numero"),
     supabase.from("legal_court_registry").select("*")
       .eq("public_datajud_enabled", true).order("court_code"),
@@ -30,10 +37,39 @@ export async function loadHearingsWorkspace(tenantId: string): Promise<HearingsW
     .filter(Boolean);
   if (errors.length) throw new Error(errors.map(error => error!.message).join(" · "));
 
+  // A carteira ativa decide o que se pode ESCOLHER, não o que já está
+  // escolhido. Sem trazer de volta os processos já vinculados a alguma
+  // audiência, editar uma audiência de processo arquivado abriria o seletor
+  // sem o item correspondente — o vínculo atual sumiria da tela e seria
+  // perdido ao salvar.
+  //
+  // Eles voltam numa lista à parte, e não misturados em `processes`. Juntar
+  // as duas trocaria um defeito por outro: o seletor de audiência NOVA
+  // passaria a oferecer todo processo arquivado que um dia teve audiência,
+  // que é exatamente a restrição que este ramo existe para aplicar.
+  const ativos = processes.data ?? [];
+  const vinculados = [...new Set(
+    (hearings.data ?? [])
+      .map(hearing => hearing.processo_id)
+      .filter((id): id is string => Boolean(id)),
+  )];
+  const faltantes = vinculados.filter(id => !ativos.some(p => p.id === id));
+
+  let arquivadosVinculados: HearingsWorkspace["archivedLinked"] = [];
+  if (faltantes.length > 0) {
+    const { data, error } = await supabase.from("processos")
+      .select("id, numero, cliente_nome")
+      .eq("tenant_id", tenantId)
+      .in("id", faltantes);
+    if (error) throw new Error(error.message);
+    arquivadosVinculados = data ?? [];
+  }
+
   return {
     hearings: hearings.data ?? [],
     signals: signals.data ?? [],
-    processes: processes.data ?? [],
+    processes: ativos,
+    archivedLinked: arquivadosVinculados,
     coverage: coverage.data ?? [],
   };
 }
