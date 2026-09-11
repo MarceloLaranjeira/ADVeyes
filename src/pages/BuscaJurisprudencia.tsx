@@ -206,10 +206,16 @@ interface ProcessoResult {
   movimentos?: Movimento[];
 }
 
-const BuscaJurisprudencia = () => {
+interface BuscaJurisprudenciaProps {
+  embedded?: boolean;
+  initialQuery?: string;
+  initialTribunal?: string;
+}
+
+const BuscaJurisprudencia = ({ embedded = false, initialQuery = "", initialTribunal = "tjam" }: BuscaJurisprudenciaProps) => {
   const { toast } = useToast();
-  const [numero, setNumero] = useState("");
-  const [tribunal, setTribunal] = useState("tjam");
+  const [numero, setNumero] = useState(initialQuery);
+  const [tribunal, setTribunal] = useState(initialTribunal);
   const [loading, setLoading] = useState(false);
   const [monitorando, setMonitorando] = useState<string[]>([]);
   const [resultados, setResultados] = useState<ProcessoResult[]>([]);
@@ -432,11 +438,14 @@ const BuscaJurisprudencia = () => {
     </Card>
   );
 
-  return (
-    <AppLayout>
-      <div className="animate-fade-in">
+  const content = (
+      <div className={embedded ? "animate-fade-in rounded-2xl border bg-card p-4 shadow-sm sm:p-6" : "animate-fade-in"}>
         <div className="mb-6">
-          <h1 className="text-4xl font-bold font-serif tracking-tight">Busca Processual</h1>
+          {embedded ? (
+            <h2 className="text-2xl font-bold font-serif tracking-tight">Consulta oficial</h2>
+          ) : (
+            <h1 className="text-4xl font-bold font-serif tracking-tight">Consulta oficial</h1>
+          )}
           <p className="text-muted-foreground text-sm mt-1">
             Consulte processos na base pública do <span className="font-semibold text-foreground">DataJud / CNJ</span> — inclusive os que tramitam em PJe, Projudi e SEEU
           </p>
@@ -769,8 +778,9 @@ const BuscaJurisprudencia = () => {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
   );
+
+  return embedded ? content : <AppLayout>{content}</AppLayout>;
 };
 
 export default BuscaJurisprudencia;

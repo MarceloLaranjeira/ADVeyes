@@ -14,7 +14,7 @@ export interface BrandPreset {
 }
 
 /** Azul da plataforma, equivalente ao `--primary` padrão do tema. */
-export const ADVEYES_PRIMARY = "#2488e5";
+export const ADVEYES_PRIMARY = "#3B73A3";
 
 export const ADVEYES_PRESET: BrandPreset = {
   id: "adveyes",

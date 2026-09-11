@@ -4,7 +4,7 @@ import type { ActivityWithUserState } from "@/types/activities";
 
 function activity(overrides: Partial<ActivityWithUserState> = {}): ActivityWithUserState {
   return {
-    id: "task-1", tenant_id: "tenant-1", user_id: "creator", titulo: "Protocolar manifestação", descricao: "Prazo processual", prioridade: "alta", status: "pendente", data_limite: "2026-08-14", processo_id: "process-1", responsavel_id: "user-1", concluida_em: null, categoria: "Prazo", pontos: 5, updated_at: "2026-08-13T10:00:00Z", created_at: "2026-08-13T10:00:00Z", google_event_id: null, assignee: null, estimated_hours: null, tags: null, source_id: null, source_type: null, userState: { tenant_id: "tenant-1", tarefa_id: "task-1", user_id: "user-1", favorita: true, lida_em: null, updated_at: "2026-08-13T10:00:00Z" }, process: { id: "process-1", number: "0001", clientId: "client-1", clientName: "Maria" }, ...overrides,
+    id: "task-1", tenant_id: "tenant-1", user_id: "creator", titulo: "Protocolar manifestação", descricao: "Prazo processual", prioridade: "alta", status: "pendente", data_limite: "2026-08-14", processo_id: "process-1", responsavel_id: "user-1", concluida_em: null, categoria: "Prazo", pontos: 5, updated_at: "2026-08-13T10:00:00Z", created_at: "2026-08-13T10:00:00Z", google_event_id: null, assignee: null, estimated_hours: null, tags: null, source_id: null, source_type: null, tipo: "tarefa", userState: { tenant_id: "tenant-1", tarefa_id: "task-1", user_id: "user-1", favorita: true, lida_em: null, updated_at: "2026-08-13T10:00:00Z" }, process: { id: "process-1", number: "0001", clientId: "client-1", clientName: "Maria" }, ...overrides,
   };
 }
 

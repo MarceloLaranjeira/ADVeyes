@@ -25,6 +25,7 @@ export interface DjenPublicationPayload {
   tipoDocumento?: string | null;
   nomeClasse?: string | null;
   numeroComunicacao?: number | string | null;
+  ativo?: boolean | null;
   destinatarios?: Array<Record<string, unknown>> | null;
   destinatarioadvogados?: Array<Record<string, unknown>> | null;
   [key: string]: unknown;
@@ -42,6 +43,24 @@ export interface DjenFetchResult {
   pages: number;
   totalReported: number | null;
   rateLimit: number | null;
+  rateLimitRemaining: number | null;
+}
+
+export interface DjenCancellationPayload {
+  id?: number | string | null;
+  numero_processo?: string | null;
+  meio?: string | null;
+  numero_comunicacao?: number | string | null;
+  hash?: string | null;
+  data_disponibilizacao?: string | null;
+  data_cancelamento?: string | null;
+  motivo_cancelamento?: string | null;
+  sigla_tribunal?: string | null;
+}
+
+export interface DjenCancellationResult {
+  items: DjenCancellationPayload[];
+  totalReported: number | null;
   rateLimitRemaining: number | null;
 }
 
@@ -223,4 +242,34 @@ export async function fetchDjenPublications(input: {
   }
 
   return { items, pages, totalReported, rateLimit, rateLimitRemaining };
+}
+
+/** Consulta cancelamentos divulgados pelo endpoint público oficial do DJEN. */
+export async function fetchDjenCancellations(input: {
+  cancellationDate: string;
+  fetcher?: typeof fetch;
+  timeoutMs?: number;
+  baseUrl?: string;
+  proxySecret?: string;
+}): Promise<DjenCancellationResult> {
+  const url = new URL(
+    input.baseUrl ?? `${DJEN_API_URL}/cancelada`,
+  );
+  url.searchParams.set("dataCancelamento", input.cancellationDate);
+  url.searchParams.set("meio", "D");
+  const response = await requestPage(
+    url,
+    input.fetcher ?? fetch,
+    input.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    input.proxySecret,
+  );
+  return {
+    items: (response.body.items ?? []) as DjenCancellationPayload[],
+    totalReported: typeof response.body.count === "number"
+      ? response.body.count
+      : null,
+    rateLimitRemaining: positiveInteger(
+      response.headers.get("x-ratelimit-remaining"),
+    ),
+  };
 }

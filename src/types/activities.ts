@@ -25,7 +25,7 @@ export interface ActivityTeamMember {
   jobTitle: string | null;
 }
 
-export type ActivityStatus = "pendente" | "em_andamento" | "concluída";
+export type ActivityStatus = "pendente" | "em_andamento" | "em_revisao" | "concluída";
 export type ActivityPriority = "alta" | "média" | "baixa";
 
 export type ActivityDueKind =
@@ -47,6 +47,7 @@ export interface ActivityMetrics {
   total: number;
   pending: number;
   inProgress: number;
+  inReview: number;
   completed: number;
   overdue: number;
   completedPoints: number;

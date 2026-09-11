@@ -13,7 +13,11 @@ import {
   useTenant,
 } from "@/contexts/TenantContext";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
-import { platformAdmin, type PlatformTenantSummary } from "@/services/platform-admin";
+import {
+  platformAdmin,
+  toPlatformTenantMembership,
+  type PlatformTenantSummary,
+} from "@/services/platform-admin";
 import { Building2, Check, ChevronDown, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -75,24 +79,7 @@ export const EnvironmentSwitcher = ({
 
   const openPlatformTenant = (tenant: PlatformTenantSummary) => {
     rememberEnvironment(`tenant:${tenant.slug}`);
-    const platformMembership: TenantMembership = {
-      tenantId: tenant.id,
-      slug: tenant.slug,
-      displayName: tenant.displayName,
-      status: tenant.status,
-      role: "admin",
-      dataScope: "tenant",
-      accessMode: "platform",
-      branding: {
-        publicName: tenant.displayName,
-        shortName: tenant.displayName,
-        logoLightPath: null,
-        logoDarkPath: null,
-        faviconPath: null,
-        iconPath: null,
-        colorTokens: {},
-      },
-    };
+    const platformMembership = toPlatformTenantMembership(tenant);
     if (onTenantSelect) {
       onTenantSelect(platformMembership);
       return;

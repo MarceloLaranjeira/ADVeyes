@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   DjenApiError,
+  fetchDjenCancellations,
   fetchDjenPublications,
   groupDjenReferences,
 } from "../../supabase/functions/_shared/djen-client.ts";
@@ -141,5 +142,29 @@ describe("fetchDjenPublications", () => {
       endDate: "2026-08-01",
       fetcher: fetcher as typeof fetch,
     })).rejects.toMatchObject({ code: "djen_invalid_response" });
+  });
+});
+
+describe("fetchDjenCancellations", () => {
+  it("consulta o endpoint oficial por data de cancelamento", async () => {
+    const fetcher = vi.fn(async (request: RequestInfo | URL) => {
+      const url = new URL(String(request));
+      expect(url.pathname).toBe("/api/v1/comunicacao/cancelada");
+      expect(url.searchParams.get("dataCancelamento")).toBe("2026-09-05");
+      expect(url.searchParams.get("meio")).toBe("D");
+      return response({
+        status: "success",
+        count: 1,
+        items: [{ id: 91, motivo_cancelamento: "Republicação necessária" }],
+      }, { headers: { "x-ratelimit-remaining": "18" } });
+    });
+
+    const result = await fetchDjenCancellations({
+      cancellationDate: "2026-09-05",
+      fetcher: fetcher as typeof fetch,
+    });
+    expect(result.items[0]).toMatchObject({ id: 91 });
+    expect(result.totalReported).toBe(1);
+    expect(result.rateLimitRemaining).toBe(18);
   });
 });

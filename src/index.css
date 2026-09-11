@@ -11,35 +11,23 @@
 
 @layer base {
   :root {
-    /* ═══════════════════════════════════════════════
-       PALETA ÚNICA — marfim e latão
-       Branco puro é o que faz todo sistema parecer igual.
-       A superfície de trabalho puxa para papel; os cartões
-       ficam em branco, e a camada aparece sem sombra pesada.
-
-       Não há segunda paleta. Existiam três (clara, escura e
-       "jarvis"), e manter as três significava desenhar toda
-       tela em triplicado — na prática, duas ficavam sem
-       revisão. Uma só é a que o advogado vê sempre.
-    ════════════════════════════════════════════════ */
-    --background: 50 23% 95%;             /* #F5F4EF marfim */
-    --foreground: 218 22% 10%;            /* #14181F */
+    /* Paleta institucional: cinza frio, superfícies brancas e azul ADVeyes. */
+    --background: 210 30% 96%;             /* #F2F5F8 */
+    --foreground: 215 28% 17%;             /* #1F2937 */
     --card: 0 0% 100%;
-    --card-foreground: 218 22% 10%;
+    --card-foreground: 215 28% 17%;
     --popover: 0 0% 100%;
-    --popover-foreground: 218 22% 10%;
-    /* Navy institucional — âncora da marca */
-    --primary: 219 46% 14%;               /* #131E33 */
+    --popover-foreground: 215 28% 17%;
+    --primary: 207 58% 35%;                /* #255D8C */
     --primary-foreground: 0 0% 100%;
-    --primary-100: 45 17% 86%;
-    --primary-900: 218 22% 10%;
-    /* Neutros com viés quente, para conversar com o marfim */
-    --secondary: 47 20% 91%;              /* #EDEBE4 */
-    --secondary-foreground: 218 16% 24%;
-    --muted: 47 20% 91%;
-    --muted-foreground: 224 9% 47%;       /* #6E7484 */
-    --accent: 45 17% 86%;
-    --accent-foreground: 218 22% 10%;
+    --primary-100: 209 47% 92%;
+    --primary-900: 208 60% 28%;            /* #1D4B73 */
+    --secondary: 210 27% 94%;              /* #EDF2F6 */
+    --secondary-foreground: 215 22% 28%;
+    --muted: 210 27% 94%;
+    --muted-foreground: 215 12% 46%;
+    --accent: 208 40% 91%;
+    --accent-foreground: 215 28% 17%;
     /* Status — vermelho reservado a prazo, nada mais */
     --destructive: 6 67% 36%;             /* #9A2A1E */
     --destructive-foreground: 0 0% 100%;
@@ -47,27 +35,25 @@
     --success-foreground: 0 0% 100%;
     --warning: 40 77% 28%;                /* #7E5A10 */
     --warning-foreground: 0 0% 100%;
-    --info: 219 46% 14%;
+    --info: 207 58% 35%;
     --info-foreground: 0 0% 100%;
-    --border: 45 17% 86%;                 /* #E2DFD6 */
-    --input: 46 15% 78%;
-    --ring: 39 55% 37%;
+    --border: 210 25% 89%;                 /* #DCE3EA */
+    --input: 210 20% 80%;
+    --ring: 207 58% 35%;
     --radius: 0.5rem;
-    /* Régua de navegação — escura nos dois temas, de propósito */
-    --sidebar-background: 219 46% 14%;    /* #131E33 */
-    --sidebar-foreground: 222 24% 83%;
-    --sidebar-primary: 39 48% 57%;        /* latão marca o item ativo */
-    --sidebar-primary-foreground: 220 40% 6%;
-    --sidebar-accent: 219 42% 20%;        /* #1D2B47 hover */
+    --sidebar-background: 210 62% 23%;     /* #163A5F */
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 207 58% 35%;        /* #255D8C */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 207 58% 35%;         /* #255D8C */
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 219 37% 26%;
-    --sidebar-ring: 39 48% 57%;
-    /* Latão fecha no claro, senão desaparece no marfim */
+    --sidebar-border: 210 45% 32%;
+    --sidebar-ring: 207 65% 80%;
     --gold: 39 55% 37%;                   /* #94702B */
     --gold-light: 39 48% 57%;             /* #C6A05B */
-    --navy: 219 46% 14%;
-    --navy-light: 219 42% 20%;
-    --neural-blue: 219 46% 14%;
+    --navy: 210 62% 23%;
+    --navy-light: 207 58% 35%;
+    --neural-blue: 207 58% 35%;
     --neural-cyan: 186 100% 50%;
     --neural-purple: 260 80% 60%;
   }
@@ -102,6 +88,15 @@
     border-top-color: #475569;
     border-radius: 9999px;
     animation: brand-bootstrap-spin 0.8s linear infinite;
+  }
+
+  .brand-name-clamp {
+    display: -webkit-box;
+    overflow: hidden;
+    overflow-wrap: normal;
+    word-break: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
   }
   @keyframes brand-bootstrap-spin {
     to { transform: rotate(360deg); }

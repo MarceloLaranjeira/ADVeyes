@@ -25,8 +25,8 @@ export const StatCard = ({ title, value, subtitle, icon: Icon, trend, variant = 
             </p>
           )}
         </div>
-        <div className="p-2.5 rounded-lg bg-primary/8 shrink-0">
-          <Icon className="w-5 h-5 text-primary" />
+        <div className="shrink-0 rounded-lg border border-slate-200 bg-slate-100 p-2.5">
+          <Icon className="h-5 w-5 text-slate-700" />
         </div>
       </div>
     </div>

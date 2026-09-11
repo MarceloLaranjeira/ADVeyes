@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, endOfMonth, format, startOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { VIEW_CARTEIRA_ATIVA } from "@/lib/carteira";
+import { carteiraAtivaQuery } from "@/lib/carteira-query";
+import { formatDeadlineDate } from "@/lib/controladoria";
 import type { Database } from "@/integrations/supabase/types";
 import type {
   DashboardAttentionItem,
@@ -10,18 +11,6 @@ import type {
   OperationalDashboardData,
 } from "@/types/operational-dashboard";
 
-/**
- * Consulta a view da carteira ativa.
- *
- * A view é nova e ainda não entrou nos tipos gerados do Supabase, então a
- * chamada precisa de uma asserção. Ela fica aqui, uma vez, em vez de
- * espalhada por cada consulta do painel.
- */
-function daCarteiraAtiva() {
-  return (supabase as unknown as {
-    from: (tabela: string) => ReturnType<typeof supabase.from>;
-  }).from(VIEW_CARTEIRA_ATIVA);
-}
 
 type Tables = Database["public"]["Tables"];
 type TaskRow = Tables["tarefas"]["Row"];
@@ -73,18 +62,21 @@ function buildAttentionItems(
     const dueDate = task.data_limite!;
     const days = differenceInCalendarDays(new Date(`${dueDate}T12:00:00`), now);
     const kind = days < 0 ? "overdue" : days === 0 ? "today" : "upcoming";
+    const deadline = formatDeadlineDate(dueDate);
     const description = days < 0
-      ? `${Math.abs(days)} dia(s) em atraso${task.prioridade === "alta" ? " · prioridade alta" : ""}`
+      ? `Venceu em ${deadline} · ${Math.abs(days)} dia(s) em atraso${task.prioridade === "alta" ? " · prioridade alta" : ""}`
       : days === 0
-        ? `Vence hoje${task.prioridade === "alta" ? " · prioridade alta" : ""}`
-        : `Vence em ${days} dia(s)`;
+        ? `Vence hoje, ${deadline}${task.prioridade === "alta" ? " · prioridade alta" : ""}`
+        : `Vence em ${deadline} · faltam ${days} dia(s)`;
 
     return {
       id: `task:${task.id}`,
       kind,
       title: task.titulo,
       description,
-      href: task.processo_id ? `/processos/${task.processo_id}` : "/tarefas",
+      // A Controladoria é o posto de comando: o item chega lá já com o
+      // contador correspondente aberto, em vez de abrir uma tela por tipo.
+      href: `/controladoria?aba=prazos&focus=${encodeURIComponent(task.id)}&foco=${days < 0 ? "vencidos" : days === 0 ? "hoje" : "proximos"}`,
       date: dueDate,
       days,
     };
@@ -101,7 +93,7 @@ function buildAttentionItems(
         hearing.processo_numero,
         hearing.vara ?? hearing.local,
       ].filter(Boolean).join(" · "),
-      href: hearing.processo_id ? `/processos/${hearing.processo_id}` : "/audiencias",
+      href: `/audiencias?focus=${encodeURIComponent(hearing.id)}`,
       date: hearing.data_hora,
       days,
     });
@@ -113,7 +105,7 @@ function buildAttentionItems(
       kind: "publication",
       title: `${source.pendingPublicationCount} intimação(ões) aguardando revisão`,
       description: "Revise o conteúdo e confirme possíveis prazos antes de distribuir atividades.",
-      href: "/intimacoes",
+      href: "/controladoria?foco=sem-ciencia",
       date: null,
       days: null,
     });
@@ -255,9 +247,9 @@ export async function loadOperationalDashboard(
     legalMonitoringSummaryResult,
     publicationsResult,
   ] = await Promise.all([
-    daCarteiraAtiva().select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-    daCarteiraAtiva().select("area").eq("tenant_id", tenantId).limit(1000),
-    daCarteiraAtiva().select("id, numero, cliente_nome, area, status, updated_at, ultimo_andamento").eq("tenant_id", tenantId).order("updated_at", { ascending: false }).limit(6),
+    carteiraAtivaQuery().select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    carteiraAtivaQuery().select("area").eq("tenant_id", tenantId).limit(1000),
+    carteiraAtivaQuery().select("id, numero, cliente_nome, area, status, updated_at, ultimo_andamento").eq("tenant_id", tenantId).order("updated_at", { ascending: false }).limit(6),
     supabase.from("clientes").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
     supabase.from("documentos").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "novo"),

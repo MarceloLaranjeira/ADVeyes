@@ -113,10 +113,10 @@ const Cadastro = () => {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-3 sm:p-6 lg:p-10">
+    <main className="min-h-screen bg-background p-3 sm:p-6 lg:p-10">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-slate-900/10 lg:grid-cols-[1.02fr_0.98fr]">
-        <section className="relative hidden overflow-hidden bg-[#081B48] px-14 py-12 text-white lg:flex lg:flex-col">
-          <div className="absolute -right-40 -top-36 h-96 w-96 rounded-full bg-[#2563EB]/25 blur-3xl" />
+        <section className="relative hidden overflow-hidden bg-sidebar px-14 py-12 text-white lg:flex lg:flex-col">
+          <div className="absolute -right-40 -top-36 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl" />
           <img
             src="/brand/adv-ta-on-club-dark.png"
@@ -149,7 +149,7 @@ const Cadastro = () => {
 
         <section className="flex items-center justify-center px-6 py-10 sm:px-12 xl:px-20">
           <div className="w-full max-w-lg">
-            <div className="mb-10 rounded-2xl bg-[#13273E] px-5 py-2 lg:hidden">
+            <div className="mb-10 rounded-2xl bg-sidebar px-5 py-2 lg:hidden">
               <img
                 src="/brand/adv-ta-on-club-dark.png"
                 alt="ADV Tá On Club"
@@ -159,7 +159,7 @@ const Cadastro = () => {
             {confirmation ? (
               <div className="text-center">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-green-100 text-green-700"><Check className="h-8 w-8" /></div>
-                <h2 className="mt-6 text-3xl font-semibold text-[#081B48]">Confirme seu e-mail</h2>
+                <h2 className="mt-6 text-3xl font-semibold text-foreground">Confirme seu e-mail</h2>
                 <p className="mt-3 leading-relaxed text-slate-600">
                   Enviamos um link para <strong>{email}</strong>. Ao confirmar, seu escritório será preparado automaticamente.
                 </p>
@@ -168,8 +168,8 @@ const Cadastro = () => {
             ) : (
               <>
                 <div className="mb-8">
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#2563EB]">Comece agora</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-[#081B48]">Crie seu escritório no ADV Tá On Club</h2>
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Comece agora</p>
+                  <h2 className="mt-2 text-3xl font-semibold text-foreground">Crie seu escritório no ADV Tá On Club</h2>
                   <p className="mt-2 text-slate-500">Leva menos de dois minutos. Não pedimos cartão.</p>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -179,13 +179,13 @@ const Cadastro = () => {
                   </div>
                   <div className="space-y-2"><Label htmlFor="signupEmail">E-mail profissional</Label><Input id="signupEmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@escritorio.com.br" autoComplete="email" required /></div>
                   <div className="space-y-2"><Label htmlFor="signupPassword">Crie uma senha</Label><Input id="signupPassword" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 8 caracteres" autoComplete="new-password" minLength={8} required /></div>
-                  <Button type="submit" className="h-12 w-full bg-[#2563EB] hover:bg-[#1d4ed8]" disabled={loading || googleLoading}>
+                  <Button type="submit" className="h-12 w-full" disabled={loading || googleLoading}>
                     {loading ? "Criando sua conta..." : <>Criar conta grátis <ArrowRight className="ml-2 h-4 w-4" /></>}
                   </Button>
                 </form>
                 <div className="relative my-5"><div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-3 text-slate-400">ou</span></div></div>
                 <Button type="button" variant="outline" className="h-12 w-full gap-3" onClick={handleGoogle} disabled={loading || googleLoading}><GoogleIcon />{googleLoading ? "Abrindo o Google..." : "Continuar com Google"}</Button>
-                <p className="mt-6 text-center text-sm text-slate-500">Já tem uma conta? <Link to="/login" className="font-semibold text-[#2563EB] hover:underline">Entrar</Link></p>
+                <p className="mt-6 text-center text-sm text-slate-500">Já tem uma conta? <Link to="/login" className="font-semibold text-primary hover:underline">Entrar</Link></p>
                 <p className="mt-5 text-center text-xs leading-relaxed text-slate-400">Ao continuar, você concorda com os <Link to="/termos" className="underline">Termos de Uso</Link> e a <Link to="/privacidade" className="underline">Política de Privacidade</Link>.</p>
               </>
             )}

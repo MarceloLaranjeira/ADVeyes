@@ -85,7 +85,7 @@ export function OperationalKpis({ data }: OperationalKpisProps) {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
                 <p className={urgent ? "mt-2 text-3xl font-bold tabular-nums text-destructive" : "mt-2 text-3xl font-bold tabular-nums"}>{value}</p>
               </div>
-              <span className={urgent ? "rounded-lg bg-destructive/10 p-2 text-destructive" : "rounded-lg bg-secondary p-2 text-muted-foreground"}>
+              <span className={urgent ? "rounded-lg bg-red-50 p-2 text-red-700" : "rounded-lg border border-slate-200 bg-slate-100 p-2 text-slate-700"}>
                 <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
             </div>
@@ -96,4 +96,3 @@ export function OperationalKpis({ data }: OperationalKpisProps) {
     </section>
   );
 }
-

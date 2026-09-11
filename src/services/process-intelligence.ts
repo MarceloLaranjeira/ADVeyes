@@ -100,7 +100,7 @@ export const processIntelligenceService = {
     const selecionarProcessos = (de: number, ate: number) => {
       const base = client
         .from("processos")
-        .select("id, numero, cliente_nome, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at")
+        .select("id, numero, cliente_nome, polo_ativo, polo_passivo, area, status, arquivado_manual, tribunal, vara, adjudicating_body, advogado, updated_at, created_at")
         .eq("tenant_id", tenantId);
       return (incluirArquivados ? base : carteiraAtiva(base))
         .order("updated_at", { ascending: false })
@@ -108,7 +108,7 @@ export const processIntelligenceService = {
         .range(de, ate);
     };
 
-    const [linhasProcessos, linhasInteligencia] = await Promise.all([
+    const [linhasProcessos, linhasInteligencia, linhasPartes] = await Promise.all([
       lerTudo(selecionarProcessos),
       lerTudo((de, ate) =>
         client
@@ -117,13 +117,35 @@ export const processIntelligenceService = {
           .eq("tenant_id", tenantId)
           .order("process_id", { ascending: true })
           .range(de, ate)),
+      lerTudo((de, ate) =>
+        client
+          .from("process_parties")
+          .select("process_id, display_name, side")
+          .eq("tenant_id", tenantId)
+          .order("process_id", { ascending: true })
+          .range(de, ate)),
     ]);
     const processes = { data: linhasProcessos };
     const intelligence = { data: linhasInteligencia };
     const byProcess = new Map<string, ProcessIntelligenceRecord>((intelligence.data ?? []).map((row: Row) => [String(row.process_id), mapRecord(row)]));
+
+    const partiesByProcess = new Map<string, { ativo: string[]; passivo: string[] }>();
+    linhasPartes.forEach((party: Row) => {
+      const processId = String(party.process_id ?? "");
+      const side = party.side === "ativo" || party.side === "passivo" ? party.side : null;
+      const name = String(party.display_name ?? "").trim();
+      if (!processId || !side || !name) return;
+      const grouped = partiesByProcess.get(processId) ?? { ativo: [], passivo: [] };
+      grouped[side].push(name);
+      partiesByProcess.set(processId, grouped);
+    });
+
     const itens = (processes.data ?? []).map((row: Row) => ({
       id: String(row.id), number: String(row.numero ?? ""), clientName: row.cliente_nome as string | null,
-      clientDocument: null, area: row.area as string | null, status: row.status as string | null,
+      clientDocument: null,
+      activeParties: (row.polo_ativo as string | null) || partiesByProcess.get(String(row.id))?.ativo.join(", ") || null,
+      passiveParties: (row.polo_passivo as string | null) || partiesByProcess.get(String(row.id))?.passivo.join(", ") || null,
+      area: row.area as string | null, status: row.status as string | null,
       court: row.tribunal as string | null, courtUnit: (row.adjudicating_body ?? row.vara) as string | null,
       lawyer: row.advogado as string | null, updatedAt: String(row.updated_at ?? row.created_at), intelligence: byProcess.get(String(row.id)) ?? null,
     }));

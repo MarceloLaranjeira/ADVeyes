@@ -72,6 +72,26 @@ verify_jwt = false
 # Chamado pelo pg_cron e protegido por GOOGLE_CALENDAR_WORKER_SECRET.
 verify_jwt = false
 
+[functions.clickup-provision]
+# O JWT é validado dentro da função junto das permissões do tenant.
+verify_jwt = false
+
+[functions.clickup-worker]
+# Chamado pelo pg_cron e protegido por CLICKUP_WORKER_SECRET.
+verify_jwt = false
+
+[functions.tenant-access-link]
+# O JWT e as permissoes do proprietario sao validados dentro da funcao e no SQL.
+verify_jwt = false
+
+[functions.tenant-request-access]
+# A acao "lookup" precisa responder antes do login; as demais exigem sessao.
+verify_jwt = false
+
+[functions.tenant-decide-access]
+# O JWT e a autoridade de proprietario sao validados dentro da funcao e no SQL.
+verify_jwt = false
+
 [functions.tenant-public-config]
 enabled = true
 verify_jwt = false
@@ -118,6 +138,18 @@ verify_jwt = true
 [functions.legal-reconcile]
 verify_jwt = false
 
+[functions.legal-portal-admin]
+# Valida JWT, papel e tenant dentro da função; segredos nunca chegam ao cliente.
+verify_jwt = false
+
+[functions.legal-portal-worker]
+# Worker interno protegido pelo mesmo CRON_SECRET das conciliações jurídicas.
+verify_jwt = false
+
+[functions.contact-enrichment-worker]
+# Worker interno protegido por CRON_SECRET; não recebe chamadas do navegador.
+verify_jwt = false
+
 [functions.legal-process-intelligence]
 # Usuários são validados dentro da função; o worker usa segredo de cron.
 verify_jwt = false
@@ -135,3 +167,25 @@ verify_jwt = true
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/tenant-self-signup/*.html" ]
+
+[functions.public-api-admin]
+# O JWT do usuário é validado dentro da função; somente owner/admin gerencia
+# credenciais server-to-server do próprio escritório.
+verify_jwt = false
+
+[functions.public-api]
+# Gateway externo protegido por token próprio com hash persistido.
+verify_jwt = false
+
+[functions.public-api-webhook-worker]
+# Worker interno protegido por CRON_SECRET.
+verify_jwt = false
+
+[functions.whatsapp-admin]
+# Valida o JWT e a permissão do escritório dentro da função, para suportar
+# tanto membros quanto sessões de suporte temporário da Conta Geral.
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+# A Meta não envia JWT do Supabase; a função valida desafio e assinatura HMAC.
+verify_jwt = false

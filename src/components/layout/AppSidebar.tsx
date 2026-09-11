@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
-  CheckSquare, Gavel, Newspaper, Search, Wallet,
+  CheckSquare, Gavel, Newspaper, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck,
+  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck, ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
@@ -20,27 +20,33 @@ const sections: Array<{
   }>;
 }> = [
   {
+    label: "Visão geral",
     items: [
       { label: "Área de trabalho", icon: LayoutDashboard, path: "/" },
-      { label: "Busca processual", icon: Search, path: "/busca" },
+    ],
+  },
+  {
+    label: "Processos",
+    items: [
       { label: "Central Processual", icon: Briefcase, path: "/processos" },
+      { label: "Controladoria Jurídica", icon: ClipboardCheck, path: "/controladoria" },
+      { label: "Intimações", icon: Newspaper, path: "/intimacoes" },
+      { label: "Audiências", icon: Gavel, path: "/audiencias" },
+    ],
+  },
+  {
+    label: "Relacionamento",
+    items: [
       { label: "Contatos", icon: Users, path: "/clientes" },
       { label: "CRM — Leads", icon: KanbanSquare, path: "/crm" },
     ],
   },
   {
-    label: "Rotina jurídica",
+    label: "Organização",
     items: [
       { label: "Agenda", icon: Calendar, path: "/agenda" },
       { label: "Tarefas", icon: CheckSquare, path: "/tarefas" },
-      { label: "Audiências", icon: Gavel, path: "/audiencias" },
-      { label: "Intimações", icon: Newspaper, path: "/intimacoes" },
-    ],
-  },
-  {
-    label: "Pesquisa",
-    items: [
-      { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
+      { label: "Documentos", icon: FolderOpen, path: "/documentos" },
     ],
   },
   {
@@ -50,13 +56,13 @@ const sections: Array<{
       { label: "Controle de horas", icon: Clock, path: "/time-tracking" },
       { label: "Gestão de equipe", icon: UserCog, path: "/equipe" },
       { label: "Contratos", icon: FileSignature, path: "/contratos" },
-      { label: "Documentos", icon: FolderOpen, path: "/documentos" },
       { label: "Indicadores", icon: BarChart3, path: "/relatorios" },
     ],
   },
   {
-    label: "IA & Ferramentas",
+    label: "Ferramentas",
     items: [
+      { label: "Integrações jurídicas", icon: Link2, path: "/integracoes-juridicas" },
       { label: "Criação de peças", icon: Sparkles, path: "/ia-juridica", ai: true },
       { label: "WhatsApp", icon: MessageSquare, path: "/whatsapp" },
       { label: "Portal do cliente", icon: ExternalLink, path: "/portal-cliente" },
@@ -70,14 +76,12 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
   const { isPlatformAdmin } = usePlatformAdmin();
 
   return (
-    // A régua é navy nos tokens desde sempre (`--sidebar-background`), mas
-    // estava com `bg-white` fixo aqui — o token nunca chegava a valer. Navy
-    // separa navegação de conteúdo sem precisar de borda ou sombra.
+    // A régua usa o azul institucional e mantém o conteúdo em superfícies claras.
     <aside className="h-full w-60 bg-sidebar border-r border-sidebar-border flex flex-col">
       <nav className="flex-1 overflow-y-auto py-5 pr-2 pl-3">
         {isPlatformAdmin && (
           <div className="mb-5">
-            <p className="px-3 mb-1.5 text-[10px] font-bold text-muted-foreground/70 tracking-widest uppercase">
+            <p className="px-3 mb-1.5 text-[10px] font-bold text-sidebar-foreground/85 tracking-widest uppercase">
               Conta Geral
             </p>
             <Link
@@ -85,8 +89,8 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
               onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 location.pathname === "/admin"
-                  ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
+                  ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--sidebar-accent-foreground))]"
+                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
               }`}
             >
               <ShieldCheck className="h-[18px] w-[18px]" />
@@ -97,13 +101,14 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
         {sections.map((section, idx) => (
           <div key={idx} className={idx === 0 ? "" : "mt-5"}>
             {section.label && (
-              <p className="px-3 mb-1.5 text-[10px] font-bold text-sidebar-foreground/50 tracking-widest uppercase">
+              <p className="px-3 mb-1.5 text-[10px] font-bold text-sidebar-foreground/85 tracking-widest uppercase">
                 {section.label}
               </p>
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = location.pathname === item.path
+                  || (item.path === "/processos" && location.pathname.startsWith("/processos/"));
                 const Icon = item.icon;
                 return (
                   <Link
@@ -112,16 +117,14 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
                     onClick={onClose}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive
-                        ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--gold))]"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
+                        ? "bg-sidebar-accent text-white font-bold shadow-[inset_3px_0_0_hsl(var(--sidebar-accent-foreground))]"
+                        : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground font-medium"
                     }`}
                   >
                     <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={isActive ? 2.25 : 2} />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.badge ? (
-                      // Vermelho de prazo é fechado demais para ler sobre
-                      // navy; o latão cumpre o papel de chamar atenção.
-                      <span className="bg-gold text-[hsl(var(--navy))] text-[10px] font-bold px-1.5 py-px rounded">
+                      <span className="bg-white/15 text-white text-[10px] font-bold px-1.5 py-px rounded">
                         {item.badge}
                       </span>
                     ) : null}
@@ -137,7 +140,7 @@ export const AppSidebar = ({ onClose }: { onClose?: () => void }) => {
       <div className="p-3 border-t border-sidebar-border">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent/60">
           <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs text-sidebar-foreground/70 flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
+          <span className="text-xs text-sidebar-foreground/85 flex-1 truncate font-medium">Cobertura DataJud/CNJ</span>
         </div>
       </div>
     </aside>

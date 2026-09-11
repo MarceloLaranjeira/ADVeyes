@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extractHearingCandidate } from "../../supabase/functions/_shared/legal-hearing-extraction.ts";
+import {
+  extractHearingCandidate,
+  extractHearingSignal,
+} from "../../supabase/functions/_shared/legal-hearing-extraction.ts";
 
 describe("extractHearingCandidate", () => {
   it("extrai audiência com data numérica e hora", () => {
@@ -34,6 +37,32 @@ describe("extractHearingCandidate", () => {
     expect(extractHearingCandidate("Audiência em 31/02/2026 às 09:00"))
       .toBeNull();
     expect(extractHearingCandidate("Audiência em 20/08/2026 às 25:00"))
+      .toBeNull();
+  });
+});
+
+describe("extractHearingSignal", () => {
+  it("mantém para revisão um indício sem data e hora", () => {
+    expect(extractHearingSignal("Audiência de conciliação será oportunamente marcada."))
+      .toMatchObject({
+        kind: "review",
+        type: "Audiência",
+        startsAt: null,
+        confidence: 0.55,
+      });
+  });
+
+  it("classifica como agendado somente quando data e hora são válidas", () => {
+    expect(extractHearingSignal("Sessão de julgamento em 09/09/2026 às 14:00."))
+      .toMatchObject({
+        kind: "scheduled",
+        type: "Sessão de julgamento",
+        startsAt: "2026-09-09T18:00:00.000Z",
+      });
+  });
+
+  it("ignora movimentação que não contém evento de audiência", () => {
+    expect(extractHearingSignal("Juntada de petição intermediária."))
       .toBeNull();
   });
 });

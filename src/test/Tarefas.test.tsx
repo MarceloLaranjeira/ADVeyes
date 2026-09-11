@@ -49,6 +49,7 @@ const task: ActivityWithUserState = {
   tags: null,
   source_id: null,
   source_type: null,
+  tipo: "tarefa",
   userState: null,
   process: null,
 };

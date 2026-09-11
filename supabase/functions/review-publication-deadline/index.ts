@@ -114,6 +114,7 @@ Deno.serve(async (request) => {
       prioridade: "alta",
       status: "pendente",
       data_limite: parsedDate.toISOString(),
+      tipo: "prazo",
     })
     .select("id")
     .single();

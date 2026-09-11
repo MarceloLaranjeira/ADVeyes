@@ -20,9 +20,15 @@ export const DepthCard = ({
 }: DepthCardProps) => {
   const isInteractive = interactive || Boolean(onActivate || onClick);
 
+  const comesFromNestedControl = (target: EventTarget | null, currentTarget: EventTarget) => {
+    if (!(target instanceof Element) || target === currentTarget) return false;
+    const control = target.closest("a, button, input, select, textarea, [role='button'], [role='link']");
+    return Boolean(control && control !== currentTarget);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
-    if (event.defaultPrevented || !isInteractive) return;
+    if (event.defaultPrevented || !isInteractive || comesFromNestedControl(event.target, event.currentTarget)) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       onActivate?.();
@@ -41,7 +47,7 @@ export const DepthCard = ({
       tabIndex={isInteractive ? 0 : undefined}
       onClick={(event) => {
         onClick?.(event);
-        if (!event.defaultPrevented) onActivate?.();
+        if (!event.defaultPrevented && !comesFromNestedControl(event.target, event.currentTarget)) onActivate?.();
       }}
       onKeyDown={handleKeyDown}
     />

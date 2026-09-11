@@ -8,6 +8,14 @@ export interface HearingCandidate {
   confidence: number;
 }
 
+export interface HearingSignal {
+  kind: "scheduled" | "review";
+  type: string;
+  startsAt: string | null;
+  evidence: string;
+  confidence: number;
+}
+
 const MONTHS: Record<string, number> = {
   janeiro: 1,
   fevereiro: 2,
@@ -47,12 +55,39 @@ export function extractHearingCandidate(
   text: string | null | undefined,
   timezoneOffset = "-04:00",
 ): HearingCandidate | null {
+  const signal = extractHearingSignal(text, timezoneOffset);
+  if (!signal || signal.kind !== "scheduled" || !signal.startsAt) return null;
+  return {
+    type: signal.type,
+    startsAt: signal.startsAt,
+    evidence: signal.evidence,
+    confidence: signal.confidence,
+  };
+}
+
+/** Mantém indícios incompletos para revisão, sem inventar data ou horário. */
+export function extractHearingSignal(
+  text: string | null | undefined,
+  timezoneOffset = "-04:00",
+): HearingSignal | null {
   const evidence = String(text ?? "").replace(/\s+/g, " ").trim();
   const event = evidence.match(EVENT_PATTERN);
+  if (!event) return null;
+  const type = event[1].toLocaleLowerCase("pt-BR").startsWith("sess")
+    ? "Sessão de julgamento"
+    : "Audiência";
   const time = evidence.match(TIME_PATTERN);
   const numericDate = evidence.match(NUMERIC_DATE_PATTERN);
   const writtenDate = evidence.match(WRITTEN_DATE_PATTERN);
-  if (!event || !time || (!numericDate && !writtenDate)) return null;
+  if (!time || (!numericDate && !writtenDate)) {
+    return {
+      kind: "review",
+      type,
+      startsAt: null,
+      evidence: evidence.slice(0, 1000),
+      confidence: 0.55,
+    };
+  }
 
   const day = Number(numericDate?.[1] ?? writtenDate?.[1]);
   const month = Number(
@@ -61,13 +96,20 @@ export function extractHearingCandidate(
   const year = Number(numericDate?.[3] ?? writtenDate?.[3]);
   const hour = Number(time[1]);
   const minute = Number(time[2]);
-  if (!validDateParts(day, month, year) || hour > 23 || minute > 59) return null;
+  if (!validDateParts(day, month, year) || hour > 23 || minute > 59) {
+    return {
+      kind: "review",
+      type,
+      startsAt: null,
+      evidence: evidence.slice(0, 1000),
+      confidence: 0.35,
+    };
+  }
 
   const startsAt = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00${timezoneOffset}`;
   return {
-    type: event[1].toLocaleLowerCase("pt-BR").startsWith("sess")
-      ? "Sessão de julgamento"
-      : "Audiência",
+    kind: "scheduled",
+    type,
     startsAt: new Date(startsAt).toISOString(),
     evidence: evidence.slice(0, 1000),
     confidence: 0.95,

@@ -1,3 +1,4 @@
+import type { ProcessSituation } from "@/lib/process-workspace";
 import type { IntelligenceRisk, ProcessIntelligenceItem, ProcessPhase, WaitingOn } from "@/types/process-intelligence";
 
 export const PHASE_LABELS: Record<ProcessPhase, string> = {
@@ -32,6 +33,7 @@ export interface IntelligenceFilters {
   risk: IntelligenceRisk | "all";
   area: string;
   stalledOnly: boolean;
+  pendingOnly: boolean;
 }
 
 export const EMPTY_INTELLIGENCE_FILTERS: IntelligenceFilters = {
@@ -41,19 +43,21 @@ export const EMPTY_INTELLIGENCE_FILTERS: IntelligenceFilters = {
   risk: "all",
   area: "all",
   stalledOnly: false,
+  pendingOnly: false,
 };
 
 export function filterProcessIntelligence(items: ProcessIntelligenceItem[], filters: IntelligenceFilters) {
   const search = filters.search.trim().toLocaleLowerCase("pt-BR");
   return items.filter(item => {
     const intelligence = item.intelligence;
-    if (search && ![item.number, item.clientName, item.clientDocument, item.lawyer, item.court, intelligence?.waitingReason, intelligence?.nextAction]
+    if (search && ![item.number, item.clientName, item.clientDocument, item.activeParties, item.passiveParties, item.lawyer, item.court, intelligence?.waitingReason, intelligence?.nextAction]
       .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR").includes(search)) return false;
     if (filters.phase !== "all" && intelligence?.phase !== filters.phase) return false;
     if (filters.waitingOn !== "all" && intelligence?.waitingOn !== filters.waitingOn) return false;
     if (filters.risk !== "all" && intelligence?.risk !== filters.risk) return false;
     if (filters.area !== "all" && item.area !== filters.area) return false;
     if (filters.stalledOnly && !intelligence?.isStalled) return false;
+    if (filters.pendingOnly && intelligence) return false;
     return true;
   });
 }
@@ -67,6 +71,25 @@ export function intelligenceMetrics(items: ProcessIntelligenceItem[]) {
     if (item.intelligence?.risk === "critico") metrics.critical += 1;
     return metrics;
   }, { total: 0, stalled: 0, office: 0, critical: 0, pending: 0 });
+}
+
+/**
+ * Situação cadastrada, não a fase inferida das movimentações: tirar um
+ * processo da mesa por leitura automática esconderia trabalho real.
+ */
+const ARCHIVED = new Set(["arquivado", "encerrado"]);
+
+export function isArchivedProcess(status: string | null): boolean {
+  return ARCHIVED.has((status ?? "").trim().toLocaleLowerCase("pt-BR"));
+}
+
+export function applySituation(
+  items: ProcessIntelligenceItem[],
+  situation: ProcessSituation,
+): ProcessIntelligenceItem[] {
+  if (situation === "todos") return items;
+  const wantArchived = situation === "arquivados";
+  return items.filter(item => isArchivedProcess(item.status) === wantArchived);
 }
 
 export function sortByAttention(items: ProcessIntelligenceItem[]) {

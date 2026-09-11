@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ProcessoTimeline } from "@/components/processos/ProcessoTimeline";
 
@@ -28,5 +28,17 @@ describe("ProcessoTimeline", () => {
     expect(screen.getByText("Resumo do andamento…")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /ver íntegra/i }));
     expect(screen.getByText("Conteúdo completo do andamento processual.")).toBeInTheDocument();
+  });
+
+  it("expande e destaca o andamento indicado pela URL", async () => {
+    render(<ProcessoTimeline focusId="movement:focus" events={[{
+      id: "movement:focus", kind: "movement", occurredAt: "2026-08-01T12:00:00Z",
+      title: "Evento destacado", summary: "Resumo", content: "Conteúdo integral",
+      provider: "datajud", sourceName: "DataJud/CNJ", sourceUrl: null, tribunal: null,
+      possibleDeadline: false,
+    }]} />);
+
+    await waitFor(() => expect(screen.getByText("Conteúdo integral")).toBeInTheDocument());
+    expect(screen.getByRole("article")).toHaveClass("ring-primary/40");
   });
 });

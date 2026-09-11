@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { PlatformSupportProvider } from "@/contexts/PlatformSupportContext";
@@ -18,7 +18,6 @@ import ProcessoDetalhe from "./pages/ProcessoDetalhe";
 import Clientes from "./pages/Clientes";
 import Agenda from "./pages/Agenda";
 import Documentos from "./pages/Documentos";
-import BuscaJurisprudencia from "./pages/BuscaJurisprudencia";
 import Audiencias from "./pages/Audiencias";
 import Financeiro from "./pages/Financeiro";
 import Tarefas from "./pages/Tarefas";
@@ -44,14 +43,27 @@ import PortalDashboard from "./pages/portal/PortalDashboard";
 import PoliticaPrivacidade from "./pages/PoliticaPrivacidade";
 import TermosUso from "./pages/TermosUso";
 import ConviteAceite from "./pages/ConviteAceite";
+import SolicitarAcesso from "./pages/SolicitarAcesso";
 import HomeEntry from "./pages/HomeEntry";
 import PlatformAdmin from "./pages/PlatformAdmin";
 import IntegracoesJuridicas from "./pages/IntegracoesJuridicas";
+import Controladoria from "./pages/Controladoria";
+import SearchResults from "./pages/SearchResults";
 import { AuthenticatedRoute } from "@/components/auth/AuthenticatedRoute";
 import { PlatformAdminRoute } from "@/components/auth/PlatformAdminRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { legacyProcessSearchTarget } from "@/lib/legal-navigation";
 
 const queryClient = new QueryClient();
+
+/**
+ * Favoritos antigos continuam válidos, mas a consulta oficial agora vive na
+ * Central Processual. Os parâmetros conhecidos são preservados.
+ */
+const LegacyProcessSearchRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={legacyProcessSearchTarget(location.search)} replace />;
+};
 
 const App = () => (
   <ThemeProvider>
@@ -80,6 +92,12 @@ const App = () => (
                     <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/convite/aceitar" element={<ConviteAceite />} />
+                    {/*
+                      Rota publica de proposito: quem pede acesso ainda nao tem
+                      membership e nao pode ser desviado para o cadastro de um
+                      escritorio novo.
+                    */}
+                    <Route path="/solicitar-acesso" element={<SolicitarAcesso />} />
                     {/* Portal do Cliente (public, token-based) */}
                     <Route path="/portal" element={<PortalLogin />} />
                     <Route path="/portal/dashboard" element={<PortalDashboard />} />
@@ -102,14 +120,13 @@ const App = () => (
                       <Route path="/processos" element={<Processos />} />
                       <Route path="/processos/:id" element={<ProcessoDetalhe />} />
                       <Route path="/clientes" element={<Clientes />} />
+                      <Route path="/controladoria" element={<Controladoria />} />
                       <Route path="/agenda" element={<Agenda />} />
                       <Route path="/tarefas" element={<Tarefas />} />
                       <Route path="/documentos" element={<Documentos />} />
-                      <Route path="/busca" element={<BuscaJurisprudencia />} />
-                      {/* Jurisprudência abria a mesma busca processual.
-                          O endereço antigo continua válido para não quebrar
-                          links salvos pelos usuários. */}
-                      <Route path="/jurisprudencia" element={<Navigate to="/busca" replace />} />
+                      <Route path="/pesquisa" element={<SearchResults />} />
+                      <Route path="/busca" element={<LegacyProcessSearchRedirect />} />
+                      <Route path="/jurisprudencia" element={<LegacyProcessSearchRedirect />} />
                       <Route path="/integracoes-juridicas" element={<IntegracoesJuridicas />} />
                       <Route path="/audiencias" element={<Audiencias />} />
                       <Route path="/financeiro" element={<Financeiro />} />

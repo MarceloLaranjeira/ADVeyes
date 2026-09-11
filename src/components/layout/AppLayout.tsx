@@ -4,6 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { PlatformSupportBanner } from "./PlatformSupportBanner";
 import { PlatformPreviewBanner } from "./PlatformPreviewBanner";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 
 interface AppLayoutProps {
   children?: ReactNode;
@@ -20,6 +21,12 @@ const AppLayoutContext = createContext(false);
 export const AppLayout = ({ children }: AppLayoutProps) => {
   const isInsideAppLayout = useContext(AppLayoutContext);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Só a régua mais externa restaura a rolagem: quando isInsideAppLayout é
+  // true, esta instância não vai renderizar a própria régua (veja o retorno
+  // abaixo), então ela não deve competir com a instância externa pela mesma
+  // chave do sessionStorage.
+  useScrollRestoration({ enabled: !isInsideAppLayout });
 
   // As páginas antigas ainda declaram AppLayout localmente. Quando elas são
   // renderizadas dentro da rota de layout persistente, evitamos montar uma

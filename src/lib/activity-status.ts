@@ -8,17 +8,20 @@ import type {
 export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
   pendente: "A Fazer",
   em_andamento: "Fazendo",
+  em_revisao: "Revisão",
   concluída: "Concluída",
 };
 
 const ACTIVITY_TRANSITIONS: Record<ActivityStatus, ActivityStatus[]> = {
-  pendente: ["em_andamento", "concluída"],
-  em_andamento: ["pendente", "concluída"],
-  concluída: ["pendente", "em_andamento"],
+  pendente: ["em_andamento", "em_revisao", "concluída"],
+  em_andamento: ["pendente", "em_revisao", "concluída"],
+  em_revisao: ["pendente", "em_andamento", "concluída"],
+  concluída: ["pendente", "em_andamento", "em_revisao"],
 };
 
 export function isActivityStatus(value: string): value is ActivityStatus {
-  return value === "pendente" || value === "em_andamento" || value === "concluída";
+  return value === "pendente" || value === "em_andamento"
+    || value === "em_revisao" || value === "concluída";
 }
 
 export function canTransitionActivityStatus(
@@ -107,6 +110,8 @@ export function calculateActivityMetrics(
 
       if (activity.status === "pendente") metrics.pending += 1;
       if (activity.status === "em_andamento") metrics.inProgress += 1;
+      // Revisão é trabalho ainda aberto: conta o atraso e não pontua.
+      if (activity.status === "em_revisao") metrics.inReview += 1;
 
       if (activity.status === "concluída") {
         metrics.completed += 1;
@@ -121,6 +126,7 @@ export function calculateActivityMetrics(
       total: 0,
       pending: 0,
       inProgress: 0,
+      inReview: 0,
       completed: 0,
       overdue: 0,
       completedPoints: 0,

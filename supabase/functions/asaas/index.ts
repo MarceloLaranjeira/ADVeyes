@@ -9,6 +9,7 @@ import {
   type BillingPlanRow,
   type CheckoutSelection,
 } from "../_shared/billing.ts";
+import { resolveTenantLegalAccess } from "../_shared/tenant-auth.ts";
 
 const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY") || "";
 const ASAAS_BASE_URL =
@@ -230,18 +231,19 @@ serve(async (req) => {
       return json({ error: "Escritório inválido" }, 400);
     }
 
-    const { data: membership, error: membershipError } = await admin
-      .from("tenant_memberships")
-      .select("role, status")
-      .eq("tenant_id", body.tenantId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (membershipError) throw membershipError;
-    if (!membership || membership.status !== "active") {
+    const access = await resolveTenantLegalAccess(
+      admin,
+      user.id,
+      body.tenantId,
+    );
+    if (!access) {
       return json({ error: "Acesso ao escritório negado" }, 403);
     }
 
-    const canManage = ["owner", "admin"].includes(membership.role);
+    // A Conta Geral pode ler a mesma assinatura do escritório, mas nunca
+    // inicia, cancela ou troca cobrança em nome do cliente.
+    const canManage = access.kind === "membership" &&
+      ["owner", "admin"].includes(access.role);
 
     if (body.action === "get_catalog") {
       const [{ data: plans, error: plansError }, {

@@ -1,0 +1,119 @@
+openapi: 3.1.0
+info:
+  title: ADVeyes WhatsApp Meta Integration
+  version: 1.0.0
+  description: Embedded Signup, envio e webhook da WhatsApp Cloud API por escritório.
+servers:
+  - url: https://mrgxxwllthlwxqhehjwp.supabase.co
+security:
+  - userJwt: []
+paths:
+  /functions/v1/whatsapp-admin:
+    post:
+      summary: Executa uma operação autenticada do WhatsApp do escritório
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/StatusCommand'
+                - $ref: '#/components/schemas/CompleteSignupCommand'
+                - $ref: '#/components/schemas/TemplatesCommand'
+                - $ref: '#/components/schemas/SendTextCommand'
+                - $ref: '#/components/schemas/SendTemplateCommand'
+                - $ref: '#/components/schemas/DisconnectCommand'
+      responses:
+        '200': { description: Operação concluída }
+        '201': { description: Conexão ou mensagem criada }
+        '400': { description: Payload inválido }
+        '403': { description: Sem permissão no escritório }
+        '409': { description: WhatsApp não conectado }
+        '422': { description: Meta recusou a operação }
+  /functions/v1/whatsapp-webhook:
+    get:
+      summary: Verificação do webhook pela Meta
+      security: []
+      parameters:
+        - { in: query, name: hub.mode, required: true, schema: { type: string, const: subscribe } }
+        - { in: query, name: hub.verify_token, required: true, schema: { type: string } }
+        - { in: query, name: hub.challenge, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Challenge devolvido como text/plain }
+        '403': { description: Token de verificação recusado }
+    post:
+      summary: Recebe mensagens e estados assinados pela Meta
+      security: []
+      parameters:
+        - in: header
+          name: x-hub-signature-256
+          required: true
+          schema: { type: string, pattern: '^sha256=[a-f0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Evento aceito ou já processado }
+        '401': { description: Assinatura inválida }
+components:
+  securitySchemes:
+    userJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: Supabase JWT
+  schemas:
+    TenantCommand:
+      type: object
+      required: [tenantId, action]
+      properties:
+        tenantId: { type: string, format: uuid }
+        action: { type: string }
+    StatusCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          properties: { action: { const: status } }
+    TemplatesCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          properties: { action: { const: templates } }
+    DisconnectCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          properties: { action: { const: disconnect } }
+    CompleteSignupCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          required: [code, wabaId, phoneNumberId]
+          properties:
+            action: { const: complete_embedded_signup }
+            code: { type: string }
+            wabaId: { type: string }
+            phoneNumberId: { type: string }
+    SendTextCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          required: [to, text]
+          properties:
+            action: { const: send_text }
+            to: { type: string, description: E.164 somente dígitos }
+            text: { type: string, maxLength: 4096 }
+            clientId: { type: [string, 'null'], format: uuid }
+    SendTemplateCommand:
+      allOf:
+        - $ref: '#/components/schemas/TenantCommand'
+        - type: object
+          required: [to, templateName, templateLanguage]
+          properties:
+            action: { const: send_template }
+            to: { type: string, description: E.164 somente dígitos }
+            templateName: { type: string }
+            templateLanguage: { type: string, example: pt_BR }
+            components: { type: array, items: { type: object, additionalProperties: true } }
+            clientId: { type: [string, 'null'], format: uuid }

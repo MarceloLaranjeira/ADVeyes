@@ -28,6 +28,7 @@ interface LegacyGoogleEventInput {
   titulo: string;
   descricao?: string;
   data_inicio: string;
+  data_fim?: string;
   local?: string;
   colorId?: string;
   allDay?: boolean;

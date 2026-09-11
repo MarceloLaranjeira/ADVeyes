@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { classifyActivityDueDate, ACTIVITY_STATUS_LABELS } from "@/lib/activity-status";
 import type { ActivityStatus, ActivityTeamMember, ActivityWithUserState } from "@/types/activities";
 
-const columns: ActivityStatus[] = ["pendente", "em_andamento", "concluída"];
+const columns: ActivityStatus[] = ["pendente", "em_andamento", "em_revisao", "concluída"];
 
 export function ActivityKanban({ activities, members, onOpen, onMove, onNew }: { activities: ActivityWithUserState[]; members: ActivityTeamMember[]; onOpen: (activity: ActivityWithUserState) => void; onMove: (activity: ActivityWithUserState, status: ActivityStatus) => void; onNew: (status: ActivityStatus) => void }) {
   const [dragId, setDragId] = useState<string | null>(null);

@@ -3,9 +3,16 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OperationalDashboardData } from "@/types/operational-dashboard";
 
-const { dashboardMock, refetchMock } = vi.hoisted(() => ({
+const { dashboardMock, refetchMock, tenantMock, navigateMock } = vi.hoisted(() => ({
   dashboardMock: vi.fn(),
   refetchMock: vi.fn(),
+  tenantMock: vi.fn(),
+  navigateMock: vi.fn(),
+}));
+
+vi.mock("react-router-dom", async () => ({
+  ...await vi.importActual<typeof import("react-router-dom")>("react-router-dom"),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock("@/hooks/useOperationalDashboard", () => ({
@@ -17,7 +24,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 }));
 
 vi.mock("@/contexts/TenantContext", () => ({
-  useTenant: () => ({ currentTenant: { tenantId: "tenant-1", displayName: "Escritório Modelo" } }),
+  useTenant: tenantMock,
 }));
 
 vi.mock("@/components/layout/AppLayout", () => ({ AppLayout: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -66,7 +73,12 @@ const data: OperationalDashboardData = {
 describe("Meu Painel", () => {
   beforeEach(() => {
     refetchMock.mockReset();
+    navigateMock.mockReset();
     dashboardMock.mockReset();
+    tenantMock.mockReset();
+    tenantMock.mockReturnValue({
+      currentTenant: { tenantId: "tenant-1", displayName: "Escritório Modelo" },
+    });
   });
 
   it("mostra escritório, indicadores e estados vazios úteis", () => {
@@ -97,5 +109,85 @@ describe("Meu Painel", () => {
     expect(screen.getByRole("heading", { name: /não foi possível carregar o painel/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /tentar novamente/i }));
     expect(refetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mostra estado vazio acionável quando a conta não tem escritório", () => {
+    tenantMock.mockReturnValue({ currentTenant: null });
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    // O skeleton só pode aparecer enquanto existe escritório e a consulta carrega.
+    expect(screen.queryByLabelText("Carregando painel")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /nenhum escritório ativo/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /solicitar acesso/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /criar escritório/i })).toBeInTheDocument();
+  });
+
+  it("não tenta consultar o painel sem escritório selecionado", () => {
+    tenantMock.mockReturnValue({ currentTenant: null });
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    expect(dashboardMock).toHaveBeenCalledWith(null);
+    const atualizar = screen.getByRole("button", { name: /atualizar/i });
+    expect(atualizar).toBeDisabled();
+    fireEvent.click(atualizar);
+    expect(refetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leva o centro de atenção para a Controladoria com o foco do item", () => {
+    dashboardMock.mockReturnValue({
+      data: {
+        ...data,
+        attention: [{
+          id: "task:late",
+          kind: "overdue",
+          title: "Prazo vencido",
+          description: "2 dia(s) em atraso",
+          href: "/controladoria?foco=vencidos",
+          date: "2026-08-11",
+          days: -2,
+        }],
+      },
+      isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 1,
+    });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /prazo vencido/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/controladoria?foco=vencidos");
+  });
+
+  it("leva os próximos compromissos para a Controladoria", () => {
+    dashboardMock.mockReturnValue({
+      data: {
+        ...data,
+        upcomingHearings: [{
+          id: "h1",
+          tipo: "Audiência de instrução",
+          data_hora: "2026-08-14T14:00:00Z",
+          processo_id: "process-1",
+          processo_numero: "0001",
+          vara: "2ª Vara",
+          local: null,
+        }],
+      },
+      isLoading: false, isError: false, isFetching: false, refetch: refetchMock, dataUpdatedAt: 1,
+    });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: /audiência de instrução/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/audiencias?focus=h1");
+  });
+
+  it("mantém o skeleton enquanto o escritório existe e a consulta carrega", () => {
+    dashboardMock.mockReturnValue({ data: undefined, isLoading: true, isError: false, isFetching: true, refetch: refetchMock, dataUpdatedAt: 0 });
+
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    expect(screen.getByLabelText("Carregando painel")).toBeInTheDocument();
   });
 });

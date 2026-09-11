@@ -102,6 +102,14 @@ export const PERMISSION_GROUPS: Array<{
       },
       {
         module: "legal",
+        action: "create",
+        label: "Registrar protocolos",
+        description: "Lançar peças protocoladas e encerrar o prazo com o ato.",
+        base: ["owner", "admin", "lawyer", "assistant"],
+        exception: [],
+      },
+      {
+        module: "legal",
         action: "update",
         label: "Editar dados jurídicos",
         description: "Criar e alterar processos, prazos e tarefas.",
@@ -152,6 +160,29 @@ export const PERMISSION_GROUPS: Array<{
         description: "Criar e alterar contratos e modelos.",
         base: ["owner", "admin", "finance"],
         exception: ["lawyer", "assistant"],
+      },
+    ],
+  },
+  {
+    title: "Solicitações e permissões",
+    rows: [
+      {
+        module: "access_requests",
+        action: "decide",
+        label: "Aprovar ou recusar solicitações",
+        description:
+          "Decidir quem entra no escritório e com quais permissões.",
+        base: ["owner"],
+        exception: [],
+      },
+      {
+        module: "permissions",
+        action: "manage",
+        label: "Administrar permissões individuais",
+        description:
+          "Alterar as exceções de acesso pessoa a pessoa.",
+        base: ["owner"],
+        exception: [],
       },
     ],
   },
@@ -219,10 +250,30 @@ export function setOverrideState(
   return next;
 }
 
-/** Permissões editáveis individualmente; propriedade nunca é sobrescrita. */
+/**
+ * Autoridades que pertencem ao proprietário e não podem ser delegadas por
+ * exceção individual. O banco recusa qualquer override nestes módulos.
+ */
+const OWNER_ONLY_MODULES = new Set([
+  "ownership",
+  "access_requests",
+  "permissions",
+]);
+
+/** Somente o proprietário administra a matriz individual. */
+export function canManagePermissions(role: TeamRole): boolean {
+  return role === "owner";
+}
+
+/** Somente o proprietário decide quem entra no escritório. */
+export function canDecideAccessRequests(role: TeamRole): boolean {
+  return role === "owner";
+}
+
+/** Permissões editáveis individualmente; as do proprietário ficam de fora. */
 export function editablePermissions(): PermissionRow[] {
   return PERMISSION_GROUPS.flatMap((group) => group.rows).filter(
-    (row) => !(row.module === "ownership" && row.action === "transfer"),
+    (row) => !OWNER_ONLY_MODULES.has(row.module),
   );
 }
 
