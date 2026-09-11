@@ -66,6 +66,9 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess, editData }: Proces
           arquivado_manual: overrideParaStatus(
             form.status,
             (editData as { arquivado_manual?: boolean | null }).arquivado_manual,
+            // O status como veio do banco. Sem ele, salvar qualquer outro
+            // campo apagaria a decisão de arquivamento.
+            editData.status ?? null,
           ),
         } as never)
         .eq("id", editData.id);

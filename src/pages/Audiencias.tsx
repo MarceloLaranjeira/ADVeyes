@@ -253,7 +253,10 @@ const Audiencias = () => {
   };
 
   const handleProcessoChange = (processoId: string) => {
-    const p = processos.find((pr) => pr.id === processoId);
+    // Procura nas opções mostradas, não só na carteira ativa: ao editar uma
+    // audiência de processo arquivado, trocar de processo e voltar ao
+    // original não encontrava a linha e salvava número e cliente em branco.
+    const p = opcoesDeProcesso.find((pr) => pr.id === processoId);
     setForm({ ...form, processo_id: processoId, processo_numero: p?.numero || "", cliente_nome: p?.cliente_nome || "" });
   };
 

@@ -230,13 +230,33 @@ export function carteiraAtiva<T>(query: T): T {
  *                                     valor padrão do cadastro, não uma
  *                                     decisão de desarquivar.
  *
+ * Nada disso vale quando o status não mudou: aí não houve escolha, e a
+ * sobreposição fica exatamente como está.
+ *
  * @param status o valor escolhido no formulário
  * @param atual `processos.arquivado_manual` como está gravado hoje
+ * @param statusAnterior o status como estava antes da edição; omitido,
+ *        qualquer status é tratado como escolha nova
  */
 export function overrideParaStatus(
   status: string | null | undefined,
   atual: boolean | null | undefined,
+  statusAnterior?: string | null,
 ): boolean | null {
+  // Sem mudança de status, não houve decisão nenhuma para sincronizar.
+  //
+  // A versão anterior lia o status carregado no formulário como se fosse uma
+  // escolha recém-feita. O efeito era destrutivo e silencioso: um processo
+  // arquivado pelo controle dedicado (`arquivado_manual = true`, status ainda
+  // "Em andamento") perdia o arquivamento assim que alguém salvasse qualquer
+  // outro campo — o telefone do cliente, a descrição. A decisão sumia sem
+  // ninguém pedir e sem nada na tela dizendo.
+  if (
+    statusAnterior !== undefined &&
+    normalizar(status) === normalizar(statusAnterior)
+  ) {
+    return atual ?? null;
+  }
   if (normalizar(status) === normalizar(STATUS_ARQUIVADO)) return true;
   return atual === true ? null : (atual ?? null);
 }

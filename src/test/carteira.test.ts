@@ -183,6 +183,20 @@ describe("estado desconhecido do tribunal", () => {
 });
 
 describe("overrideParaStatus", () => {
+  it("não mexe na sobreposição quando o status não mudou", () => {
+    // O caso destrutivo: processo arquivado pelo controle dedicado, status
+    // ainda "Em andamento". Salvar o telefone do cliente apagava a decisão de
+    // arquivamento, sem ninguém pedir e sem nada na tela dizendo.
+    expect(overrideParaStatus("Em andamento", true, "Em andamento")).toBe(true);
+    expect(overrideParaStatus("Em andamento", false, "Em andamento")).toBe(false);
+    expect(overrideParaStatus("Arquivado", null, "Arquivado")).toBe(null);
+  });
+
+  it("sincroniza quando o status muda de verdade", () => {
+    expect(overrideParaStatus("Arquivado", null, "Em andamento")).toBe(true);
+    expect(overrideParaStatus("Em andamento", true, "Arquivado")).toBe(null);
+  });
+
   it("faz o status Arquivado do formulário arquivar de fato", () => {
     // Sem isto, marcar "Arquivado" num processo reativado não fazia nada: a
     // sobreposição vence o texto, e o salvamento dizia que deu certo.
