@@ -104,9 +104,12 @@ export function PropostaPrazoCard({
 }: Props) {
   // O calendario do tribunal veio junto com a proposta; usa-lo aqui e o que
   // impede o cartao de contar dia em que aquele forum nao abre.
+  // Sem segundo argumento: `situacaoDoPrazo` resolve a data civil no fuso
+  // forense. Passar `new Date()` aqui faria a leitura cair em UTC e, das 21h
+  // à meia-noite, classificar o prazo pelo dia seguinte.
   const situacao = situacaoDoPrazo(
     proposta.vencimento,
-    new Date(),
+    undefined,
     proposta.calendario.feriados,
   );
   const { texto: textoUrgencia, classe: classeUrgencia } = urgencia(situacao);

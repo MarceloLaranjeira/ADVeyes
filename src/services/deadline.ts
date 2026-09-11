@@ -196,15 +196,51 @@ export type SituacaoPrazo =
  * que aquele tribunal específico não abre — por isso quem tiver a lista deve
  * passá-la.
  */
+/**
+ * Fuso em que se lê a data civil de um prazo.
+ *
+ * Prazo processual vence numa data do calendário civil brasileiro, não num
+ * instante UTC. `new Date()` avaliado em UTC vira o dia seguinte a partir das
+ * 21h no horário de Brasília — então, para quem confere prazo à noite, o
+ * cartão classificava como "vence hoje" um prazo que vence amanhã, e como
+ * vencido um que ainda vence hoje. É a faixa do dia em que o advogado mais
+ * olha para a tela.
+ *
+ * Fixo em Brasília por ora. Os fusos brasileiros vão de UTC−2 a UTC−5, então
+ * um escritório em Manaus ou Rio Branco ainda pode divergir na última hora do
+ * dia; fechar isso exige o fuso do escritório em `tenant`, que não existe
+ * hoje. Ler a data civil em Brasília erra em uma hora para alguns; ler em UTC
+ * errava em três para todos.
+ */
+const FUSO_FORENSE = "America/Sao_Paulo";
+
+/** A data civil de hoje no fuso forense, como "AAAA-MM-DD". */
+export function hojeNoFusoForense(agora = new Date()): string {
+  // `en-CA` formata como AAAA-MM-DD, que é o formato que `parseIsoDate` lê.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO_FORENSE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(agora);
+}
+
 export function situacaoDoPrazo(
   vencimento: string,
-  hoje = new Date(),
+  /**
+   * Aceita a data civil como texto ("AAAA-MM-DD"), que é o caminho correto,
+   * ou um `Date`, que é lido pelas partes UTC. O padrão resolve o fuso
+   * sozinho, então a tela não precisa saber disto.
+   */
+  hoje: Date | string = hojeNoFusoForense(),
   feriados: HolidayInput[] = [],
 ): SituacaoPrazo {
   const alvo = parseIsoDate(vencimento);
-  const base = new Date(
-    Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
-  );
+  const base = typeof hoje === "string"
+    ? parseIsoDate(hoje)
+    : new Date(
+      Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
+    );
 
   if (alvo.getTime() === base.getTime()) return { estado: "vence_hoje" };
 

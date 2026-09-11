@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   situacaoDoPrazo,
+  hojeNoFusoForense,
   pesoDaConfianca,
 } from "@/services/deadline";
 
@@ -83,5 +84,26 @@ describe("situacaoDoPrazo", () => {
         { date: "2026-08-10", description: "feriado do tribunal" },
       ]),
     ).toEqual({ estado: "a_vencer", diasUteis: 0 });
+  });
+});
+
+describe("data civil no fuso forense", () => {
+  it("não vira o dia às 21h de Brasília", () => {
+    // 2026-08-10T00:30:00Z é 10/08 em UTC e ainda 09/08 em Brasília. Ler em
+    // UTC classificava o prazo pelo dia seguinte justamente na faixa da noite
+    // em que o advogado mais confere prazo.
+    expect(hojeNoFusoForense(new Date("2026-08-10T00:30:00Z"))).toBe("2026-08-09");
+  });
+
+  it("acompanha a virada real do dia civil", () => {
+    expect(hojeNoFusoForense(new Date("2026-08-10T02:59:00Z"))).toBe("2026-08-09");
+    expect(hojeNoFusoForense(new Date("2026-08-10T03:01:00Z"))).toBe("2026-08-10");
+  });
+
+  it("um prazo que vence hoje não aparece como vencido à noite", () => {
+    const meiaNoiteMeiaUtc = new Date("2026-08-10T00:30:00Z");
+    expect(
+      situacaoDoPrazo("2026-08-09", hojeNoFusoForense(meiaNoiteMeiaUtc)),
+    ).toEqual({ estado: "vence_hoje" });
   });
 });
