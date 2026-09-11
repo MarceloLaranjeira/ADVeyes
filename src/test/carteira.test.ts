@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   apenasCarteiraAtiva,
   carteiraAtiva,
+  overrideParaStatus,
   FILTRO_CARTEIRA_ATIVA,
   estaArquivado,
   situacaoNaCarteira,
@@ -178,5 +179,31 @@ describe("estado desconhecido do tribunal", () => {
       .toBe(false);
     expect(situacaoNaCarteira({ arquivadoManual: true, fase: null }).divergente)
       .toBe(false);
+  });
+});
+
+describe("overrideParaStatus", () => {
+  it("faz o status Arquivado do formulário arquivar de fato", () => {
+    // Sem isto, marcar "Arquivado" num processo reativado não fazia nada: a
+    // sobreposição vence o texto, e o salvamento dizia que deu certo.
+    expect(overrideParaStatus("Arquivado", false)).toBe(true);
+    expect(overrideParaStatus("Arquivado", null)).toBe(true);
+    expect(overrideParaStatus("arquivado", null)).toBe(true);
+  });
+
+  it("retira a sobreposição quando o status deixa de ser Arquivado", () => {
+    expect(overrideParaStatus("Em andamento", true)).toBe(null);
+  });
+
+  it("não desfaz uma reativação explícita", () => {
+    // "Em andamento" é o valor padrão do cadastro, não uma decisão de
+    // desarquivar. Tratá-lo como decisão apagaria a reativação sem querer.
+    expect(overrideParaStatus("Em andamento", false)).toBe(false);
+    expect(overrideParaStatus("Sentença proferida", false)).toBe(false);
+  });
+
+  it("não inventa decisão em processo sem sobreposição", () => {
+    expect(overrideParaStatus("Em andamento", null)).toBe(null);
+    expect(overrideParaStatus("Em andamento", undefined)).toBe(null);
   });
 });

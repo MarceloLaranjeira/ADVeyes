@@ -67,8 +67,23 @@ const Audiencias = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [audiencias, setAudiencias] = useState<Audiencia[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
+  const [processosArquivadosVinculados, setProcessosArquivadosVinculados] =
+    useState<Processo[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<Audiencia | null>(null);
+
+  // O seletor de processo responde a duas perguntas diferentes conforme o
+  // diálogo. Em audiência NOVA, só a carteira ativa: vincular audiência nova
+  // a processo arquivado é quase sempre engano. Ao EDITAR, entra também o
+  // processo daquela audiência, e só ele — sem isso o seletor abriria sem o
+  // item correspondente e o vínculo se perderia ao salvar.
+  const opcoesDeProcesso = useMemo(() => {
+    const vinculado = editData?.processo_id;
+    if (!vinculado || processos.some(p => p.id === vinculado)) return processos;
+    const arquivado = processosArquivadosVinculados
+      .find(p => p.id === vinculado);
+    return arquivado ? [...processos, arquivado] : processos;
+  }, [editData, processos, processosArquivadosVinculados]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -126,6 +141,7 @@ const Audiencias = () => {
       const data = await loadHearingsWorkspace(tenantId);
       setAudiencias(data.hearings as Audiencia[]);
       setProcessos(data.processes);
+      setProcessosArquivadosVinculados(data.archivedLinked);
       setSignals(data.signals);
       setCoverageCount(data.coverage.length);
     } catch (error) {
@@ -414,7 +430,7 @@ const Audiencias = () => {
                 <Select value={form.processo_id} onValueChange={handleProcessoChange}>
                   <SelectTrigger><SelectValue placeholder="Selecione um processo" /></SelectTrigger>
                   <SelectContent>
-                    {processos.map(p => <SelectItem key={p.id} value={p.id}>{p.numero} - {p.cliente_nome}</SelectItem>)}
+                    {opcoesDeProcesso.map(p => <SelectItem key={p.id} value={p.id}>{p.numero} - {p.cliente_nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

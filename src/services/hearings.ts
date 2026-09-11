@@ -11,6 +11,12 @@ export interface HearingsWorkspace {
   hearings: HearingRow[];
   signals: HearingSignalRow[];
   processes: Array<Pick<Tables["processos"]["Row"], "id" | "numero" | "cliente_nome">>;
+  /**
+   * Processos fora da carteira ativa que já estão vinculados a alguma
+   * audiência. Separados de `processes` de propósito: servem para não perder
+   * o vínculo ao editar, nunca para oferecer em audiência nova.
+   */
+  archivedLinked: Array<Pick<Tables["processos"]["Row"], "id" | "numero" | "cliente_nome">>;
   coverage: CourtCoverageRow[];
 }
 
@@ -36,6 +42,11 @@ export async function loadHearingsWorkspace(tenantId: string): Promise<HearingsW
   // audiência, editar uma audiência de processo arquivado abriria o seletor
   // sem o item correspondente — o vínculo atual sumiria da tela e seria
   // perdido ao salvar.
+  //
+  // Eles voltam numa lista à parte, e não misturados em `processes`. Juntar
+  // as duas trocaria um defeito por outro: o seletor de audiência NOVA
+  // passaria a oferecer todo processo arquivado que um dia teve audiência,
+  // que é exatamente a restrição que este ramo existe para aplicar.
   const ativos = processes.data ?? [];
   const vinculados = [...new Set(
     (hearings.data ?? [])
@@ -44,7 +55,7 @@ export async function loadHearingsWorkspace(tenantId: string): Promise<HearingsW
   )];
   const faltantes = vinculados.filter(id => !ativos.some(p => p.id === id));
 
-  let arquivadosVinculados: HearingsWorkspace["processes"] = [];
+  let arquivadosVinculados: HearingsWorkspace["archivedLinked"] = [];
   if (faltantes.length > 0) {
     const { data, error } = await supabase.from("processos")
       .select("id, numero, cliente_nome")
@@ -57,7 +68,8 @@ export async function loadHearingsWorkspace(tenantId: string): Promise<HearingsW
   return {
     hearings: hearings.data ?? [],
     signals: signals.data ?? [],
-    processes: [...ativos, ...arquivadosVinculados],
+    processes: ativos,
+    archivedLinked: arquivadosVinculados,
     coverage: coverage.data ?? [],
   };
 }

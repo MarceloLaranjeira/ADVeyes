@@ -208,3 +208,35 @@ export function carteiraAtiva<T>(query: T): T {
 
   return encadeavel.or(FILTRO_CARTEIRA_ATIVA) as unknown as T;
 }
+
+/**
+ * Mantém a escolha de status coerente com a sobreposição manual.
+ *
+ * O cadastro do processo continua oferecendo "Arquivado" na lista de status,
+ * e depois que a sobreposição passou a vencer o status, essas duas metades
+ * podiam discordar: um processo reativado (`arquivado_manual = false`) que o
+ * advogado voltasse a marcar como "Arquivado" no formulário continuaria na
+ * carteira, porque `false` vence o texto. O salvamento dizia que deu certo e
+ * nada acontecia.
+ *
+ * Em vez de tirar a opção da lista — é assim que boa parte da base arquiva
+ * hoje —, a escolha passa a alimentar a sobreposição:
+ *
+ *   escolheu "Arquivado"            → `true`, arquiva de fato.
+ *   escolheu outro, havia `true`    → `null`, o arquivamento manual foi
+ *                                     retirado e o tribunal volta a decidir.
+ *   escolheu outro, havia `false`   → mantém `false`; a reativação foi uma
+ *                                     decisão explícita e "Em andamento" é o
+ *                                     valor padrão do cadastro, não uma
+ *                                     decisão de desarquivar.
+ *
+ * @param status o valor escolhido no formulário
+ * @param atual `processos.arquivado_manual` como está gravado hoje
+ */
+export function overrideParaStatus(
+  status: string | null | undefined,
+  atual: boolean | null | undefined,
+): boolean | null {
+  if (normalizar(status) === normalizar(STATUS_ARQUIVADO)) return true;
+  return atual === true ? null : (atual ?? null);
+}

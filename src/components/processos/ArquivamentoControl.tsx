@@ -18,6 +18,7 @@
  */
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Loader2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ export function ArquivamentoControl({
   onChange,
 }: Props) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [salvando, setSalvando] = useState(false);
 
   const situacao = situacaoNaCarteira({ status, arquivadoManual, fase });
@@ -96,6 +98,13 @@ export function ArquivamentoControl({
         ? "O arquivamento volta a seguir o tribunal."
         : undefined,
     });
+    // `onChange` recarrega só o processo aberto. A listagem central vive em
+    // outro cache, com `staleTime` de 30 segundos e duas variantes de chave
+    // (com e sem arquivados) — sem invalidar as duas, voltar para a lista
+    // dentro desse intervalo mostra o estado velho, e ficar obsoleto sozinho
+    // não dispara refetch: depende de um foco de janela ou refresh manual.
+    // O processo apareceria ou sumiria com atraso, sem explicação.
+    void queryClient.invalidateQueries({ queryKey: ["process-intelligence"] });
     onChange();
   };
 
