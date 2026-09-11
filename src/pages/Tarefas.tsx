@@ -25,7 +25,7 @@ import { useActiveTeamMembers } from "@/hooks/useActiveTeamMembers";
 import { useActivities } from "@/hooks/useActivities";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { carteiraAtiva } from "@/lib/carteira";
+import { carteiraAtivaQuery } from "@/lib/carteira-query";
 import { calculateActivityMetrics, classifyActivityDueDate } from "@/lib/activity-status";
 import { activitiesToCsv, activityRouteParams, filterActivities, paginateActivities, parseActivityRoute, reconcileActivitySelection, sortActivities } from "@/lib/activity-workspace";
 import type { ActivityFilters, ActivityPriority, ActivityScope, ActivitySort, ActivityStatus, ActivityView, ActivityWithUserState } from "@/types/activities";
@@ -90,7 +90,7 @@ export default function Tarefas() {
   }, [filtered]);
   useEffect(() => {
     if (!tenantId) return;
-    void carteiraAtiva(supabase.from("processos").select("id, numero, cliente_nome").eq("tenant_id", tenantId)).order("numero").then(({ data }) => setProcesses((data ?? []).map(process => ({ id: process.id, number: process.numero, clientName: process.cliente_nome }))));
+    void carteiraAtivaQuery().select("id, numero, cliente_nome").eq("tenant_id", tenantId).order("numero").then(({ data }) => setProcesses((data ?? []).map(process => ({ id: process.id, number: process.numero, clientName: process.cliente_nome }))));
   }, [tenantId]);
   useEffect(() => {
     const taskId = searchParams.get("task");

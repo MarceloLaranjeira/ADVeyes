@@ -148,3 +148,35 @@ describe("normalização entre código e banco", () => {
     expect(estaArquivado({ status: "Aguardando arquivamento" })).toBe(false);
   });
 });
+
+describe("estado desconhecido do tribunal", () => {
+  it("não inventa divergência quando o tribunal não se pronunciou", () => {
+    // Sem registro em `process_intelligence_current` não existe
+    // classificação do tribunal. Tratar essa ausência como "em andamento"
+    // fazia a tela afirmar que o tribunal discorda do escritório — sobre um
+    // processo que o tribunal nunca classificou. Aviso inventado gasta a
+    // atenção que ele existe para capturar.
+    const situacao = situacaoNaCarteira({ arquivadoManual: true });
+    expect(situacao.arquivado).toBe(true);
+    expect(situacao.origem).toBe("manual");
+    expect(situacao.divergente).toBe(false);
+  });
+
+  it("continua apontando divergência quando o tribunal se pronunciou", () => {
+    expect(
+      situacaoNaCarteira({ arquivadoManual: true, fase: "conhecimento" })
+        .divergente,
+    ).toBe(true);
+    expect(
+      situacaoNaCarteira({ arquivadoManual: false, arquivadoNoTribunal: true })
+        .divergente,
+    ).toBe(true);
+  });
+
+  it("trata fase vazia como ausência de classificação, não como ativo", () => {
+    expect(situacaoNaCarteira({ arquivadoManual: true, fase: "" }).divergente)
+      .toBe(false);
+    expect(situacaoNaCarteira({ arquivadoManual: true, fase: null }).divergente)
+      .toBe(false);
+  });
+});

@@ -24,34 +24,54 @@ function mapRecord(row: Row): ProcessIntelligenceRecord {
 }
 
 /**
- * Tamanho da página ao varrer uma tabela inteira.
+ * Tamanho pedido por página ao varrer uma tabela inteira.
  *
- * O PostgREST corta a resposta num teto de linhas configurado no servidor.
- * Como o corte é silencioso — vem uma resposta bem-sucedida, só que curta —
- * uma carteira grande devolveria apenas as primeiras linhas por
- * `updated_at`, e qualquer filtro aplicado depois disso descartaria parte
- * dessa página sem repor o que ficou de fora. O resultado seria processo
- * ativo sumindo da tela por causa de arquivado recém-movimentado.
+ * O PostgREST corta a resposta num teto de linhas configurado no servidor,
+ * e o corte é silencioso — vem uma resposta bem-sucedida, só que curta. Sem
+ * paginar, uma carteira grande devolveria apenas as primeiras linhas por
+ * `updated_at`, e qualquer filtro aplicado depois descartaria parte dessa
+ * página sem repor o que ficou de fora: processo ativo sumindo da tela por
+ * causa de arquivado recém-movimentado.
+ *
+ * O valor é o que se *pede*, não o que se recebe. Se o servidor estiver
+ * configurado com teto menor, cada página vem curta — e é por isso que o
+ * avanço abaixo é pelo número de linhas devolvidas, não por esta constante.
  */
 const PAGINA = 1000;
+
+/**
+ * Trava de segurança: nenhuma carteira legítima passa disto.
+ *
+ * Um servidor que devolvesse sempre a mesma página faria o laço rodar para
+ * sempre. Preferimos uma lista truncada a uma aba travada.
+ */
+const MAXIMO_DE_LINHAS = 100_000;
 
 /**
  * Lê todas as linhas de uma consulta, página por página.
  *
  * `montar` recebe a faixa e devolve a consulta já filtrada, porque o
  * `range` precisa ser aplicado por último, depois dos demais predicados.
+ *
+ * O avanço é pelo tamanho real da página recebida. Avançar por `PAGINA`
+ * assumiria que o servidor honra o que foi pedido: num deployment com teto
+ * abaixo de 1000, a primeira resposta já viria curta, seria lida como
+ * "última página" e todo o resto da carteira desapareceria em silêncio.
+ * Terminar só na página vazia é o único sinal de fim que não depende dessa
+ * suposição.
  */
 async function lerTudo(
   montar: (de: number, ate: number) => PromiseLike<{ data: Row[] | null; error: unknown }>,
 ): Promise<Row[]> {
   const todas: Row[] = [];
-  for (let de = 0; ; de += PAGINA) {
-    const { data, error } = await montar(de, de + PAGINA - 1);
+  while (todas.length < MAXIMO_DE_LINHAS) {
+    const { data, error } = await montar(todas.length, todas.length + PAGINA - 1);
     if (error) throw error;
     const pagina = data ?? [];
+    if (pagina.length === 0) return todas;
     todas.push(...pagina);
-    if (pagina.length < PAGINA) return todas;
   }
+  return todas;
 }
 
 export const processIntelligenceService = {

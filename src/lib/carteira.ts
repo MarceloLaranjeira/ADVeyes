@@ -82,9 +82,18 @@ export interface SituacaoCarteira {
 export function situacaoNaCarteira(
   processo: ProcessoArquivavel,
 ): SituacaoCarteira {
-  const tribunal =
-    processo.arquivadoNoTribunal === true ||
-    normalizar(processo.fase) === FASE_ARQUIVADA;
+  // O tribunal tem três respostas, não duas, e a diferença aparece na tela.
+  //
+  // Colapsar "não sei" em "não arquivado" fazia o controle do processo
+  // afirmar que o tribunal ainda mostra o processo em andamento — para um
+  // processo que o tribunal nunca classificou, porque a análise ainda não
+  // rodou. Divergência inventada gasta a atenção que o aviso existe para
+  // capturar, e ensina o advogado a ignorá-lo.
+  const tribunal: boolean | null = typeof processo.arquivadoNoTribunal === "boolean"
+    ? processo.arquivadoNoTribunal
+    : normalizar(processo.fase).length > 0
+      ? normalizar(processo.fase) === FASE_ARQUIVADA
+      : null;
 
   const manual =
     typeof processo.arquivadoManual === "boolean"
@@ -97,13 +106,14 @@ export function situacaoNaCarteira(
     return {
       arquivado: manual,
       origem: manual ? "manual" : "ativo",
-      divergente: manual !== tribunal,
+      // Só há discordância quando existe alguém do outro lado discordando.
+      divergente: tribunal !== null && manual !== tribunal,
     };
   }
 
   return {
-    arquivado: tribunal,
-    origem: tribunal ? "tribunal" : "ativo",
+    arquivado: tribunal === true,
+    origem: tribunal === true ? "tribunal" : "ativo",
     divergente: false,
   };
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
-import { carteiraAtiva } from "@/lib/carteira";
+import { carteiraAtivaQuery } from "@/lib/carteira-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ const TimeTracking = () => {
   const fetchData = async () => {
     const [entriesRes, processosRes, clientesRes] = await Promise.all([
       (supabase.from as any)("time_entries").select("*, processos(numero, descricao), clientes(nome)").order("data", { ascending: false }).order("created_at", { ascending: false }),
-      carteiraAtiva(supabase.from("processos").select("id, numero, descricao")).order("created_at", { ascending: false }),
+      carteiraAtivaQuery().select("id, numero, descricao").order("created_at", { ascending: false }),
       supabase.from("clientes").select("id, nome").order("nome"),
     ]);
     if (entriesRes.data) setEntries(entriesRes.data);
