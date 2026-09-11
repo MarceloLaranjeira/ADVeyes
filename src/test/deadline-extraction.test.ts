@@ -139,3 +139,37 @@ describe("extractDeadline — alertas de conferência", () => {
     expect(result.alertas).toHaveLength(0);
   });
 });
+
+describe("qualificador separado do número", () => {
+  // A redação mais comum nos diários não cola o qualificador no número:
+  // "prazo de 5 dias, contados em dias úteis". Enquanto o regex só aceitava a
+  // forma colada, o qualificador se perdia e a dedução por ramo assumia o
+  // comando — num processo criminal, propondo contagem contínua contra uma
+  // ordem expressa em sentido contrário.
+  for (const texto of [
+    "Fica intimado para, no prazo de 5 dias, contados em dias uteis, manifestar-se.",
+    "Prazo de 10 dias (uteis) para contrarrazoes.",
+    "Prazo de 15 dias computados em dias corridos.",
+    "Concedido o prazo de 5 dias uteis.",
+  ]) {
+    it(`lê o qualificador em: ${texto.slice(0, 45)}...`, () => {
+      const lido = extractDeadline(texto);
+      expect(lido.qualificadorExplicito).not.toBeNull();
+    });
+  }
+
+  it("continua sem qualificador quando o texto não diz", () => {
+    const lido = extractDeadline("Fica intimado para, no prazo de 5 dias, manifestar-se.");
+    expect(lido.qualificadorExplicito).toBeNull();
+    expect(lido.dias).toBe(5);
+  });
+
+  it("não confunde o modo lido", () => {
+    expect(
+      extractDeadline("prazo de 5 dias, contados em dias uteis").qualificadorExplicito,
+    ).toBe("uteis");
+    expect(
+      extractDeadline("prazo de 5 dias, contados em dias corridos").qualificadorExplicito,
+    ).toBe("corridos");
+  });
+});
