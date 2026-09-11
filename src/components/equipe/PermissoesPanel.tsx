@@ -127,8 +127,8 @@ export function PermissoesPanel({
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             Estas regras são aplicadas no banco de dados, não apenas na tela.
-            O proprietário e os administradores podem manter a regra do perfil,
-            permitir ou negar cada acesso por pessoa.
+            Somente o proprietário pode manter a regra do perfil, permitir ou
+            negar cada acesso por pessoa.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -203,7 +203,7 @@ export function PermissoesPanel({
         <CardContent className="space-y-4">
           {!canManage && (
             <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-              Somente proprietário ou administrador pode alterar permissões.
+              Somente o proprietário pode alterar permissões.
             </p>
           )}
 

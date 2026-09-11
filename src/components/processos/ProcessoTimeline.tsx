@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -20,6 +20,7 @@ interface ProcessoTimelineProps {
   events: ProcessTimelineEvent[];
   previewLimit?: number;
   emptyMessage?: string;
+  focusId?: string | null;
 }
 
 const appearance = {
@@ -54,10 +55,23 @@ export function ProcessoTimeline({
   events,
   previewLimit,
   emptyMessage = "Nenhuma movimentação registrada neste processo.",
+  focusId = null,
 }: ProcessoTimelineProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(!previewLimit);
   const visible = showAll || !previewLimit ? events : events.slice(0, previewLimit);
+
+  useEffect(() => {
+    if (!focusId || !events.some(event => event.id === focusId)) return;
+    setShowAll(true);
+    setExpanded(current => new Set(current).add(focusId));
+    const timer = window.setTimeout(() => {
+      const item = document.getElementById(`process-timeline-${focusId}`);
+      if (typeof item?.scrollIntoView === "function") item.scrollIntoView({ behavior: "smooth", block: "center" });
+      item?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [events, focusId]);
 
   if (events.length === 0) {
     return (
@@ -88,7 +102,9 @@ export function ProcessoTimeline({
           return (
             <article
               key={event.id}
-              className="grid gap-3 border-b p-4 last:border-b-0 hover:bg-muted/20 md:grid-cols-[145px_minmax(0,1fr)] md:p-5"
+              id={`process-timeline-${event.id}`}
+              tabIndex={focusId === event.id ? -1 : undefined}
+              className={`grid gap-3 border-b p-4 last:border-b-0 hover:bg-muted/20 md:grid-cols-[145px_minmax(0,1fr)] md:p-5 ${focusId === event.id ? "bg-primary/5 ring-1 ring-inset ring-primary/40" : ""}`}
             >
               <div className="text-xs text-muted-foreground">
                 <p className="font-medium text-foreground/70">{date.date}</p>

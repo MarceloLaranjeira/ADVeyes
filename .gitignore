@@ -36,3 +36,11 @@ supabase/.temp/
 supabase/.branches/
 check_ts.js
 check_ts.mjs
+
+# Scratch e artefatos de execução local
+tmp/
+output/
+vitest.config.ts.timestamp-*.mjs
+
+# Cópia gerada por scripts/sync-api-docs.mjs a partir de docs/
+public/api/

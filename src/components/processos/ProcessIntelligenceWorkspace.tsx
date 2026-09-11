@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Bot, CheckCircle2, Clock3, PencilLine, Scale, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DepthCard } from "@/components/dashboard/DepthCard";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,10 @@ function ProcessSummary({ item }: { item: ProcessIntelligenceItem }) {
       <p className="truncate font-mono text-xs font-semibold text-primary">{item.number}</p>
       <p className="mt-1 truncate text-sm font-semibold">{item.clientName || "Cliente não informado"}</p>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.courtUnit || item.court || "Órgão julgador não informado"}</p>
+      <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+        <p className="truncate" title={item.activeParties ?? "Não identificado"}><span className="font-semibold text-foreground">Polo ativo:</span> {item.activeParties || "Não identificado"}</p>
+        <p className="truncate" title={item.passiveParties ?? "Não identificado"}><span className="font-semibold text-foreground">Polo passivo:</span> {item.passiveParties || "Não identificado"}</p>
+      </div>
     </div>
   );
 }
@@ -43,12 +48,12 @@ export function IntelligenceCentral({ items, onCorrect }: { items: ProcessIntell
       {ordered.map(item => {
         const intelligence = item.intelligence;
         return (
-          <Card key={item.id} className="overflow-hidden transition-shadow hover:shadow-md">
+          <DepthCard key={item.id} interactive onActivate={() => navigate(`/processos/${item.id}`)} className="overflow-hidden transition-shadow hover:shadow-md" aria-label={`Abrir processo ${item.number}`}>
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3"><ProcessSummary item={item} /><RiskBadge item={item} /></div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                 <Fact label="Fase" value={intelligence ? PHASE_LABELS[intelligence.phase] : "Não analisada"} />
-                <Fact label="Etapa" value={intelligence?.stage.replaceAll("_", " ") ?? "—"} />
+                <Fact label="Etapa" value={intelligence?.stage.split("_").join(" ") ?? "—"} />
                 <Fact label="Aguardando" value={intelligence ? WAITING_LABELS[intelligence.waitingOn] : "—"} />
                 <Fact label="Sem avanço" value={intelligence?.lastAdvanceAt ? `${intelligence.stalledDays} dias` : "Sem histórico"} />
               </div>
@@ -69,7 +74,7 @@ export function IntelligenceCentral({ items, onCorrect }: { items: ProcessIntell
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </DepthCard>
         );
       })}
     </div>
@@ -95,6 +100,8 @@ export function IntelligencePipeline({ items }: { items: ProcessIntelligenceItem
               {sortByAttention(phaseItems).map(item => (
                 <button key={item.id} type="button" onClick={() => navigate(`/processos/${item.id}`)} className="w-full rounded-lg border bg-card p-3 text-left shadow-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <p className="truncate font-mono text-[10px] font-semibold">{item.number}</p><p className="mt-1 truncate text-xs font-medium">{item.clientName || "Sem cliente"}</p>
+                  <p className="mt-2 truncate text-[10px] text-muted-foreground" title={item.activeParties ?? "Não identificado"}><span className="font-semibold text-foreground">Polo ativo:</span> {item.activeParties || "Não identificado"}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={item.passiveParties ?? "Não identificado"}><span className="font-semibold text-foreground">Polo passivo:</span> {item.passiveParties || "Não identificado"}</p>
                   <div className="mt-2 flex items-center justify-between"><span className="truncate text-[10px] text-muted-foreground">{item.intelligence ? WAITING_LABELS[item.intelligence.waitingOn] : "Não analisado"}</span><RiskBadge item={item} /></div>
                 </button>
               ))}
@@ -114,7 +121,7 @@ export function IntelligenceList({ items }: { items: ProcessIntelligenceItem[] }
     <div className="overflow-x-auto rounded-xl border bg-card">
       <table className="w-full min-w-[980px] text-left text-sm">
         <thead className="border-b bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground"><tr><th className="p-3">Processo / cliente</th><th className="p-3">Fase e etapa</th><th className="p-3">Aguardando</th><th className="p-3">Último avanço</th><th className="p-3">Motivo</th><th className="p-3">Risco</th><th className="p-3"><span className="sr-only">Ação</span></th></tr></thead>
-        <tbody className="divide-y">{sortByAttention(items).map(item => <tr key={item.id} className="hover:bg-muted/30"><td className="p-3"><ProcessSummary item={item} /></td><td className="p-3"><p className="font-medium">{item.intelligence ? PHASE_LABELS[item.intelligence.phase] : "Não analisada"}</p><p className="mt-0.5 text-xs capitalize text-muted-foreground">{item.intelligence?.stage.replaceAll("_", " ") ?? "—"}</p></td><td className="p-3">{item.intelligence ? WAITING_LABELS[item.intelligence.waitingOn] : "—"}</td><td className="p-3">{item.intelligence?.lastAdvanceAt ? `${item.intelligence.stalledDays} dias` : "Sem histórico"}</td><td className="max-w-[260px] truncate p-3" title={item.intelligence?.waitingReason ?? ""}>{item.intelligence?.waitingReason || "—"}</td><td className="p-3"><RiskBadge item={item} /></td><td className="p-3"><Button variant="ghost" size="icon" aria-label={`Abrir processo ${item.number}`} onClick={() => navigate(`/processos/${item.id}`)}><ArrowRight className="h-4 w-4" /></Button></td></tr>)}</tbody>
+        <tbody className="divide-y">{sortByAttention(items).map(item => <tr key={item.id} role="link" tabIndex={0} aria-label={`Abrir processo ${item.number}`} onClick={() => navigate(`/processos/${item.id}`)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); navigate(`/processos/${item.id}`); } }} className="cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><td className="p-3"><ProcessSummary item={item} /></td><td className="p-3"><p className="font-medium">{item.intelligence ? PHASE_LABELS[item.intelligence.phase] : "Não analisada"}</p><p className="mt-0.5 text-xs capitalize text-muted-foreground">{item.intelligence?.stage.split("_").join(" ") ?? "—"}</p></td><td className="p-3">{item.intelligence ? WAITING_LABELS[item.intelligence.waitingOn] : "—"}</td><td className="p-3">{item.intelligence?.lastAdvanceAt ? `${item.intelligence.stalledDays} dias` : "Sem histórico"}</td><td className="max-w-[260px] truncate p-3" title={item.intelligence?.waitingReason ?? ""}>{item.intelligence?.waitingReason || "—"}</td><td className="p-3"><RiskBadge item={item} /></td><td className="p-3"><ArrowRight className="h-4 w-4" aria-hidden="true" /></td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -139,12 +146,13 @@ export function CorrectionDialog({ item, open, busy, onOpenChange, onSubmit }: {
 }
 
 export function IntelligenceMetricCards({ total, stalled, office, critical, pending }: { total: number; stalled: number; office: number; critical: number; pending: number }) {
+  const navigate = useNavigate();
   const cards = [
-    { label: "Processos acompanhados", value: total, icon: Scale, tone: "text-primary" },
-    { label: "Sem avanço", value: stalled, icon: Clock3, tone: "text-amber-600" },
-    { label: "Ação do escritório", value: office, icon: AlertTriangle, tone: "text-orange-600" },
-    { label: "Risco crítico", value: critical, icon: Sparkles, tone: "text-red-600" },
-    { label: "Aguardando análise", value: pending, icon: CheckCircle2, tone: "text-muted-foreground" },
+    { label: "Processos acompanhados", value: total, icon: Scale, tone: "text-primary", href: "/processos" },
+    { label: "Sem avanço", value: stalled, icon: Clock3, tone: "text-amber-600", href: "/processos?focus=stalled" },
+    { label: "Ação do escritório", value: office, icon: AlertTriangle, tone: "text-orange-600", href: "/processos?focus=office" },
+    { label: "Risco crítico", value: critical, icon: Sparkles, tone: "text-red-600", href: "/processos?focus=critical" },
+    { label: "Aguardando análise", value: pending, icon: CheckCircle2, tone: "text-muted-foreground", href: "/processos?focus=pending" },
   ];
-  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{cards.map(card => <Card key={card.label}><CardHeader className="flex-row items-center justify-between space-y-0 p-4 pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">{card.label}</CardTitle><card.icon className={`h-4 w-4 ${card.tone}`} /></CardHeader><CardContent className="p-4 pt-0"><p className="text-2xl font-bold">{card.value}</p></CardContent></Card>)}</div>;
+  return <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{cards.map(card => <DepthCard key={card.label} interactive onActivate={() => navigate(card.href)} aria-label={`${card.label}: ${card.value}`}><CardHeader className="flex-row items-center justify-between space-y-0 p-4 pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">{card.label}</CardTitle><card.icon className={`h-4 w-4 ${card.tone}`} /></CardHeader><CardContent className="p-4 pt-0"><p className="text-2xl font-bold">{card.value}</p></CardContent></DepthCard>)}</div>;
 }

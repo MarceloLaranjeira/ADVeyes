@@ -6,6 +6,7 @@ import {
   formatCnj,
   nextAttemptDelayMs,
   normalizeDataJudParties,
+  normalizeDataJudProceduralSystem,
   normalizeDataJudProcessMetadata,
   normalizeDataJudMovements,
   normalizeDjenPublication,
@@ -270,6 +271,8 @@ describe("normalizeDjenPublication", () => {
       link: "https://www4.tjmg.jus.br/consulta",
       tipoDocumento: "Apelação",
       nomeClasse: "Apelação Criminal",
+      numeroComunicacao: 8831,
+      ativo: true,
     }, { receivedAt });
 
     expect(normalized.externalId).toBe("651169325");
@@ -281,6 +284,12 @@ describe("normalizeDjenPublication", () => {
     expect(normalized.tribunal).toBe("TJMG");
     expect(normalized.possibleDeadline).toBe(true);
     expect(normalized.sourceName).toBe("TJMG - 5ª Câmara Criminal");
+    expect(normalized.availableOn).toBe("2026-07-31");
+    expect(normalized.djenHash).toBe("hash-oficial");
+    expect(normalized.communicationNumber).toBe("8831");
+    expect(normalized.documentType).toBe("Apelação");
+    expect(normalized.processClass).toBe("Apelação Criminal");
+    expect(normalized.active).toBe(true);
   });
 
   it("usa o hash como identidade e mantém origem desconhecida sem evidência", () => {
@@ -327,6 +336,16 @@ describe("normalizeDjenPublication", () => {
     ]);
     expect(normalized.hearingEvidence).toContain("Audiência de conciliação");
   });
+
+  it("preserva o cancelamento informado pelo feed principal", () => {
+    const normalized = normalizeDjenPublication({
+      id: 99,
+      texto: "Comunicação cancelada.",
+      ativo: false,
+    }, { receivedAt });
+
+    expect(normalized.active).toBe(false);
+  });
 });
 
 describe("normalizeDataJudProcessMetadata", () => {
@@ -358,6 +377,33 @@ describe("normalizeDataJudProcessMetadata", () => {
     expect(normalized.proceduralSystem).toBe("PROJUDI");
     expect(normalized.publicSecrecyLevel).toBe(0);
   });
+});
+
+describe("normalizeDataJudProceduralSystem", () => {
+  it.each([
+    [1, "PJe", "pje"],
+    [2, "Projudi", "projudi"],
+    [3, "SAJ", "other"],
+    [4, "Eproc", "other"],
+  ])("mapeia o código nacional %s sem depender do tribunal", (codigo, label, originSystem) => {
+    expect(normalizeDataJudProceduralSystem({ codigo })).toMatchObject({
+      code: String(codigo),
+      label,
+      originSystem,
+      conflict: false,
+    });
+  });
+
+  it("preserva o nome declarado e sinaliza divergência com o código", () => {
+    expect(normalizeDataJudProceduralSystem({ codigo: 1, nome: "PROJUDI" }))
+      .toMatchObject({
+        code: "1",
+        label: "PROJUDI",
+        originSystem: "projudi",
+        conflict: true,
+      });
+  });
+
 });
 
 describe("normalizeDataJudParties", () => {
@@ -599,6 +645,16 @@ describe("normalizeDataJudMovements", () => {
     });
 
     expect(movement.originSystem).toBe("unknown");
+  });
+
+  it("propaga para o andamento o sistema oficial declarado na capa", () => {
+    const [movement] = normalizeDataJudMovements({
+      tribunal: "TJPR",
+      sistema: { codigo: 2, nome: "Projudi" },
+      movimentos: [{ nome: "Audiência designada", dataHora: "2026-09-01T10:00:00Z" }],
+    });
+
+    expect(movement.originSystem).toBe("projudi");
   });
 });
 

@@ -4,7 +4,8 @@ export type PlanName =
   | "solo"
   | "profissional"
   | "escritorio"
-  | "performance";
+  | "performance"
+  | "parceiro";
 export type PlanStatus = "trial" | "pending" | "active" | "overdue" | "cancelled";
 
 export type PlanFeature =
@@ -17,13 +18,13 @@ export type PlanFeature =
   | "api_webhooks";
 
 const FEATURE_MATRIX: Record<PlanFeature, PlanName[]> = {
-  adicionar_processo: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
-  adicionar_cliente: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
-  ia_juridica: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
-  exportar_relatorio: ["trial", "starter", "solo", "profissional", "escritorio", "performance"],
-  financeiro: ["trial", "starter", "profissional", "escritorio", "performance"],
-  equipe: ["profissional", "escritorio", "performance"],
-  api_webhooks: ["performance"],
+  adicionar_processo: ["trial", "starter", "solo", "profissional", "escritorio", "performance", "parceiro"],
+  adicionar_cliente: ["trial", "starter", "solo", "profissional", "escritorio", "performance", "parceiro"],
+  ia_juridica: ["trial", "starter", "solo", "profissional", "escritorio", "performance", "parceiro"],
+  exportar_relatorio: ["trial", "starter", "solo", "profissional", "escritorio", "performance", "parceiro"],
+  financeiro: ["trial", "starter", "profissional", "escritorio", "performance", "parceiro"],
+  equipe: ["profissional", "escritorio", "performance", "parceiro"],
+  api_webhooks: ["performance", "parceiro"],
 };
 
 export function getTrialDaysLeft(trialEndsAt: string, now = Date.now()): number {

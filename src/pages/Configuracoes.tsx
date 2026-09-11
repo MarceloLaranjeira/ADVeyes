@@ -27,6 +27,8 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
 import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
+import { ApiIntegrationSettings } from "@/components/configuracoes/ApiIntegrationSettings";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   generateOpenAITts,
   OPENAI_TTS_VOICES,
@@ -117,6 +119,7 @@ const Configuracoes = () => {
     trialDaysLeft,
   } = useSubscription();
   const { toast } = useToast();
+  const { currentTenant } = useTenant();
 
   // Google Calendar state
   const [gcalConnected, setGcalConnected] = useState(() => googleCalendar.isConnected());
@@ -777,8 +780,8 @@ const Configuracoes = () => {
                 <div className="mb-4 rounded-lg border border-primary/20 p-4 bg-primary/5">
                   <p className="text-xs font-bold text-primary uppercase tracking-wide mb-2">Horus IA — Consulta com Contexto Processual</p>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Para que o Horus consulte e analise processos de tribunais específicos, primeiro faça a busca em
-                    <strong> Busca Processual</strong>, depois cole o resultado ou número do processo no chat do Horus.
+                    Para que o Horus consulte e analise processos de tribunais específicos, abra a
+                    <strong> Central Processual</strong>, acesse <strong>Consulta oficial</strong> e depois cole o resultado ou número do processo no chat do Horus.
                     O assistente pode analisar movimentações, sugerir estratégias e gerar peças com base no processo real.
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -819,6 +822,36 @@ const Configuracoes = () => {
 
           {/* === INTEGRAÇÕES === */}
           <TabsContent value="integracoes" className="space-y-4">
+
+            {currentTenant ? (
+              <ApiIntegrationSettings
+                tenantId={currentTenant.tenantId}
+                canManage={["owner", "admin"].includes(currentTenant.role)}
+              />
+            ) : (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Key className="h-5 w-5 text-primary" />
+                        <h3 className="font-serif font-semibold">API pública v1 operacional</h3>
+                        <span className="rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs font-semibold text-green-700">Online</span>
+                      </div>
+                      <p className="max-w-2xl text-sm text-muted-foreground">
+                        Tokens, webhooks, contatos, processos e tarefas já estão disponíveis. Para criar uma credencial, primeiro cadastre ou selecione um escritório; cada token pertence exclusivamente ao escritório selecionado.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" asChild>
+                        <a href="/api/docs/" target="_blank" rel="noreferrer">Abrir documentação da API</a>
+                      </Button>
+                      <Button onClick={() => navigate("/admin")}>Cadastrar ou selecionar escritório</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* ── Plano / Asaas ── */}
             <Card>

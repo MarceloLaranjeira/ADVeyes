@@ -7,6 +7,7 @@ import {
   BILLING_PLANS,
   type BillingPlanKey,
 } from "@/lib/billing-plans";
+import type { PlanName } from "@/lib/subscription-access";
 
 export type PlanKey = BillingPlanKey;
 export type BillingType = "CREDIT_CARD" | "PIX" | "BOLETO";
@@ -76,7 +77,7 @@ export interface TenantSubscription {
   trial_ends_at: string | null;
   next_due_date: string | null;
   billing_plans: {
-    code: PlanKey;
+    code: PlanName;
     name: string;
     version: number;
     entitlements: Record<string, number | boolean>;

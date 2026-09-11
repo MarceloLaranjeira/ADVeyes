@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, endOfMonth, format, startOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { formatDeadlineDate } from "@/lib/controladoria";
 import type { Database } from "@/integrations/supabase/types";
 import type {
   DashboardAttentionItem,
@@ -59,18 +60,21 @@ function buildAttentionItems(
     const dueDate = task.data_limite!;
     const days = differenceInCalendarDays(new Date(`${dueDate}T12:00:00`), now);
     const kind = days < 0 ? "overdue" : days === 0 ? "today" : "upcoming";
+    const deadline = formatDeadlineDate(dueDate);
     const description = days < 0
-      ? `${Math.abs(days)} dia(s) em atraso${task.prioridade === "alta" ? " · prioridade alta" : ""}`
+      ? `Venceu em ${deadline} · ${Math.abs(days)} dia(s) em atraso${task.prioridade === "alta" ? " · prioridade alta" : ""}`
       : days === 0
-        ? `Vence hoje${task.prioridade === "alta" ? " · prioridade alta" : ""}`
-        : `Vence em ${days} dia(s)`;
+        ? `Vence hoje, ${deadline}${task.prioridade === "alta" ? " · prioridade alta" : ""}`
+        : `Vence em ${deadline} · faltam ${days} dia(s)`;
 
     return {
       id: `task:${task.id}`,
       kind,
       title: task.titulo,
       description,
-      href: task.processo_id ? `/processos/${task.processo_id}` : "/tarefas",
+      // A Controladoria é o posto de comando: o item chega lá já com o
+      // contador correspondente aberto, em vez de abrir uma tela por tipo.
+      href: `/controladoria?aba=prazos&focus=${encodeURIComponent(task.id)}&foco=${days < 0 ? "vencidos" : days === 0 ? "hoje" : "proximos"}`,
       date: dueDate,
       days,
     };
@@ -87,7 +91,7 @@ function buildAttentionItems(
         hearing.processo_numero,
         hearing.vara ?? hearing.local,
       ].filter(Boolean).join(" · "),
-      href: hearing.processo_id ? `/processos/${hearing.processo_id}` : "/audiencias",
+      href: `/audiencias?focus=${encodeURIComponent(hearing.id)}`,
       date: hearing.data_hora,
       days,
     });
@@ -99,7 +103,7 @@ function buildAttentionItems(
       kind: "publication",
       title: `${source.pendingPublicationCount} intimação(ões) aguardando revisão`,
       description: "Revise o conteúdo e confirme possíveis prazos antes de distribuir atividades.",
-      href: "/intimacoes",
+      href: "/controladoria?foco=sem-ciencia",
       date: null,
       days: null,
     });

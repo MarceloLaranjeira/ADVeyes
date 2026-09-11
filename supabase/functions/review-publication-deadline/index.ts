@@ -195,6 +195,7 @@ Deno.serve(async (request) => {
       prioridade: "alta",
       status: "pendente",
       data_limite: parsedDate.toISOString(),
+      tipo: "prazo",
       data_limite_interna: await calcularPrazoInterno(
         auth.admin,
         tenantId,

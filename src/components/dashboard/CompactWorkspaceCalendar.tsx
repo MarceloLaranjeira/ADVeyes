@@ -61,7 +61,7 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
     <Card>
       <CardContent className="p-3 sm:p-4">
         <div className="mb-2 flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-blue-600" />
+          <CalendarDays className="h-4 w-4 text-slate-500" />
           <h2 className="font-serif text-sm font-semibold">Calendário do escritório</h2>
         </div>
 
@@ -87,8 +87,8 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
                 classNames={{
                   month: "space-y-3",
                   caption_label: "text-sm font-semibold capitalize",
-                  day_selected: "bg-blue-950 text-white hover:bg-blue-900 hover:text-white focus:bg-blue-950 focus:text-white",
-                  day_today: "ring-1 ring-blue-500 text-blue-700",
+                  day_selected: "bg-slate-800 text-white hover:bg-slate-700 hover:text-white focus:bg-slate-800 focus:text-white",
+                  day_today: "ring-1 ring-slate-400 text-slate-700",
                 }}
                 components={{
                   DayContent: ({ date }) => {
@@ -126,7 +126,7 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
                   <button
                     type="button"
                     onClick={() => navigate(buildAgendaUrl(selectedDate!))}
-                    className="text-[11px] font-medium text-blue-700 hover:underline"
+                    className="text-[11px] font-medium text-slate-700 hover:underline"
                   >
                     Ver mais ({selectedItems.length - 3})
                   </button>
@@ -144,7 +144,7 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
                       type="button"
                       key={item.id}
                       onClick={() => navigate(operationalItemTarget(item))}
-                      className="flex w-full items-start gap-2 rounded-lg border p-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      className="flex w-full items-start gap-2 rounded-lg border p-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sourceDotClass[item.sourceType]}`} />
                       <span className="min-w-0 flex-1">
@@ -170,7 +170,7 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
         <Button
           variant="ghost"
           size="sm"
-          className="mt-2 h-8 w-full justify-between text-xs text-blue-700 hover:text-blue-800"
+          className="mt-2 h-8 w-full justify-between text-xs text-slate-700 hover:text-slate-900"
           onClick={() => navigate(buildAgendaUrl(agendaDate))}
         >
           Mostrar agenda completa <ArrowRight className="h-3.5 w-3.5" />

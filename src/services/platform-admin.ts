@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/async-timeout";
+import type {
+  TenantBranding,
+  TenantMembership,
+} from "@/contexts/TenantContext";
 
 export interface PlatformTenantSummary {
   id: string;
@@ -13,12 +17,40 @@ export interface PlatformTenantSummary {
   candidateProcesses: number;
   monitoredProcesses: number;
   integrationFailures: number;
+  branding?: TenantBranding | null;
   subscription: {
     planCode: string | null;
     status: string;
     nextDueDate: string | null;
     trialEndsAt: string | null;
   } | null;
+}
+
+export function toPlatformTenantMembership(
+  tenant: PlatformTenantSummary,
+): TenantMembership {
+  const fallbackName = tenant.displayName || "ADVeyes";
+  const branding = tenant.branding ?? {
+    publicName: fallbackName,
+    shortName: fallbackName,
+    logoLightPath: null,
+    logoDarkPath: null,
+    faviconPath: null,
+    iconPath: null,
+    colorTokens: {},
+  };
+
+  return {
+    tenantId: tenant.id,
+    slug: tenant.slug,
+    displayName: tenant.displayName,
+    status: tenant.status,
+    role: "admin",
+    dataScope: "tenant",
+    accessMode: "platform",
+    platformContextVersion: 1,
+    branding,
+  };
 }
 
 export interface PlatformOverview {
@@ -70,6 +102,22 @@ async function invokePlatformAdmin<T>(body: Record<string, unknown>) {
   return data as T;
 }
 
+export interface PlatformToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  scopes: string[];
+  expires_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+}
+
+export interface PlatformTokenList {
+  availableScopes: string[];
+  tokens: PlatformToken[];
+}
+
 export const platformAdmin = {
   async session() {
     return invokePlatformAdmin<{ isPlatformAdmin: boolean }>({
@@ -113,6 +161,30 @@ export const platformAdmin = {
     return invokePlatformAdmin<PlatformSupportStatus>({
       action: "end_support",
       tenantId,
+    });
+  },
+
+  async listPlatformTokens() {
+    return invokePlatformAdmin<PlatformTokenList>({
+      action: "list_platform_tokens",
+    });
+  },
+
+  async createPlatformToken(input: {
+    name: string;
+    scopes: string[];
+    expiresInDays: number;
+  }) {
+    return invokePlatformAdmin<{ token: string; record: PlatformToken }>({
+      action: "create_platform_token",
+      ...input,
+    });
+  },
+
+  async revokePlatformToken(tokenId: string) {
+    return invokePlatformAdmin<{ revoked: true }>({
+      action: "revoke_platform_token",
+      tokenId,
     });
   },
 };

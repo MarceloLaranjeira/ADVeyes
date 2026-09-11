@@ -31,14 +31,14 @@ const Nav = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <LogoMark size="sm" />
-            <span className="font-serif font-bold text-[#1a2a5e] tracking-widest text-lg uppercase">ADVeyes</span>
+            <LogoMark dark={!scrolled} size="sm" />
+            <span className={`font-serif font-bold tracking-widest text-lg uppercase transition-colors ${scrolled ? "text-primary" : "text-white"}`}>ADVeyes</span>
           </div>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
             {["Recursos", "Preços", "Sobre", "Contato"].map(item => (
-              <a key={item} href={`#${item.toLowerCase()}`} className="text-sm font-medium text-gray-600 hover:text-[#1a2a5e] transition-colors">
+              <a key={item} href={`#${item.toLowerCase()}`} className={`text-sm font-medium transition-colors ${scrolled ? "text-gray-600 hover:text-primary" : "text-white/75 hover:text-white"}`}>
                 {item}
               </a>
             ))}
@@ -46,19 +46,19 @@ const Nav = () => {
 
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <button onClick={() => navigate("/login")} className="text-sm font-medium text-gray-700 hover:text-[#1a2a5e] transition-colors px-4 py-2">
+            <button onClick={() => navigate("/login")} className={`text-sm font-medium transition-colors px-4 py-2 ${scrolled ? "text-gray-700 hover:text-primary" : "text-white/80 hover:text-white"}`}>
               Entrar
             </button>
             <button
               onClick={() => navigate("/cadastro")}
-              className="bg-[#1a2a5e] text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-[#243570] transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2"
+              className={`text-sm font-semibold px-5 py-2.5 rounded-xl transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 ${scrolled ? "bg-primary text-primary-foreground hover:bg-[hsl(var(--primary-900))]" : "bg-white/15 text-white ring-1 ring-inset ring-white/20 hover:bg-white/25"}`}
             >
               Teste Grátis <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Mobile menu button */}
-          <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden p-2 rounded-lg hover:bg-gray-100">
+          <button onClick={() => setMenuOpen(!menuOpen)} className={`md:hidden p-2 rounded-lg ${scrolled ? "hover:bg-gray-100" : "text-white hover:bg-white/10"}`}>
             {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
@@ -73,7 +73,7 @@ const Nav = () => {
             ))}
             <div className="border-t border-gray-100 pt-3 mt-3 px-4 space-y-2">
               <button onClick={() => navigate("/login")} className="w-full text-sm font-medium py-2.5 border border-gray-200 rounded-xl">Entrar</button>
-              <button onClick={() => navigate("/cadastro")} className="w-full bg-[#1a2a5e] text-white text-sm font-semibold py-2.5 rounded-xl">Começar grátis</button>
+              <button onClick={() => navigate("/cadastro")} className="w-full bg-primary text-primary-foreground text-sm font-semibold py-2.5 rounded-xl">Começar grátis</button>
             </div>
           </div>
         )}
@@ -86,12 +86,12 @@ const Nav = () => {
 const Hero = () => {
   const navigate = useNavigate();
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden bg-gradient-to-br from-[#0f1f4e] via-[#1a2a5e] to-[#243570] pt-16">
+    <section className="relative min-h-screen flex items-center overflow-hidden bg-gradient-to-br from-[#28577F] via-[#326A99] to-[#3971A3] pt-16">
       {/* Background decorations */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 right-10 w-96 h-96 bg-yellow-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-20 right-10 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute bottom-10 left-0 w-80 h-80 bg-blue-400/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-yellow-400/3 rounded-full blur-2xl" />
+        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-blue-100/10 rounded-full blur-2xl" />
         {/* Grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)", backgroundSize: "50px 50px" }} />
@@ -102,14 +102,14 @@ const Hero = () => {
           {/* Left */}
           <div className="text-center lg:text-left">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-full px-4 py-1.5 mb-8">
+            <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 mb-8">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-yellow-300 text-xs font-semibold tracking-wide">14 dias de piloto · Sem cartão · Sem pegadinha</span>
+              <span className="text-blue-50 text-xs font-semibold tracking-wide">14 dias de piloto · Sem cartão · Sem pegadinha</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold text-white leading-tight mb-6">
               Gestão Jurídica para Advogados que{" "}
-              <span className="text-yellow-400">não perdem</span>{" "}
+              <span className="text-blue-100">não perdem</span>{" "}
               tempo
             </h1>
 
@@ -122,7 +122,7 @@ const Hero = () => {
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <button
                 onClick={() => navigate("/cadastro")}
-                className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-8 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
+                className="bg-white hover:bg-blue-50 text-primary font-bold px-8 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-blue-950/20 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
               >
                 Começar grátis agora
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -273,10 +273,10 @@ const Features = () => (
   <section id="recursos" className="py-24 bg-gray-50">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="text-center mb-16">
-        <span className="inline-block text-xs font-bold tracking-widest text-yellow-600 uppercase bg-yellow-50 px-4 py-1.5 rounded-full border border-yellow-100 mb-4">
+        <span className="inline-block text-xs font-bold tracking-widest text-primary uppercase bg-primary/10 px-4 py-1.5 rounded-full border border-primary/15 mb-4">
           Recursos
         </span>
-        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">
+        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-foreground mb-4">
           Tudo que você precisa para<br />gerir seu escritório
         </h2>
         <p className="text-gray-500 max-w-xl mx-auto">
@@ -293,7 +293,7 @@ const Features = () => (
             <div className={`w-12 h-12 rounded-xl ${f.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
               <f.icon className="w-6 h-6" />
             </div>
-            <h3 className="font-serif font-bold text-[#1a2a5e] text-lg mb-2">{f.title}</h3>
+            <h3 className="font-serif font-bold text-foreground text-lg mb-2">{f.title}</h3>
             <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
           </div>
         ))}
@@ -314,7 +314,7 @@ const HowItWorks = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="text-center mb-16">
         <span className="inline-block text-xs font-bold tracking-widest text-blue-600 uppercase bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100 mb-4">Como funciona</span>
-        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">Simples assim</h2>
+        <h2 className="text-3xl sm:text-4xl font-serif font-bold text-foreground mb-4">Simples assim</h2>
         <p className="text-gray-500">3 passos para transformar sua gestão jurídica</p>
       </div>
       <div className="grid md:grid-cols-3 gap-8">
@@ -323,10 +323,10 @@ const HowItWorks = () => (
             {i < steps.length - 1 && (
               <div className="hidden md:block absolute top-8 left-2/3 w-1/3 h-px bg-gradient-to-r from-gray-200 to-gray-100" />
             )}
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#1a2a5e] text-yellow-400 font-serif font-bold text-2xl mb-5 shadow-lg">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white font-serif font-bold text-2xl mb-5 shadow-lg">
               {s.n}
             </div>
-            <h3 className="font-serif font-bold text-[#1a2a5e] text-xl mb-3">{s.title}</h3>
+            <h3 className="font-serif font-bold text-foreground text-xl mb-3">{s.title}</h3>
             <p className="text-gray-500 text-sm leading-relaxed">{s.desc}</p>
           </div>
         ))}
@@ -343,7 +343,7 @@ const plans = (Object.entries(BILLING_PLANS) as [
   key,
   ...plan,
   yearly: getMonthlyEquivalent(plan.annualTotal),
-  color: "popular" in plan && plan.popular ? "border-[#1a2a5e]" : "border-gray-200",
+  color: "popular" in plan && plan.popular ? "border-primary" : "border-gray-200",
   popular: "popular" in plan && plan.popular,
 }));
 
@@ -356,13 +356,13 @@ const Pricing = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <span className="inline-block text-xs font-bold tracking-widest text-green-700 uppercase bg-green-50 px-4 py-1.5 rounded-full border border-green-100 mb-4">Preços</span>
-          <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[#1a2a5e] mb-4">Simples e transparente</h2>
+          <h2 className="text-3xl sm:text-4xl font-serif font-bold text-foreground mb-4">Simples e transparente</h2>
           <p className="text-gray-500 mb-8">14 dias de piloto assistido, sem cartão obrigatório</p>
 
           {/* Toggle */}
           <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1">
-            <button onClick={() => setYearly(false)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${!yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>Mensal</button>
-            <button onClick={() => setYearly(true)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${yearly ? "bg-[#1a2a5e] text-white" : "text-gray-500"}`}>
+            <button onClick={() => setYearly(false)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${!yearly ? "bg-primary text-white" : "text-gray-500"}`}>Mensal</button>
+            <button onClick={() => setYearly(true)} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${yearly ? "bg-primary text-white" : "text-gray-500"}`}>
               Anual <span className="text-green-500 text-xs ml-1">2 meses grátis</span>
             </button>
           </div>
@@ -372,13 +372,13 @@ const Pricing = () => {
           {plans.map((p) => (
             <div key={p.name} className={`relative bg-white rounded-2xl border-2 ${p.color} p-6 ${p.popular ? "shadow-xl scale-105 z-10" : "shadow-sm"} transition-all hover:shadow-lg`}>
               {p.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-[#1a2a5e] text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
                   MAIS POPULAR
                 </div>
               )}
-              <h3 className="font-serif font-bold text-[#1a2a5e] text-xl mb-1">{p.name}</h3>
+              <h3 className="font-serif font-bold text-foreground text-xl mb-1">{p.name}</h3>
               <div className="flex items-end gap-1 mb-1">
-                <span className="text-4xl font-bold text-[#1a2a5e]">R$ {yearly ? p.yearly : p.price}</span>
+                <span className="text-4xl font-bold text-foreground">R$ {yearly ? p.yearly : p.price}</span>
                 <span className="text-gray-400 text-sm mb-1">/mês</span>
               </div>
               {yearly && <p className="text-xs text-green-600 font-medium mb-4">Total anual: R$ {p.annualTotal.toLocaleString("pt-BR")}</p>}
@@ -396,8 +396,8 @@ const Pricing = () => {
               <button
                 onClick={() => navigate(`/cadastro?plan=${p.key}`)}
                 className={`w-full py-3 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5 ${p.popular
-                  ? "bg-[#1a2a5e] text-white hover:bg-[#243570] hover:shadow-lg"
-                  : "border-2 border-[#1a2a5e] text-[#1a2a5e] hover:bg-[#1a2a5e] hover:text-white"
+                  ? "bg-primary text-white hover:bg-[hsl(var(--primary-900))] hover:shadow-lg"
+                  : "border-2 border-primary text-primary hover:bg-primary hover:text-white"
                 }`}
               >
                 Começar piloto de 14 dias
@@ -419,9 +419,9 @@ const Pricing = () => {
 const CTABanner = () => {
   const navigate = useNavigate();
   return (
-    <section className="py-24 bg-gradient-to-br from-[#0f1f4e] via-[#1a2a5e] to-[#243570] relative overflow-hidden">
+    <section className="py-24 bg-gradient-to-br from-[#28577F] via-[#326A99] to-[#3971A3] relative overflow-hidden">
       <div className="absolute inset-0">
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-yellow-400/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-1/4 w-80 h-80 bg-blue-400/5 rounded-full blur-3xl" />
       </div>
       <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
@@ -435,7 +435,7 @@ const CTABanner = () => {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={() => navigate("/cadastro")}
-            className="bg-yellow-500 hover:bg-yellow-400 text-[#1a2a5e] font-bold px-10 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-yellow-500/25 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
+            className="bg-white hover:bg-blue-50 text-primary font-bold px-10 py-4 rounded-xl text-base transition-all hover:shadow-2xl hover:shadow-blue-950/20 hover:-translate-y-0.5 flex items-center justify-center gap-2 group"
           >
             Começar piloto de 14 dias
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -451,7 +451,7 @@ const CTABanner = () => {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 const Footer = () => (
-  <footer className="bg-[#0a1535] text-white/50 py-12">
+  <footer className="bg-sidebar text-white/60 py-12">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-3">

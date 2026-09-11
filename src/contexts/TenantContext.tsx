@@ -46,6 +46,7 @@ export interface TenantMembership {
   dataScope: "tenant" | "team" | "assigned";
   branding: TenantBranding;
   accessMode?: "membership" | "platform";
+  platformContextVersion?: 1;
 }
 
 export type TenantAccessError =
@@ -223,7 +224,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
         );
         const parsed = raw ? JSON.parse(raw) as TenantMembership : null;
         if (
-          parsed?.accessMode === "platform" && parsed.tenantId && parsed.slug
+          parsed?.accessMode === "platform" &&
+          parsed.platformContextVersion === 1 &&
+          parsed.tenantId &&
+          parsed.slug &&
+          parsed.branding
         ) storedPlatformTenant = parsed;
       } catch {
         sessionStorage.removeItem(`adveyes:platform-tenant:${userId}`);
@@ -298,7 +303,11 @@ export const TenantProvider = ({ children }: { children: ReactNode }) => {
   const selectPlatformTenant = useCallback(
     (tenant: TenantMembership) => {
       if (!userId) return;
-      const platformTenant = { ...tenant, accessMode: "platform" as const };
+      const platformTenant = {
+        ...tenant,
+        accessMode: "platform" as const,
+        platformContextVersion: 1 as const,
+      };
       sessionStorage.setItem(
         `adveyes:platform-tenant:${userId}`,
         JSON.stringify(platformTenant),

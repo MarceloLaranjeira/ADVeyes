@@ -7,6 +7,8 @@ import {
   getEscavadorStatus,
   providerSecretNames,
 } from "../_shared/provider-secrets.ts";
+import { API_SCOPES, isApiScope } from "../_shared/public-api-contract.ts";
+import { createApiToken, sha256Hex } from "../_shared/public-api-crypto.ts";
 
 interface PlatformAdminRequest {
   action?:
@@ -16,10 +18,17 @@ interface PlatformAdminRequest {
     | "set_escavador_token"
     | "support_status"
     | "start_support"
-    | "end_support";
+    | "end_support"
+    | "list_platform_tokens"
+    | "create_platform_token"
+    | "revoke_platform_token";
   tenantId?: string;
   reason?: string;
   token?: string;
+  name?: string;
+  scopes?: string[];
+  expiresInDays?: number;
+  tokenId?: string;
 }
 
 interface TenantRow {
@@ -30,6 +39,19 @@ interface TenantRow {
   status: string;
   trial_ends_at: string | null;
   created_at: string;
+}
+
+interface TenantBrandRow {
+  tenant_id: string;
+  public_name: string | null;
+  short_name: string | null;
+  logo_light_path: string | null;
+  logo_dark_path: string | null;
+  favicon_path: string | null;
+  icon_path: string | null;
+  color_tokens: Record<string, string> | null;
+  privacy_url: string | null;
+  terms_url: string | null;
 }
 
 interface LegalOverviewCountRow {
@@ -76,6 +98,82 @@ Deno.serve(async (request) => {
       return json({ isPlatformAdmin: false });
     }
     return json({ error: "permission_denied" }, 403);
+  }
+
+  if (action === "list_platform_tokens") {
+    const { data, error } = await auth.admin.from("api_tokens")
+      .select("id, name, token_prefix, scopes, expires_at, last_used_at, revoked_at, created_at")
+      .is("tenant_id", null)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("platform-admin: platform token list failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+    return json({ availableScopes: API_SCOPES, tokens: data ?? [] });
+  }
+
+  if (action === "create_platform_token") {
+    const name = body.name?.trim() ?? "";
+    const scopes = body.scopes;
+    const expiresInDays = body.expiresInDays ?? 90;
+    if (name.length < 2 || name.length > 80) return json({ error: "invalid_name" }, 400);
+    if (
+      !Array.isArray(scopes) || scopes.length < 1 || scopes.length > API_SCOPES.length ||
+      !scopes.every((scope) => typeof scope === "string" && isApiScope(scope))
+    ) return json({ error: "invalid_scopes" }, 400);
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+      return json({ error: "invalid_expiration" }, 400);
+    }
+
+    const generated = createApiToken("live");
+    const tokenHash = await sha256Hex(generated.token);
+    const { data, error } = await auth.admin.from("api_tokens").insert({
+      tenant_id: null,
+      is_platform: true,
+      name,
+      token_prefix: generated.prefix,
+      token_hash: tokenHash,
+      scopes: [...new Set(scopes)],
+      expires_at: new Date(Date.now() + expiresInDays * 86_400_000).toISOString(),
+      created_by: auth.user.id,
+    }).select("id, name, token_prefix, scopes, expires_at, created_at").single();
+    if (error) {
+      console.error("platform-admin: platform token creation failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+
+    // Uma credencial que alcanca todos os escritorios precisa deixar rastro de
+    // quem a emitiu, alem do log de uso da propria API.
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.api_token_created",
+      target_type: "api_token",
+      target_id: data.id,
+      metadata: { scopes: data.scopes, expires_at: data.expires_at },
+    });
+    return json({ token: generated.token, record: data }, 201);
+  }
+
+  if (action === "revoke_platform_token") {
+    const tokenId = typeof body.tokenId === "string" ? body.tokenId : "";
+    if (!tokenId) return json({ error: "invalid_payload" }, 400);
+    const { data, error } = await auth.admin.from("api_tokens")
+      .update({ revoked_at: new Date().toISOString() })
+      .is("tenant_id", null).eq("id", tokenId).is("revoked_at", null)
+      .select("id").maybeSingle();
+    if (error) {
+      console.error("platform-admin: platform token revoke failed");
+      return json({ error: "operation_failed" }, 500);
+    }
+    if (!data) return json({ error: "token_not_found" }, 404);
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.api_token_revoked",
+      target_type: "api_token",
+      target_id: tokenId,
+      metadata: {},
+    });
+    return json({ revoked: true });
   }
 
   if (action === "session") {
@@ -233,7 +331,12 @@ Deno.serve(async (request) => {
     return json({ error: "invalid_action" }, 400);
   }
 
-  const [tenantsResult, subscriptionsResult, legalCountsResult] = await Promise.all([
+  const [
+    tenantsResult,
+    subscriptionsResult,
+    legalCountsResult,
+    brandsResult,
+  ] = await Promise.all([
     auth.admin
       .from("tenants")
       .select(
@@ -248,6 +351,12 @@ Deno.serve(async (request) => {
     auth.admin.rpc("platform_legal_overview_counts", {
       p_actor_user_id: auth.user.id,
     }),
+    auth.admin
+      .from("tenant_brand_settings")
+      .select(
+        "tenant_id, public_name, short_name, logo_light_path, logo_dark_path, favicon_path, icon_path, color_tokens, privacy_url, terms_url",
+      )
+      .not("published_at", "is", null),
   ]);
 
   const coreError = [tenantsResult.error, legalCountsResult.error].find(Boolean);
@@ -258,6 +367,7 @@ Deno.serve(async (request) => {
 
   [
     ["subscriptions", subscriptionsResult.error],
+    ["brands", brandsResult.error],
   ].forEach(([query, error]) => {
     if (error) {
       console.error(`platform-admin: optional ${query} query failed`);
@@ -278,10 +388,18 @@ Deno.serve(async (request) => {
       ],
     ),
   );
+  const brands = new Map(
+    (brandsResult.error ? [] : brandsResult.data ?? []).map((brand) => [
+      brand.tenant_id,
+      brand as TenantBrandRow,
+    ]),
+  );
 
   const tenants = (tenantsResult.data as TenantRow[] ?? []).map((tenant) => {
     const subscription = subscriptions.get(tenant.id);
     const counts = legalCounts.get(tenant.id);
+    const brand = brands.get(tenant.id);
+    const publicName = brand?.public_name?.trim() || tenant.display_name;
     return {
       id: tenant.id,
       displayName: tenant.display_name,
@@ -295,6 +413,17 @@ Deno.serve(async (request) => {
       monitoredProcesses: counts?.monitored_processes ?? 0,
       integrationFailures: counts?.integration_failures ?? 0,
       lastLegalSuccessAt: counts?.last_legal_success_at ?? null,
+      branding: {
+        publicName,
+        shortName: brand?.short_name?.trim() || publicName,
+        logoLightPath: brand?.logo_light_path ?? null,
+        logoDarkPath: brand?.logo_dark_path ?? null,
+        faviconPath: brand?.favicon_path ?? null,
+        iconPath: brand?.icon_path ?? null,
+        colorTokens: brand?.color_tokens ?? {},
+        privacyUrl: brand?.privacy_url ?? undefined,
+        termsUrl: brand?.terms_url ?? undefined,
+      },
       subscription: subscription
         ? {
           planCode: Array.isArray(subscription.billing_plans)

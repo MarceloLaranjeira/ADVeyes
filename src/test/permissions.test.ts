@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  canDecideAccessRequests,
+  canManagePermissions,
   editablePermissions,
   exceptionsForRole,
   hasOverride,
   PERMISSION_GROUPS,
   permissionLevel,
   overrideState,
+  ROLE_ORDER,
   setOverrideState,
   toggleOverride,
   type PermissionRow,
@@ -42,6 +45,16 @@ describe("matriz de permissões", () => {
       .toBe("excecao");
     expect(permissionLevel(findRow("legal", "delete"), "admin"))
       .toBe("excecao");
+  });
+
+  it("concede o registro de protocolo aos mesmos perfis que o banco concede", () => {
+    // private.has_tenant_permission libera legal.create para owner, admin,
+    // lawyer e assistant — a mesma lista de legal.read e legal.update.
+    const row = findRow("legal", "create");
+    expect(row.base).toEqual(["owner", "admin", "lawyer", "assistant"]);
+    expect(row.exception).toHaveLength(0);
+    expect(permissionLevel(row, "assistant")).toBe("sempre");
+    expect(permissionLevel(row, "finance")).toBe("nunca");
   });
 
   it("não oferece exceção a quem já tem o acesso pela regra base", () => {
@@ -111,5 +124,39 @@ describe("permissões tri-state", () => {
     expect(editablePermissions()).not.toContainEqual(
       findRow("ownership", "transfer"),
     );
+  });
+});
+
+describe("autoridade exclusiva do proprietário", () => {
+  it("permite apenas ao proprietário administrar a matriz individual", () => {
+    expect(canManagePermissions("owner")).toBe(true);
+    for (const role of ROLE_ORDER.filter((item) => item !== "owner")) {
+      expect(canManagePermissions(role)).toBe(false);
+    }
+  });
+
+  it("permite apenas ao proprietário decidir solicitações de acesso", () => {
+    expect(canDecideAccessRequests("owner")).toBe(true);
+    for (const role of ROLE_ORDER.filter((item) => item !== "owner")) {
+      expect(canDecideAccessRequests(role)).toBe(false);
+    }
+  });
+
+  it("registra a decisão de acesso como regra base somente do proprietário", () => {
+    const row = findRow("access_requests", "decide");
+    expect(row.base).toEqual(["owner"]);
+    expect(row.exception).toHaveLength(0);
+  });
+
+  it("registra a administração de permissões como regra base somente do proprietário", () => {
+    const row = findRow("permissions", "manage");
+    expect(row.base).toEqual(["owner"]);
+    expect(row.exception).toHaveLength(0);
+  });
+
+  it("mantém as autoridades do proprietário fora das exceções editáveis", () => {
+    const editable = editablePermissions();
+    expect(editable).not.toContainEqual(findRow("access_requests", "decide"));
+    expect(editable).not.toContainEqual(findRow("permissions", "manage"));
   });
 });

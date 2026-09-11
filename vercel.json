@@ -1,6 +1,14 @@
 {
   "regions": ["gru1"],
   "rewrites": [
+    {
+      "source": "/api/v1",
+      "destination": "https://mrgxxwllthlwxqhehjwp.supabase.co/functions/v1/public-api/api/v1"
+    },
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://mrgxxwllthlwxqhehjwp.supabase.co/functions/v1/public-api/api/v1/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

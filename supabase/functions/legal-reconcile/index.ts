@@ -19,6 +19,7 @@ import {
 } from "../_shared/datajud-client.ts";
 import {
   DjenApiError,
+  fetchDjenCancellations,
   fetchDjenPublications,
   groupDjenReferences,
   type DjenFetchResult,
@@ -1123,15 +1124,17 @@ async function reconcileDjenGroup(
       } catch (error) {
         const code = errorCode(error);
         const finishedAt = new Date().toISOString();
-        const delay = nextAttemptDelayMs(source.failure_count);
-        const exhausted = delay === null;
+        const permanent = PERMANENT_FAILURES.has(code);
+        const delay = permanent ? null : nextAttemptDelayMs(source.failure_count);
+        // Uma falha ao persistir uma publicação (banco, alerta, timeout) não
+        // torna a fonte inválida. Somente os códigos permanentes exigem pausa.
         await context.admin.from("legal_sync_sources").update({
           failure_count: source.failure_count + 1,
           last_attempt_at: finishedAt,
           last_error_code: code,
           last_error_message: errorMessage(error),
-          active: !exhausted,
-          paused_reason: exhausted ? "max_retries" : null,
+          active: !permanent,
+          paused_reason: permanent ? code : null,
           next_sync_at: new Date(
             Date.now() + (delay ?? RECONCILIATION_INTERVAL_MS),
           ).toISOString(),
@@ -1229,6 +1232,46 @@ async function drainPendingImportQueue(
     failed += result.failed;
   }
   return { tenants: byTenant.size, imported, failed };
+}
+
+async function reconcileDjenCancellations(
+  context: ReconcileContext,
+  tenantId: string | null,
+): Promise<{ received: number; matched: number }> {
+  const cancellationBaseUrl = Deno.env.get("DJEN_CANCELLATIONS_URL");
+  const fetched = await fetchDjenCancellations({
+    cancellationDate: dateOnly(new Date()),
+    baseUrl: cancellationBaseUrl ?? undefined,
+    proxySecret: cancellationBaseUrl
+      ? Deno.env.get("DJEN_PROXY_SECRET") ?? undefined
+      : undefined,
+  });
+  let matched = 0;
+
+  for (const cancellation of fetched.items) {
+    if (cancellation.id == null) continue;
+    let query = context.admin.from("publicacoes").update({
+      status: "cancelada",
+      review_status: "dismissed",
+      possible_deadline: false,
+      prazo_dias: null,
+      data_prazo: null,
+      cancelled_at: cancellation.data_cancelamento ?? new Date().toISOString(),
+      cancellation_reason: cancellation.motivo_cancelamento ??
+        "Comunicação cancelada pelo tribunal no DJEN.",
+      djen_hash: cancellation.hash ?? null,
+      communication_number: cancellation.numero_comunicacao == null
+        ? null
+        : String(cancellation.numero_comunicacao),
+      updated_at: new Date().toISOString(),
+    }).eq("provider", "djen").eq("external_id", String(cancellation.id));
+    if (tenantId) query = query.eq("tenant_id", tenantId);
+    const { data, error } = await query.select("id");
+    if (error) throw error;
+    matched += data?.length ?? 0;
+  }
+
+  return { received: fetched.items.length, matched };
 }
 
 Deno.serve(async (request) => {
@@ -1397,6 +1440,22 @@ Deno.serve(async (request) => {
   const djenSources = typedSources.filter((source) =>
     source.provider === "djen"
   );
+  let djenCancellations = { received: 0, matched: 0 };
+
+  if (djenSources.length > 0) {
+    try {
+      djenCancellations = await reconcileDjenCancellations(
+        context,
+        auth.mode === "manual" ? auth.tenantId : null,
+      );
+    } catch (cancellationError) {
+      // O feed principal continua operando quando o endpoint complementar de
+      // cancelamentos estiver temporariamente indisponível.
+      console.error("legal-reconcile: DJEN cancellation sync failed", {
+        code: errorCode(cancellationError),
+      });
+    }
+  }
 
   for (const source of legacySources) {
     const outcome = await reconcileSource(context, source);
@@ -1439,6 +1498,7 @@ Deno.serve(async (request) => {
     mode: auth.mode,
     ...results,
     queueImport,
+    djenCancellations,
     failures: failures.slice(0, 20),
     message: results.processed === 0
       ? "Nenhuma fonte monitorada estava pendente."

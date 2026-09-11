@@ -11,6 +11,8 @@ interface Processo {
   cliente_nome?: string;
   area?: string;
   status?: string;
+  polo_ativo?: string;
+  polo_passivo?: string;
   data_prazo?: string;
   urgente?: boolean;
 }
@@ -24,7 +26,7 @@ export const RecentProcesses = () => {
     setLoading(true);
     const { data } = await supabase
       .from("processos")
-      .select("id, numero, area, status, cliente_nome")
+      .select("id, numero, area, status, cliente_nome, polo_ativo, polo_passivo")
       .order("updated_at", { ascending: false })
       .limit(8);
 
@@ -35,6 +37,8 @@ export const RecentProcesses = () => {
         cliente_nome: p.cliente_nome || "—",
         area: p.area || "Geral",
         status: p.status || "Em andamento",
+        polo_ativo: p.polo_ativo || "Não identificado",
+        polo_passivo: p.polo_passivo || "Não identificado",
       })));
     }
     setLoading(false);
@@ -73,10 +77,11 @@ export const RecentProcesses = () => {
       ) : (
         <div className="divide-y">
           {processos.map((p) => (
-            <div
+            <button
+              type="button"
               key={p.id}
-              className="p-4 hover:bg-muted/40 transition-colors cursor-pointer group"
-              onClick={() => navigate("/processos")}
+              className="block w-full p-4 text-left hover:bg-muted/40 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              onClick={() => navigate(`/processos/${p.id}`)}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
@@ -90,6 +95,8 @@ export const RecentProcesses = () => {
                     <User className="w-3 h-3 text-muted-foreground shrink-0" />
                     <span className="text-xs text-muted-foreground truncate">{p.cliente_nome}</span>
                   </div>
+                  <p className="mt-2 truncate text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Polo ativo:</span> {p.polo_ativo}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Polo passivo:</span> {p.polo_passivo}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <AreaBadge area={p.area || "Geral"} />
@@ -102,7 +109,7 @@ export const RecentProcesses = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
