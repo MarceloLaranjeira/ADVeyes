@@ -3,6 +3,7 @@ import {
   apenasCarteiraAtiva,
   carteiraAtiva,
   overrideParaStatus,
+  FASE_NAO_IDENTIFICADA,
   FILTRO_CARTEIRA_ATIVA,
   estaArquivado,
   situacaoNaCarteira,
@@ -223,15 +224,40 @@ describe("overrideParaStatus", () => {
 });
 
 describe("fase não identificada não é classificação do tribunal", () => {
-  it("não gera divergência com o tribunal", () => {
-    // `nao_identificada` é o padrão da inteligência processual: quer dizer
-    // que a análise não concluiu, não que o tribunal considere o processo em
-    // andamento. Tratá-la como classificação fazia a tela afirmar uma
-    // discordância que não existe.
+  it("não gera divergência com a fase padrão da inteligência", () => {
+    // `nao_identificada` é o valor padrão da coluna — o que a maior parte da
+    // carteira tem antes da primeira análise. Enquanto era lida como
+    // classificação, a tela apontava discordância com um tribunal que não
+    // disse nada.
+    //
+    // A versão anterior deste teste passava `fase: null` e por isso passava
+    // sem exercitar o caso que o próprio nome anunciava.
     const situacao = situacaoNaCarteira({
       arquivadoManual: true,
-      fase: null,
+      fase: FASE_NAO_IDENTIFICADA,
     });
     expect(situacao.divergente).toBe(false);
+    expect(situacao.arquivado).toBe(true);
+  });
+
+  it("também não classifica com fase ausente", () => {
+    expect(
+      situacaoNaCarteira({ arquivadoManual: true, fase: null }).divergente,
+    ).toBe(false);
+  });
+
+  it("volta a divergir quando a fase diz alguma coisa", () => {
+    expect(
+      situacaoNaCarteira({ arquivadoManual: true, fase: "conhecimento" })
+        .divergente,
+    ).toBe(true);
+  });
+
+  it("a regra vale sem a tela precisar mascarar o valor", () => {
+    // O mascaramento morava só no controle de arquivamento, então qualquer
+    // outro chamador recebia a divergência inventada. Agora está na regra.
+    expect(
+      estaArquivado({ fase: FASE_NAO_IDENTIFICADA, status: "Em andamento" }),
+    ).toBe(false);
   });
 });

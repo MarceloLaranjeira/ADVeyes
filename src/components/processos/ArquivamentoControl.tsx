@@ -49,16 +49,9 @@ export function ArquivamentoControl({
   const queryClient = useQueryClient();
   const [salvando, setSalvando] = useState(false);
 
-  // `nao_identificada` é o valor padrão da inteligência processual: significa
-  // que a análise não chegou a uma conclusão, não que o tribunal considere o
-  // processo em andamento. Passá-la adiante como classificação fazia o
-  // controle afirmar uma divergência com o tribunal que não existe.
-  const faseClassificada = fase === "nao_identificada" ? null : fase;
-  const situacao = situacaoNaCarteira({
-    status,
-    arquivadoManual,
-    fase: faseClassificada,
-  });
+  // `nao_identificada` já é tratada como ausência de classificação dentro de
+  // `situacaoNaCarteira`, então a fase vai crua.
+  const situacao = situacaoNaCarteira({ status, arquivadoManual, fase });
 
   const gravar = async (valor: boolean | null) => {
     setSalvando(true);
@@ -148,9 +141,11 @@ export function ArquivamentoControl({
                 `arquivadoManual` vem antes de `origem` porque `false` é uma
                 decisão tão explícita quanto `true`. Ler só a origem mostrava
                 um processo reativado pelo escritório como "sem arquivamento
-                registrado", escondendo quem respondeu pelo estado atual.
+                registrado", escondendo quem respondeu pelo estado atual. A
+                origem "manual" entra junto porque cobre o processo legado,
+                arquivado pelo status antes de a coluna existir.
               */}
-              {arquivadoManual !== null
+              {arquivadoManual !== null || situacao.origem === "manual"
                 ? "por decisão do escritório"
                 : situacao.origem === "tribunal"
                   ? "pelo andamento do tribunal"

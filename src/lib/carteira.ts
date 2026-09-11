@@ -38,6 +38,16 @@ export const STATUS_ARQUIVADO = "Arquivado";
 /** Fase que a inteligência processual atribui a partir do tribunal. */
 export const FASE_ARQUIVADA = "arquivado_encerrado";
 
+/**
+ * Fase que a inteligência atribui quando não chegou a conclusão nenhuma.
+ *
+ * É o valor padrão da coluna, então é o que a maior parte da carteira tem
+ * antes da primeira análise. Não é classificação do tribunal e não pode ser
+ * lida como "em andamento": tratá-la assim fazia a tela apontar divergência
+ * com um tribunal que não disse nada.
+ */
+export const FASE_NAO_IDENTIFICADA = "nao_identificada";
+
 function normalizar(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
@@ -89,10 +99,18 @@ export function situacaoNaCarteira(
   // processo que o tribunal nunca classificou, porque a análise ainda não
   // rodou. Divergência inventada gasta a atenção que o aviso existe para
   // capturar, e ensina o advogado a ignorá-lo.
+  // A fase só conta como classificação quando diz alguma coisa. Vazia e
+  // `nao_identificada` são ambas ausência de resposta, e a segunda é o padrão
+  // da coluna — a normalização precisa morar aqui, na regra, e não em cada
+  // tela que chama: enquanto só o controle de arquivamento mascarava o valor,
+  // qualquer outro chamador recebia uma divergência inventada.
+  const faseNormalizada = normalizar(processo.fase);
+  const faseDizAlgo = faseNormalizada.length > 0 &&
+    faseNormalizada !== FASE_NAO_IDENTIFICADA;
   const tribunal: boolean | null = typeof processo.arquivadoNoTribunal === "boolean"
     ? processo.arquivadoNoTribunal
-    : normalizar(processo.fase).length > 0
-      ? normalizar(processo.fase) === FASE_ARQUIVADA
+    : faseDizAlgo
+      ? faseNormalizada === FASE_ARQUIVADA
       : null;
 
   const manual =

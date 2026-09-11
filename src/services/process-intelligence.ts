@@ -40,6 +40,16 @@ function mapRecord(row: Row): ProcessIntelligenceRecord {
 const PAGINA = 1000;
 
 /**
+ * Erro da trava de segurança, com tipo próprio.
+ *
+ * Existe para não ser confundido com falha de rede. A consulta de partes é
+ * opcional e engole os próprios erros; sem um tipo para distinguir, ela
+ * engoliria também o aviso de que a leitura foi truncada — que é justamente
+ * o que não pode passar em silêncio.
+ */
+class LeituraTruncadaError extends Error {}
+
+/**
  * Trava de segurança: nenhuma carteira legítima passa disto.
  *
  * Um servidor que devolvesse sempre a mesma página faria o laço rodar para
@@ -74,7 +84,7 @@ async function lerTudo(
     if (pagina.length === 0) return todas;
     todas.push(...pagina);
   }
-  throw new Error(
+  throw new LeituraTruncadaError(
     `Leitura interrompida em ${MAXIMO_DE_LINHAS} linhas. A carteira estaria ` +
       "incompleta, então nada é exibido — avise o suporte.",
   );
@@ -134,7 +144,13 @@ export const processIntelligenceService = {
           .select("process_id, display_name, side")
           .eq("tenant_id", tenantId)
           .order("process_id", { ascending: true })
-          .range(de, ate)).catch(() => [] as Row[]),
+          .range(de, ate)).catch((erro: unknown) => {
+        // A truncagem passa: ela diz que a carteira está incompleta, e isso
+        // vale mais do que os nomes das partes. Só o erro comum de consulta
+        // — a tabela acessória indisponível — é engolido.
+        if (erro instanceof LeituraTruncadaError) throw erro;
+        return [] as Row[];
+      }),
     ]);
     const processes = { data: linhasProcessos };
     const intelligence = { data: linhasInteligencia };
