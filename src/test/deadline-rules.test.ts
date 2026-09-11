@@ -269,3 +269,50 @@ describe("regraEfetiva", () => {
     expect(regraEfetiva(penal, null, undefined)).toBe(penal);
   });
 });
+
+describe("classe processual importada do tribunal em processos.area", () => {
+  // `legal-ingestion.ts` grava `metadata.className` cru em `processos.area`.
+  // O conjunto de classes do CNJ é aberto, então nenhuma lista de exclusões
+  // dá conta dele — foi por isso que a detecção passou a ser por vocabulário
+  // conhecido, e não por eliminação.
+
+  it("reconhece classes criminais e conta em dias corridos", () => {
+    for (const classe of [
+      "Habeas Corpus",
+      "Inquérito Policial",
+      "Ação Penal - Procedimento Ordinário",
+      "Termo Circunstanciado",
+    ]) {
+      const regra = resolverRegraContagem({ area: classe });
+      expect(regra.modo, classe).toBe("corridos");
+      expect(regra.fonte, classe).toBe("cpp");
+    }
+  });
+
+  it("não trata classe desconhecida como ramo confirmado", () => {
+    // O defeito anterior: qualquer texto não listado saía como CPC com
+    // confiança alta e sem aviso, e um prazo criminal ia para dias úteis com
+    // a data fatal esticada e nada sinalizando na tela.
+    const regra = resolverRegraContagem({ area: "Procedimento Comum Cibernético" });
+    expect(regra.fonte).toBe("padrao");
+    expect(regra.confianca).toBe("baixa");
+    expect(regra.aviso).toBeTruthy();
+  });
+
+  it("mantém confiança alta apenas para o vocabulário cível conhecido", () => {
+    for (const area of ["Cível", "Família", "Tributário", "Consumidor"]) {
+      const regra = resolverRegraContagem({ area });
+      expect(regra.fonte, area).toBe("cpc");
+      expect(regra.confianca, area).toBe("alta");
+      expect(regra.aviso, area).toBeUndefined();
+    }
+  });
+
+  it("avisa sobre o risco criminal quando o ramo não foi identificado", () => {
+    // O aviso precisa dizer para que lado o erro cai. "Não identificado" sem
+    // consequência não faz ninguém conferir.
+    const regra = resolverRegraContagem({ area: "A definir" });
+    expect(regra.aviso).toContain("criminal");
+    expect(regra.aviso).toContain("dias corridos");
+  });
+});

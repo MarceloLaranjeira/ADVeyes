@@ -93,40 +93,62 @@ function normalize(value: string | null | undefined): string {
 
 /** Junta os campos que podem revelar o juízo, para uma varredura só. */
 /**
- * Valores de área que não identificam o ramo.
+ * Vocabulário de área que identifica o ramo cível e afins.
  *
- * Dois grupos, pelo mesmo motivo: nenhum deles diz de que diploma o processo
- * corre, e tratá-los como ramo identificado devolvia CPC com confiança alta
- * e sem aviso — um processo criminal cuja vara não contenha a palavra
- * "criminal" sairia em dias úteis, sem nada sinalizando.
+ * Esta lista já foi o inverso — uma relação de valores que *não* identificam
+ * ramo ("A definir", "Recurso", "Outros"), com tudo o mais tratado como
+ * cível confirmado. A inversão foi forçada por como a área é realmente
+ * preenchida, que não é por um advogado escolhendo um ramo:
  *
- * Preenchimento vazio: `confirm_legal_process_candidate` grava `'A definir'`
- * ao importar processo automaticamente, que é como a maior parte da carteira
- * entra no sistema.
+ *   - `confirm_legal_process_candidate` grava `'A definir'` na importação.
+ *   - `ProcessoForm.tsx` e `CRM.tsx` oferecem listas diferentes, misturando
+ *     ramo e fase processual ("Recurso" ao lado de "Penal").
+ *   - `legal-ingestion.ts` grava `metadata.className` cru, que é a classe
+ *     processual do tribunal. Aí entram "Habeas Corpus", "Inquérito
+ *     Policial", "Ação Penal" — texto que nenhuma lista de exclusões
+ *     prevê, porque o conjunto de classes CNJ é aberto.
  *
- * Fase processual no lugar de ramo: `ProcessoForm.tsx` oferece "Recurso" na
- * mesma lista de "Penal" e "Cível", como se fosse ramo. Não é — existe
- * recurso em qualquer ramo, e uma apelação criminal cadastrada assim, com
- * órgão julgador genérico do tipo "1ª Câmara", passava por cível.
+ * Enquanto a lista era de exclusões, cada valor não previsto virava cível
+ * com confiança alta e sem aviso: um habeas corpus contado em dias úteis,
+ * com a data fatal esticada e nada na tela sinalizando. Era a quinta vez que
+ * o mesmo campo produzia o mesmo defeito por uma porta diferente.
+ *
+ * Com a lista de inclusões, o desconhecido cai no ramo não identificado —
+ * mesmo modo de contagem, mas com confiança baixa e aviso. O palpite não
+ * muda; o que muda é o sistema admitir que é palpite.
+ *
+ * Penal e trabalhista não estão aqui: têm listas próprias, avaliadas antes.
  */
-const AREAS_VAZIAS = [
-  "a definir",
-  "a identificar",
-  "nao definido",
-  "nao informado",
-  "indefinido",
-  "outro",
-  "outros",
-  "-",
-  "--",
-  "n/a",
-  "recurso",
-  "recursal",
-  "recursos",
+const CIVIL_AREAS = [
+  "civel",
+  "civil",
+  "familia",
+  "sucessoes",
+  "inventario",
+  "consumidor",
+  "empresarial",
+  "societario",
+  "falencia",
+  "recuperacao judicial",
+  "tributario",
+  "fiscal",
+  "previdenciario",
+  "administrativo",
+  "ambiental",
+  "imobiliario",
+  "locacao",
+  "contratual",
+  "contratos",
+  "indenizatoria",
+  "responsabilidade civil",
+  "bancario",
+  "saude",
+  "eleitoral",
+  "fazenda publica",
 ];
 
 function areaIdentificada(area: string): boolean {
-  return area.length > 0 && !AREAS_VAZIAS.includes(area);
+  return areaMatches(area, CIVIL_AREAS);
 }
 
 function juizoText(input: ProcessRuleInput): string {
@@ -164,12 +186,20 @@ const CRIMINAL_JUIZO_PATTERNS = [
   /violencia domestica/,
 ];
 
+// "penal" já casa por substring com "ação penal", "execução penal" e
+// "direito penal", então a lista só precisa nomear o que não contém a
+// palavra. As últimas entradas são classes processuais do CNJ, que chegam
+// cruas em `processos.area` pela importação (`legal-ingestion.ts` grava
+// `metadata.className`) — reconhecê-las aqui é melhor do que deixá-las
+// caírem no ramo não identificado, porque o modo de contagem muda.
 const CRIMINAL_AREAS = [
   "penal",
   "criminal",
-  "execucao penal",
-  "direito penal",
-  "processo penal",
+  "crime",
+  "inquerito",
+  "habeas corpus",
+  "termo circunstanciado",
+  "juri",
 ];
 
 const LABOR_AREAS = [
@@ -290,7 +320,11 @@ export function resolverRegraContagem(
     };
   }
 
-  // Cível e demais ramos identificados.
+  // Cível e ramos afins, reconhecidos pelo vocabulário conhecido.
+  //
+  // Só entra aqui quem foi nomeado. Área não reconhecida — classe processual
+  // importada do tribunal, "A definir", fase processual no lugar de ramo —
+  // cai no bloco seguinte, com o mesmo modo de contagem mas com aviso.
   if (areaIdentificada(area)) {
     return {
       modo: "uteis",
@@ -300,15 +334,24 @@ export function resolverRegraContagem(
     };
   }
 
-  // Nada identificado: padrão do CPC, assumido como palpite.
+  // Ramo não reconhecido: padrão do CPC, assumido como palpite.
+  //
+  // Este é o destino de tudo que não foi nomeado, e é para cá que passou a
+  // vir a maior parte da carteira importada. O modo de contagem é o mesmo do
+  // cível — continua sendo o palpite certo na maioria dos casos —, mas sai
+  // com confiança baixa e aviso, para a tela pedir conferência em vez de
+  // apresentar a data como calculada.
   return {
     modo: "uteis",
     fonte: "padrao",
     confianca: "baixa",
     fundamento: "CPC, art. 219 — computados somente os dias úteis.",
     aviso:
-      "Ramo do processo não identificado; aplicada a regra geral do CPC. " +
-      "Confirme se a contagem deste processo é em dias úteis.",
+      "Ramo do processo não identificado a partir da área cadastrada; " +
+      "aplicada a regra geral do CPC. Se este processo for criminal, a " +
+      "contagem correta é em dias corridos (CPP, art. 798) e a data " +
+      "sugerida está mais longa que a real. Confirme antes de usá-la como " +
+      "prazo fatal.",
   };
 }
 
