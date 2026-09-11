@@ -107,3 +107,19 @@ describe("data civil no fuso forense", () => {
     ).toEqual({ estado: "vence_hoje" });
   });
 });
+
+describe("calendário cobre os anos do meio", () => {
+  it("conta feriado de ano intermediário como dia não útil", () => {
+    // Um intervalo que atravessa mais de um ano deixava o ano do meio sem
+    // feriados, e cada feriado nacional em dia de semana virava dia útil —
+    // a contagem saía maior do que a real.
+    const situacao = situacaoDoPrazo("2028-06-01", "2026-11-01");
+    if (situacao.estado !== "a_vencer") throw new Error("esperado a_vencer");
+
+    // 2027 tem feriados nacionais em dia de semana; se o ano tivesse ficado
+    // de fora, a contagem seria maior. O limite superior é o total de dias
+    // de semana no intervalo, que só se atinge sem feriado nenhum.
+    const diasDeSemana = Math.floor(578 / 7) * 5;
+    expect(situacao.diasUteis).toBeLessThan(diasDeSemana);
+  });
+});

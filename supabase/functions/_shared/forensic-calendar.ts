@@ -237,6 +237,32 @@ export function buildCalendar(
   };
 }
 
+/**
+ * O mesmo calendário, sem o recesso do art. 220.
+ *
+ * O recesso é do CPC e suspende prazo cível. O CPP, art. 798 diz o oposto
+ * para o criminal: os prazos são contínuos e **não se interrompem por
+ * férias**. Como o recesso entrava em `nonBusinessReason` junto de domingo e
+ * feriado, um vencimento criminal que caísse num dia útil dentro do recesso
+ * — 22 de dezembro, digamos — era empurrado até 21 de janeiro. Quase um mês
+ * de prazo inventado num processo criminal, que é o erro mais grave que este
+ * módulo pode cometer.
+ *
+ * Domingo e feriado continuam valendo: o art. 798, §3 prorroga o vencimento
+ * que cai neles. O que sai é só a suspensão que a lei criminal não conhece.
+ */
+export function semRecessoForense(
+  calendar: ForensicCalendar,
+): ForensicCalendar {
+  return {
+    nonBusinessReason(date: Date): string | null {
+      const motivo = calendar.nonBusinessReason(date);
+      return motivo?.includes("art. 220") ? null : motivo;
+    },
+    isPartialExpedient: (date: Date) => calendar.isPartialExpedient(date),
+  };
+}
+
 /** Primeiro dia útil em `date` ou depois dela. */
 export function nextBusinessDay(
   date: Date,
@@ -422,11 +448,19 @@ export function computeDeadline(
   }
 
   // Art. 224, §1 — vencimento em dia de expediente reduzido é protraído.
+  //
+  // No criminal a prorrogação usa o calendário sem o recesso: o art. 798, §3
+  // prorroga por domingo e feriado, mas o recesso do art. 220 é do CPC e não
+  // suspende prazo criminal. Prorrogar por ele esticaria a data até 21 de
+  // janeiro.
+  const calendarioDaProrrogacao = regimePenal
+    ? semRecessoForense(calendar)
+    : calendar;
   if (
-    calendar.isPartialExpedient(vencimento) ||
-    calendar.nonBusinessReason(vencimento) !== null
+    calendarioDaProrrogacao.isPartialExpedient(vencimento) ||
+    calendarioDaProrrogacao.nonBusinessReason(vencimento) !== null
   ) {
-    vencimento = nextBusinessDay(vencimento, calendar);
+    vencimento = nextBusinessDay(vencimento, calendarioDaProrrogacao);
     fundamentos.push(
       regimePenal
         ? "CPP, art. 798, §3 — vencimento em domingo ou feriado prorrogado " +

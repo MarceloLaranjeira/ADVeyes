@@ -215,8 +215,11 @@ Deno.serve(async (request) => {
   // O override do advogado tambem desliga o regime, e nao so o modo: quando
   // ele escolhe a contagem, quem decide deixou de ser o CPP, e aplicar o
   // termo inicial do art. 798 §1 seria afirmar uma tese que ele nao afirmou.
+  // `== null` cobre `undefined` e o `null` do JSON de uma vez: um override
+  // enviado como `null` significa "sem sobreposição", e tratá-lo como decisão
+  // desligava o regime do CPP num processo que continua correndo por ele.
   const regimePenal = regra.fonte === "cpp" && diasCorridos &&
-    body.override?.diasCorridos === undefined;
+    body.override?.diasCorridos == null;
 
   // O que a tela deve mostrar: quem de fato decidiu o modo. O ramo perde
   // para o qualificador do ato, e os dois perdem para o advogado.

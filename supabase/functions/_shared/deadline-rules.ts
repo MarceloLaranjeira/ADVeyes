@@ -177,6 +177,9 @@ function juizoText(input: ProcessRuleInput): string {
 const JEC_PATTERNS = [
   /juizado especial/,
   /\bjec\b/,
+  // "JECRIM" escrito junto: o `rim` no fim impede que `\bjec\b` case, e é
+  // assim que boa parte dos tribunais nomeia a vara.
+  /\bjecrim\b/,
   /\bjef\b/,
   /\bjecc\b/,
   /turma recursal/,
@@ -186,6 +189,7 @@ const JEC_PATTERNS = [
 /** Varas e órgãos criminais, quando a área não foi preenchida direito. */
 const CRIMINAL_JUIZO_PATTERNS = [
   /\bcriminal\b/,
+  /\bjecrim\b/,
   /\bcrime\b/,
   /execucao penal/,
   /\bjuri\b/,
@@ -206,6 +210,7 @@ const CRIMINAL_AREAS = [
   "inquerito policial",
   "habeas corpus",
   "termo circunstanciado",
+  "jecrim",
   "juri",
 ];
 
@@ -281,7 +286,7 @@ export function resolverRegraContagem(
   // área, o rito da Lei 9.099 está identificado mesmo que o juízo não diga.
   // Sem isto, a classe importada saía como penal comum, confiança alta, sem
   // o aviso que o rito especial exige.
-  const ehJuizado = areaMatches(area, ["termo circunstanciado"]) ||
+  const ehJuizado = areaMatches(area, ["termo circunstanciado", "jecrim"]) ||
     matchesAny(juizo, JEC_PATTERNS);
 
   // Penal — prazos contínuos. É o ramo em que errar estica a data, então ele

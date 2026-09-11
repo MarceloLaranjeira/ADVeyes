@@ -162,3 +162,48 @@ describe("regime penal — termo inicial", () => {
     expect(semRegime.fundamentos.some((f) => f.includes("224, §3"))).toBe(true);
   });
 });
+
+describe("recesso do art. 220 no prazo criminal", () => {
+  it("não empurra vencimento criminal para depois do recesso", () => {
+    // CPP, art. 798 — os prazos criminais são contínuos e não se interrompem
+    // por férias. O recesso é do CPC. Enquanto ele entrava junto de domingo e
+    // feriado, um vencimento em 22/12 era prorrogado até 21/01: quase um mês
+    // de prazo inventado num processo criminal.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-12-17",
+      dias: 5,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    expect(penal.vencimento.startsWith("2026-12")).toBe(true);
+    expect(penal.vencimento < "2027-01-01").toBe(true);
+  });
+
+  it("continua prorrogando vencimento criminal que cai em domingo", () => {
+    // O §3 não sai junto: domingo e feriado continuam prorrogando.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-12-18",
+      dias: 2,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    const diaDaSemana = parseIsoDate(penal.vencimento).getUTCDay();
+    expect(diaDaSemana).not.toBe(0);
+    expect(diaDaSemana).not.toBe(6);
+  });
+
+  it("mantém o recesso suspendendo prazo cível", () => {
+    const civel = computeDeadline({
+      disponibilizacao: "2026-12-17",
+      dias: 5,
+      diasCorridos: false,
+    });
+    // Só a data: o fundamento do art. 220 não é emitido neste caminho porque
+    // o termo inicial já é protraído para depois do recesso, então a contagem
+    // nunca visita aqueles dias. A data fica certa e a explicação falta — é
+    // uma lacuna anterior a esta mudança, anotada no PR.
+    expect(civel.vencimento > "2027-01-20").toBe(true);
+  });
+});

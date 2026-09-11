@@ -223,16 +223,37 @@ const WARNING_RULES: WarningRule[] = [
 /* ------------------------------------------------------------------ */
 
 /**
+ * O qualificador de contagem, incluindo as formas separadas do número.
+ *
+ * A versão anterior só aceitava "5 dias úteis", colado. Mas a redação mais
+ * comum nos diários é "prazo de 5 dias, contados em dias úteis" — e ali o
+ * qualificador ficava para trás, `qualificadorExplicito` saía nulo e a
+ * dedução por ramo assumia o comando. Num processo criminal isso propunha
+ * contagem contínua contra uma ordem expressa em sentido contrário, ou seja,
+ * uma data fatal mais curta do que a que o juízo determinou.
+ *
+ * Aceita, depois de "dias": vírgula ou parêntese opcionais, e as fórmulas
+ * "contados em", "contado em", "contando-se em", "computados em".
+ */
+const QUALIFICADOR =
+  "(?:[,;]?\\s*(?:\\(\\s*)?(?:contados?|contando-se|computados?)?\\s*(?:em\\s+)?" +
+  "(?:dias\\s+)?(uteis|corridos)\\s*\\)?)";
+
+/**
  * Captura "prazo de 15 (quinze) dias", "em 5 dias úteis", "prazo: 10 dias"
  * e variações. O numeral por extenso entre parênteses é redundante no texto
  * jurídico, então o dígito tem precedência e o extenso serve de conferência.
  */
-const EXPLICIT_PATTERN =
-  /(?:prazo\s*(?:de|:)?\s*|dentro\s+de\s+|em\s+)(\d{1,3})\s*(?:\(\s*([a-z\s]{3,20})\s*\)\s*)?dias?(\s+uteis|\s+corridos)?/;
+const EXPLICIT_PATTERN = new RegExp(
+  "(?:prazo\\s*(?:de|:)?\\s*|dentro\\s+de\\s+|em\\s+)(\\d{1,3})\\s*" +
+    "(?:\\(\\s*([a-z\\s]{3,20})\\s*\\)\\s*)?dias?" + QUALIFICADOR + "?",
+);
 
 /** Fallback para o caso de o número vir só por extenso. */
-const WORD_ONLY_PATTERN =
-  /(?:prazo\s*(?:de|:)?\s*|dentro\s+de\s+|em\s+)([a-z]{3,12})\s*dias?(\s+uteis|\s+corridos)?/;
+const WORD_ONLY_PATTERN = new RegExp(
+  "(?:prazo\\s*(?:de|:)?\\s*|dentro\\s+de\\s+|em\\s+)([a-z]{3,12})\\s*dias?" +
+    QUALIFICADOR + "?",
+);
 
 function findWarnings(normalized: string): string[] {
   return WARNING_RULES

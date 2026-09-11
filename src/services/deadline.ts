@@ -244,11 +244,18 @@ export function situacaoDoPrazo(
 
   if (alvo.getTime() === base.getTime()) return { estado: "vence_hoje" };
 
-  const anos = [base.getUTCFullYear(), alvo.getUTCFullYear()];
-  const calendario = buildCalendar(
-    [...anos, Math.min(...anos) - 1, Math.max(...anos) + 1],
-    feriados,
-  );
+  // Todos os anos entre as duas pontas, não só as pontas.
+  //
+  // A lista anterior tinha apenas os dois extremos mais uma folga de um ano
+  // para cada lado. Num intervalo que atravessa mais de um ano — um prazo
+  // longo aberto no fim de 2026 e vencendo em 2028 —, o ano do meio ficava
+  // sem feriados, e cada feriado nacional em dia de semana de 2027 era
+  // contado como dia útil. A contagem saía maior do que a real.
+  const primeiro = Math.min(base.getUTCFullYear(), alvo.getUTCFullYear()) - 1;
+  const ultimo = Math.max(base.getUTCFullYear(), alvo.getUTCFullYear()) + 1;
+  const anos: number[] = [];
+  for (let ano = primeiro; ano <= ultimo; ano += 1) anos.push(ano);
+  const calendario = buildCalendar(anos, feriados);
 
   const vencido = alvo.getTime() < base.getTime();
   const inicio = vencido ? alvo : base;
