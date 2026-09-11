@@ -207,3 +207,34 @@ describe("recesso do art. 220 no prazo criminal", () => {
     expect(civel.vencimento > "2027-01-20").toBe(true);
   });
 });
+
+describe("feriado dentro do recesso no prazo criminal", () => {
+  it("prorroga vencimento criminal que cai no Natal", () => {
+    // 25/12 é feriado E está dentro do recesso. Enquanto o recesso respondia
+    // primeiro no calendário, remover o recesso para a contagem criminal
+    // levava o Natal junto, e o vencimento penal caía em 25/12 sem a
+    // prorrogação do CPP, art. 798, §3.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-12-22",
+      dias: 3,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    expect(penal.vencimento).not.toBe("2026-12-25");
+    expect(penal.vencimento.startsWith("2026-12")).toBe(true);
+  });
+
+  it("ainda deixa o prazo criminal correr em dia útil comum do recesso", () => {
+    // O que sai é só a suspensão do art. 220, não o feriado: 21/12 é dia
+    // comum dentro do recesso e o prazo criminal corre por ele.
+    const penal = computeDeadline({
+      disponibilizacao: "2026-12-18",
+      dias: 3,
+      diasCorridos: true,
+      intimacaoPessoal: true,
+      regimePenal: true,
+    });
+    expect(penal.vencimento).toBe("2026-12-21");
+  });
+});

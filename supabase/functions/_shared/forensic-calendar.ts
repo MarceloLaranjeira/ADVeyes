@@ -222,12 +222,23 @@ export function buildCalendar(
       if (isWeekend(date)) {
         return date.getUTCDay() === 0 ? "domingo" : "sábado";
       }
-      if (isInRecess(date)) {
-        return "recesso forense (CPC, art. 220)";
-      }
+      // O feriado é avaliado ANTES do recesso, e a ordem tem consequência.
+      //
+      // 25 de dezembro e 1º de janeiro caem dentro do recesso. Enquanto o
+      // recesso respondia primeiro, o motivo devolvido era sempre "art. 220",
+      // e o feriado ficava invisível para quem consultasse o calendário. Isso
+      // quebrava `semRecessoForense`: ao remover o recesso para a contagem
+      // criminal, o Natal ia junto, e um vencimento penal caía em 25/12 sem a
+      // prorrogação que o CPP, art. 798, §3 manda aplicar.
+      //
+      // Para o cível não muda nada: o dia continua não útil pelos dois
+      // motivos, e o que muda é só qual deles é nomeado.
       const holiday = holidays.get(toIsoDate(date));
       if (holiday && !holiday.partialExpedient) {
         return holiday.description;
+      }
+      if (isInRecess(date)) {
+        return "recesso forense (CPC, art. 220)";
       }
       return null;
     },

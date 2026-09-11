@@ -116,10 +116,12 @@ describe("calendário cobre os anos do meio", () => {
     const situacao = situacaoDoPrazo("2028-06-01", "2026-11-01");
     if (situacao.estado !== "a_vencer") throw new Error("esperado a_vencer");
 
-    // 2027 tem feriados nacionais em dia de semana; se o ano tivesse ficado
-    // de fora, a contagem seria maior. O limite superior é o total de dias
-    // de semana no intervalo, que só se atinge sem feriado nenhum.
-    const diasDeSemana = Math.floor(578 / 7) * 5;
-    expect(situacao.diasUteis).toBeLessThan(diasDeSemana);
+    // Valor exato, porque o limite frouxo que estava aqui não discriminava.
+    //
+    // O intervalo tem 414 dias de semana. Com os feriados de 2027 contados,
+    // sobram 351 dias úteis; sem eles — que era o defeito — sobram 360. O
+    // limite anterior era 410, então passava dos dois jeitos e não cobria
+    // nada. Números conferidos executando as duas versões.
+    expect(situacao.diasUteis).toBe(351);
   });
 });
