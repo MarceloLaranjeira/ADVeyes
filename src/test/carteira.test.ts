@@ -261,3 +261,20 @@ describe("fase não identificada não é classificação do tribunal", () => {
     ).toBe(false);
   });
 });
+
+describe("processo legado arquivado pelo status", () => {
+  it("é reconhecido como decisão do escritório, não do tribunal", () => {
+    // Status "Arquivado" com a coluna dedicada ainda nula é como boa parte da
+    // base arquiva hoje. A origem tem de sair como manual, senão o controle
+    // atribui ao tribunal uma decisão que foi do escritório — e, na
+    // divergência, chega a inverter os dois lados.
+    const situacao = situacaoNaCarteira({
+      status: "Arquivado",
+      arquivadoManual: null,
+      fase: "conhecimento",
+    });
+    expect(situacao.arquivado).toBe(true);
+    expect(situacao.origem).toBe("manual");
+    expect(situacao.divergente).toBe(true);
+  });
+});

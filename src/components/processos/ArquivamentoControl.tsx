@@ -160,7 +160,16 @@ export function ArquivamentoControl({
                 aria-hidden="true"
               />
               <span>
-                {arquivadoManual
+                {/*
+                  A frase segue `situacao.arquivado`, a decisão que de fato
+                  vale, e não `arquivadoManual` cru. No processo legado —
+                  status "Arquivado" com a coluna ainda nula — o valor cru é
+                  falso e a mensagem saía invertida: dizia que o tribunal
+                  arquivou e o escritório manteve ativo, exatamente o oposto
+                  do que o rótulo logo acima afirmava. Contradizer a si mesmo
+                  num aviso de divergência destrói a razão de o aviso existir.
+                */}
+                {situacao.arquivado
                   ? "O escritório arquivou este processo, mas o tribunal ainda o mostra em andamento."
                   : "O tribunal considera este processo arquivado, e o escritório o mantém ativo."}
               </span>
