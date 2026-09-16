@@ -332,7 +332,7 @@ create or replace function public.tenant_access_link_server(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -434,7 +434,7 @@ create or replace function public.tenant_request_access_server(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -516,22 +516,27 @@ begin
   );
 
   -- Avisa os proprietarios: a entrada so avanca com a decisao deles.
-  insert into public.notificacoes (
-    user_id, tenant_id, titulo, mensagem, tipo, origem, referencia_id
-  )
-  select
-    membership.user_id,
-    link.tenant_id,
-    'Nova solicitacao de acesso',
-    coalesce(nullif(btrim(p_profile ->> 'name'), ''), account_email)
-      || ' pediu acesso ao escritorio.',
-    'info',
-    'access_request',
-    request_id
-  from public.tenant_memberships membership
-  where membership.tenant_id = link.tenant_id
-    and membership.role = 'owner'
-    and membership.status = 'active';
+  begin
+    insert into public.notificacoes (
+      user_id, tenant_id, titulo, mensagem, tipo, origem, referencia_id
+    )
+    select
+      membership.user_id,
+      link.tenant_id,
+      'Nova solicitacao de acesso',
+      coalesce(nullif(btrim(p_profile ->> 'name'), ''), account_email)
+        || ' pediu acesso ao escritorio.',
+      'info',
+      'access_request',
+      request_id
+    from public.tenant_memberships membership
+    where membership.tenant_id = link.tenant_id
+      and membership.role = 'owner'
+      and membership.status = 'active';
+  exception
+    when others then
+      null;
+  end;
 
   select tenant.display_name
   into tenant_name
@@ -555,7 +560,7 @@ create or replace function public.tenant_my_access_requests_server(
 returns jsonb
 language plpgsql
 stable
-security invoker
+security definer
 set search_path = ''
 as $$
 begin
@@ -587,7 +592,7 @@ create or replace function public.tenant_access_requests_overview_server(
 returns jsonb
 language plpgsql
 stable
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -666,7 +671,7 @@ create or replace function public.tenant_decide_access_server(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -723,10 +728,14 @@ begin
       ))
     );
 
-    -- A decisao encerra o aviso: nada mais depende do proprietario aqui.
-    update public.notificacoes
-    set lida = true
-    where origem = 'access_request' and referencia_id = request.id;
+    begin
+      update public.notificacoes
+      set lida = true
+      where origem = 'access_request' and referencia_id = request.id;
+    exception
+      when others then
+        null;
+    end;
 
     return jsonb_build_object('request_id', request.id, 'status', 'rejected');
   end if;
@@ -878,9 +887,14 @@ begin
     )
   );
 
-  update public.notificacoes
-  set lida = true
-  where origem = 'access_request' and referencia_id = request.id;
+  begin
+    update public.notificacoes
+    set lida = true
+    where origem = 'access_request' and referencia_id = request.id;
+  exception
+    when others then
+      null;
+  end;
 
   return jsonb_build_object(
     'request_id', request.id,

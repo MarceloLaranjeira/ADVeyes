@@ -187,4 +187,11 @@ export const platformAdmin = {
       tokenId,
     });
   },
+
+  async promotePartner(tenantId: string) {
+    return invokePlatformAdmin<{ success: boolean; plan: string }>({
+      action: "promote_partner",
+      tenantId,
+    });
+  },
 };
