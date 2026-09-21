@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { classifyDeadline, formatDeadlineDate } from "@/lib/controladoria";
 import { legalOriginPath } from "@/lib/legal-navigation";
 import { djenCertificateUrl, djenLawyers, djenParties } from "@/lib/djen-publication";
+import { isPartialSyncCode, partialSyncLabel } from "@/lib/sync-health";
 import { PropostaPrazoCard } from "@/components/processos/PropostaPrazoCard";
 import {
   deadlineService,
@@ -169,6 +170,9 @@ const failureLabels: Record<string, string> = {
   max_retries: "Interrompida após cinco tentativas",
   provider_error: "Falha do provedor",
 };
+
+// A classificação de estado das fontes vive em @/lib/sync-health para ser
+// testável sem montar a página inteira.
 
 const sourceLabels: Record<string, string> = {
   pje: "PJe",
@@ -669,7 +673,8 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
       ).length,
       failingCount: syncSummary?.failing_count ?? syncSources.filter((source) =>
         source.last_error_code &&
-        source.last_error_code !== "integration_not_configured"
+        source.last_error_code !== "integration_not_configured" &&
+        !isPartialSyncCode(source.last_error_code)
       ).length,
       stoppedCount: syncSummary?.stopped_count ?? syncSources.filter((source) =>
         !source.active && source.paused_reason !== "covered_by_oab"
@@ -679,7 +684,13 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
       ),
       failing: syncSources.filter((source) =>
         source.last_error_code &&
-        source.last_error_code !== "integration_not_configured"
+        source.last_error_code !== "integration_not_configured" &&
+        !isPartialSyncCode(source.last_error_code)
+      ),
+      // Fontes que responderam mas não terminaram o período: continuam ativas
+      // e se completam sozinhas na próxima execução.
+      partial: syncSources.filter((source) =>
+        isPartialSyncCode(source.last_error_code)
       ),
       stopped: syncSources.filter((source) =>
         !source.active && source.paused_reason !== "covered_by_oab"
@@ -846,6 +857,33 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
                 {syncPanel.pendingCount} fonte(s) aguardam a configuração do
                 provedor. Os andamentos disponíveis continuam sendo atualizados.
               </p>
+            )}
+
+            {syncPanel.partial.length > 0 && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
+                <p className="font-medium text-amber-700 dark:text-amber-400">
+                  Busca incompleta em {syncPanel.partial.length} fonte(s) — ainda
+                  há publicação a caminho
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  O que já chegou está na lista abaixo. A janela de datas não
+                  avançou, então a próxima execução retoma do mesmo ponto e traz
+                  o restante — nenhuma publicação é perdida.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {syncPanel.partial.slice(0, 4).map((source) => (
+                    <li key={source.id} className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">
+                        {providerLabels[source.provider] ?? source.provider}
+                      </Badge>
+                      <span className="font-medium">{source.reference}</span>
+                      <span className="text-muted-foreground">
+                        {partialSyncLabel(source.last_error_code)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {(syncPanel.failingCount > 0 || syncPanel.stoppedCount > 0) && (

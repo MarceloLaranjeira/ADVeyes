@@ -83,6 +83,24 @@ const COURTS_BY_OAB_STATE: Record<string, string[]> = {
   TO: ["tjto", "trf1", "trt10"],
 };
 
+/**
+ * Justiça Militar estadual: existe em apenas três estados e tem índice próprio
+ * no DataJud. Sem isto, o processo militar estadual do advogado nunca aparece
+ * na descoberta, mesmo o CNJ publicando o índice.
+ */
+const MILITARY_COURT_BY_OAB_STATE: Record<string, string> = {
+  MG: "tjmmg",
+  RS: "tjmrs",
+  SP: "tjmsp",
+};
+
+/**
+ * Tribunais superiores: processam recurso de qualquer seccional, então entram
+ * na descoberta de toda OAB. Antes ficavam de fora e um recurso no STJ não
+ * aparecia para nenhum advogado do país.
+ */
+const SUPERIOR_COURTS = ["stf", "stj", "tst", "tse", "stm"];
+
 export class DataJudApiError extends Error {
   constructor(
     public readonly status: number,
@@ -90,6 +108,22 @@ export class DataJudApiError extends Error {
   ) {
     super(code);
   }
+}
+
+/**
+ * `AbortSignal.timeout` existe no Deno e nos navegadores atuais, mas não em
+ * todo ambiente de teste. Quando falta, o fallback com AbortController entrega
+ * o mesmo comportamento — sem isso, a chamada estourava antes de sair e toda
+ * consulta virava "datajud_request_failed" fora de produção.
+ */
+function timeoutSignal(ms: number): AbortSignal | undefined {
+  const factory = (AbortSignal as { timeout?: (ms: number) => AbortSignal })
+    .timeout;
+  if (typeof factory === "function") return factory.call(AbortSignal, ms);
+  if (typeof AbortController !== "function") return undefined;
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
 }
 
 function aliasFromTribunal(tribunal: string | null | undefined): string | null {
@@ -142,7 +176,7 @@ export interface DataJudProcess extends DataJudProcessPayload {
 
 interface DataJudSearchResponse {
   hits?: {
-    hits?: Array<{ _source?: Record<string, unknown> }>;
+    hits?: Array<{ _source?: Record<string, unknown>; sort?: unknown[] }>;
   };
 }
 
@@ -175,7 +209,7 @@ export async function fetchDataJudProcess(input: {
       query: { match: { numeroProcesso: input.cnj.replace(/\D/g, "") } },
       size: 1,
     }),
-    signal: AbortSignal.timeout(input.timeoutMs ?? PROCESS_TIMEOUT_MS),
+    signal: timeoutSignal(input.timeoutMs ?? PROCESS_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -229,7 +263,15 @@ function errorCodeForStatus(status: number): string {
 
 /** Índices onde faz sentido procurar processos de uma OAB. */
 export function courtsForOabState(oabState: string): string[] {
-  return COURTS_BY_OAB_STATE[oabState.trim().toUpperCase()] ?? [];
+  const uf = oabState.trim().toUpperCase();
+  const regional = COURTS_BY_OAB_STATE[uf];
+  if (!regional) return [];
+  const military = MILITARY_COURT_BY_OAB_STATE[uf];
+  return [
+    ...regional,
+    ...(military ? [military] : []),
+    ...SUPERIOR_COURTS,
+  ];
 }
 
 /**
@@ -267,6 +309,20 @@ export interface DiscoveredProcess {
   poloPassivo: string | null;
 }
 
+/** Diagnóstico por índice: separa "não achou" de "não deu para perguntar". */
+export interface DiscoveryCourtReport {
+  court: string;
+  status: "ok" | "failed" | "partial";
+  found: number;
+  pages: number;
+  errorCode: string | null;
+}
+
+export interface DiscoveryResult {
+  processes: DiscoveredProcess[];
+  reports: DiscoveryCourtReport[];
+}
+
 interface DataJudParty {
   nome?: string;
   polo?: string;
@@ -280,6 +336,172 @@ function partyByPole(parties: DataJudParty[], pole: string): string | null {
   return found?.nome ?? null;
 }
 
+function mapHitToProcess(
+  source: Record<string, unknown>,
+  court: string,
+): DiscoveredProcess | null {
+  if (typeof source.numeroProcesso !== "string") return null;
+  const parties = Array.isArray(source.partes)
+    ? source.partes as DataJudParty[]
+    : [];
+  const orgao = source.orgaoJulgador as { nome?: string } | undefined;
+  const classe = source.classe as { nome?: string } | undefined;
+
+  return {
+    numeroProcesso: source.numeroProcesso,
+    court,
+    tribunal: typeof source.tribunal === "string"
+      ? source.tribunal
+      : court.toUpperCase(),
+    classe: classe?.nome ?? null,
+    orgaoJulgador: orgao?.nome ?? null,
+    dataAjuizamento: typeof source.dataAjuizamento === "string"
+      ? source.dataAjuizamento
+      : null,
+    ultimaAtualizacao: typeof source.dataHoraUltimaAtualizacao === "string"
+      ? source.dataHoraUltimaAtualizacao
+      : null,
+    poloAtivo: partyByPole(parties, "A"),
+    poloPassivo: partyByPole(parties, "P"),
+  };
+}
+
+/**
+ * Varre um índice inteiro com `search_after`, o único modo de paginação que o
+ * Elasticsearch do DataJud aceita além do teto de 10.000 de `from`.
+ *
+ * A implementação anterior mandava uma única consulta com `size: 50` e tratava
+ * o resultado como completo: um advogado com 300 processos no TJ recebia 50 e
+ * nenhum aviso de que faltavam 250. Aqui a varredura segue até o índice acabar
+ * ou até `maxPages`, e o relatório diz qual dos dois aconteceu.
+ */
+async function scanCourt(input: {
+  authorization: string;
+  court: string;
+  query: Record<string, unknown>;
+  pageSize: number;
+  maxPages: number;
+  timeoutMs: number;
+  fetcher: typeof fetch;
+}): Promise<{ processes: DiscoveredProcess[]; report: DiscoveryCourtReport }> {
+  const processes: DiscoveredProcess[] = [];
+  let searchAfter: unknown[] | null = null;
+  let pages = 0;
+
+  for (let page = 0; page < input.maxPages; page += 1) {
+    let response: Response;
+    try {
+      response = await input.fetcher(
+        `${DATAJUD_BASE}/api_publica_${input.court}/_search`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: input.authorization,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            query: input.query,
+            size: input.pageSize,
+            // A ordenação estável é o que torna search_after determinístico.
+            sort: [{ "@timestamp": { order: "asc" } }, { _id: "asc" }],
+            ...(searchAfter ? { search_after: searchAfter } : {}),
+          }),
+          signal: timeoutSignal(input.timeoutMs),
+        },
+      );
+    } catch {
+      return {
+        processes,
+        report: {
+          court: input.court,
+          status: pages > 0 ? "partial" : "failed",
+          found: processes.length,
+          pages,
+          errorCode: "datajud_request_failed",
+        },
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        processes,
+        report: {
+          court: input.court,
+          status: pages > 0 ? "partial" : "failed",
+          found: processes.length,
+          pages,
+          errorCode: errorCodeForStatus(response.status),
+        },
+      };
+    }
+
+    let payload: DataJudSearchResponse;
+    try {
+      payload = await response.json() as DataJudSearchResponse;
+    } catch {
+      return {
+        processes,
+        report: {
+          court: input.court,
+          status: pages > 0 ? "partial" : "failed",
+          found: processes.length,
+          pages,
+          errorCode: "datajud_invalid_response",
+        },
+      };
+    }
+
+    pages += 1;
+    const hits = payload.hits?.hits ?? [];
+    for (const hit of hits) {
+      const mapped = hit._source ? mapHitToProcess(hit._source, input.court) : null;
+      if (mapped) processes.push(mapped);
+    }
+
+    if (hits.length < input.pageSize) {
+      return {
+        processes,
+        report: {
+          court: input.court,
+          status: "ok",
+          found: processes.length,
+          pages,
+          errorCode: null,
+        },
+      };
+    }
+
+    const cursor = hits[hits.length - 1]?.sort;
+    if (!Array.isArray(cursor) || cursor.length === 0) {
+      // Índice sem campo de ordenação: não dá para continuar com segurança.
+      return {
+        processes,
+        report: {
+          court: input.court,
+          status: "partial",
+          found: processes.length,
+          pages,
+          errorCode: "datajud_missing_sort_cursor",
+        },
+      };
+    }
+    searchAfter = cursor;
+  }
+
+  // Saiu pelo teto de páginas: existe mais resultado no índice.
+  return {
+    processes,
+    report: {
+      court: input.court,
+      status: "partial",
+      found: processes.length,
+      pages,
+      errorCode: "datajud_max_pages_reached",
+    },
+  };
+}
+
 /**
  * Descobre processos de um advogado nos índices da seccional informada.
  * Retorna candidatos: a confirmação de vínculo continua sendo humana.
@@ -289,68 +511,48 @@ export async function discoverProcessesByOab(input: {
   oabNumber: string;
   oabState: string;
   pageSize?: number;
+  maxPages?: number;
   timeoutMs?: number;
-}): Promise<DiscoveredProcess[]> {
+  fetcher?: typeof fetch;
+}): Promise<DiscoveryResult> {
   const courts = courtsForOabState(input.oabState);
   if (!courts.length) {
     throw new DataJudApiError(400, "datajud_court_not_supported");
   }
 
   const query = buildOabQuery(input.oabNumber, input.oabState);
-  const found = new Map<string, DiscoveredProcess>();
+  const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 100));
+  const maxPages = Math.min(50, Math.max(1, input.maxPages ?? 20));
 
-  // Os índices são consultados em paralelo: em série, três consultas lentas
+  // Os índices são consultados em paralelo: em série, consultas lentas
   // estouram o tempo de espera do navegador antes de a função responder.
-  const responses = await Promise.allSettled(
+  const settled = await Promise.all(
     courts.map((court) =>
-      fetch(`${DATAJUD_BASE}/api_publica_${court}/_search`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: input.authorization,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query, size: input.pageSize ?? 50 }),
-        signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
+      scanCourt({
+        authorization: input.authorization,
+        court,
+        query,
+        pageSize,
+        maxPages,
+        timeoutMs: input.timeoutMs ?? DISCOVERY_TIMEOUT_MS,
+        fetcher: input.fetcher ?? fetch,
       })
     ),
   );
 
-  for (const [index, court] of courts.entries()) {
-    const settled = responses[index];
-    // Um índice indisponível ou lento não invalida os demais.
-    if (settled.status === "rejected" || !settled.value.ok) continue;
-
-    const payload = await settled.value.json() as DataJudSearchResponse;
-    for (const hit of payload.hits?.hits ?? []) {
-      const source = hit._source;
-      if (!source || typeof source.numeroProcesso !== "string") continue;
-
-      const parties = Array.isArray(source.partes)
-        ? source.partes as DataJudParty[]
-        : [];
-      const orgao = source.orgaoJulgador as { nome?: string } | undefined;
-      const classe = source.classe as { nome?: string } | undefined;
-
-      found.set(source.numeroProcesso, {
-        numeroProcesso: source.numeroProcesso,
-        court,
-        tribunal: typeof source.tribunal === "string"
-          ? source.tribunal
-          : court.toUpperCase(),
-        classe: classe?.nome ?? null,
-        orgaoJulgador: orgao?.nome ?? null,
-        dataAjuizamento: typeof source.dataAjuizamento === "string"
-          ? source.dataAjuizamento
-          : null,
-        ultimaAtualizacao: typeof source.dataHoraUltimaAtualizacao === "string"
-          ? source.dataHoraUltimaAtualizacao
-          : null,
-        poloAtivo: partyByPole(parties, "A"),
-        poloPassivo: partyByPole(parties, "P"),
-      });
+  // Um mesmo processo pode aparecer em mais de um índice (ex.: recurso no STJ
+  // e origem no TJ). A primeira ocorrência vence, preservando a origem.
+  const found = new Map<string, DiscoveredProcess>();
+  for (const result of settled) {
+    for (const process of result.processes) {
+      if (!found.has(process.numeroProcesso)) {
+        found.set(process.numeroProcesso, process);
+      }
     }
   }
 
-  return Array.from(found.values());
+  return {
+    processes: Array.from(found.values()),
+    reports: settled.map((result) => result.report),
+  };
 }

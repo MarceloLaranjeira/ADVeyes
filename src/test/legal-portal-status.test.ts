@@ -16,6 +16,7 @@ function connection(
     lastErrorCode: null,
     lastErrorAt: null,
     lastResult: {},
+    sessionExpiresAt: null,
     configured: true,
     ...overrides,
   };

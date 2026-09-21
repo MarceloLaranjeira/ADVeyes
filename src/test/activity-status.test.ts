@@ -14,6 +14,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     concluida_em: null,
     created_at: "2026-08-01T12:00:00Z",
     data_limite: null,
+    deleted_at: null,
     descricao: null,
     estimated_hours: null,
     google_event_id: null,
