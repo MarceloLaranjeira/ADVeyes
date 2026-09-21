@@ -25,6 +25,15 @@ export interface IngestionResult {
   created: number;
   ignored: number;
   createdIds: string[];
+  /**
+   * Código de truncamento quando a origem respondeu mas não entregou o
+   * conjunto inteiro. Diferente de erro: os registros recebidos são válidos
+   * e já foram gravados — o que falta vem na próxima execução. Quem chama usa
+   * isto para não marcar a fonte como totalmente sincronizada.
+   */
+  partialCode?: string | null;
+  /** Detalhe legível do truncamento, para a timeline de sincronização. */
+  partialDetail?: string | null;
 }
 
 export interface ProcessReference {

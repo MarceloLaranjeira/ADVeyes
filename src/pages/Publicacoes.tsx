@@ -138,6 +138,7 @@ interface SyncSummary {
   monitored_oabs: number;
   monitored_processes: number;
   pending_count: number;
+  partial_count: number | null;
   failing_count: number;
   stopped_count: number;
   next_run: string | null;
@@ -311,7 +312,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
         (supabase as any)
           .from("legal_sync_source_summary")
           .select(
-            "monitored_oabs, monitored_processes, pending_count, failing_count, stopped_count, next_run, last_success",
+            "monitored_oabs, monitored_processes, pending_count, partial_count, failing_count, stopped_count, next_run, last_success",
           )
           .eq("tenant_id", tenantId)
           .maybeSingle(),
@@ -688,7 +689,11 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
         !isPartialSyncCode(source.last_error_code)
       ),
       // Fontes que responderam mas não terminaram o período: continuam ativas
-      // e se completam sozinhas na próxima execução.
+      // e se completam sozinhas na próxima execução. A view é a fonte de
+      // verdade para a contagem; a lista detalhada vem das linhas carregadas.
+      partialCount: syncSummary?.partial_count ?? syncSources.filter((source) =>
+        isPartialSyncCode(source.last_error_code)
+      ).length,
       partial: syncSources.filter((source) =>
         isPartialSyncCode(source.last_error_code)
       ),
@@ -859,10 +864,10 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
               </p>
             )}
 
-            {syncPanel.partial.length > 0 && (
+            {syncPanel.partialCount > 0 && (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs">
                 <p className="font-medium text-amber-700 dark:text-amber-400">
-                  Busca incompleta em {syncPanel.partial.length} fonte(s) — ainda
+                  Busca incompleta em {syncPanel.partialCount} fonte(s) — ainda
                   há publicação a caminho
                 </p>
                 <p className="mt-1 text-muted-foreground">

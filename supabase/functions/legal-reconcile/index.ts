@@ -48,6 +48,11 @@ import {
   type ProcessReference,
 } from "../_shared/legal-ingestion.ts";
 import {
+  dateOnly,
+  djenStartDate,
+  nextDjenCursor,
+} from "../_shared/djen-window.ts";
+import {
   formatCnj,
   DJEN_RECONCILIATION_INTERVAL_MS,
   nextAttemptDelayMs,
@@ -80,8 +85,6 @@ const MAX_BATCH = 200;
 // evita que uma OAB com centenas de processos esgote a vida útil do worker e
 // deixe a execução presa em "running".
 const AUTO_IMPORT_BATCH = 200;
-const DJEN_INITIAL_LOOKBACK_DAYS = 7;
-const DJEN_OVERLAP_DAYS = 1;
 
 /** Falhas que não se resolvem com retentativa e exigem ação humana. */
 const PERMANENT_FAILURES = new Set([
@@ -465,11 +468,22 @@ async function reconcileDataJudOabSource(
     last_discovery_at: new Date().toISOString(),
   }).eq("tenant_id", source.tenant_id).eq("id", registration.id);
 
+  // Um índice que parou no teto ou falhou no meio deixa processo para trás.
+  // Sem propagar isso, reconcileSource limparia last_error_code e a varredura
+  // incompleta passaria por completa — exatamente o problema que este PR ataca.
+  const incomplete = discovery.reports.filter((report) => report.status !== "ok");
+
   return {
     received: discovery.processes.length,
     created: imported.imported,
     ignored: discovery.processes.length - imported.imported,
     createdIds: imported.processes.map((process) => process.processId),
+    partialCode: incomplete.length ? "datajud_max_pages_reached" : null,
+    partialDetail: incomplete.length
+      ? incomplete
+        .map((report) => `${report.court}:${report.errorCode ?? report.status}`)
+        .join(", ")
+      : null,
   };
 }
 
@@ -849,12 +863,16 @@ async function reconcileSource(
       : await reconcileProcessSource(context, source);
 
     const finishedAt = new Date().toISOString();
+    // Varredura parcial não é falha, mas também não é sincronização completa:
+    // o código fica gravado para a fonte voltar antes e para a interface poder
+    // avisar que ainda há resultado a caminho.
+    const partialCode = result.partialCode ?? null;
     await context.admin.from("legal_sync_sources").update({
       failure_count: 0,
       last_attempt_at: finishedAt,
       last_success_at: finishedAt,
-      last_error_code: null,
-      last_error_message: null,
+      last_error_code: partialCode,
+      last_error_message: result.partialDetail ?? partialCode,
       paused_reason: null,
       next_sync_at: new Date(Date.now() + RECONCILIATION_INTERVAL_MS)
         .toISOString(),
@@ -862,15 +880,20 @@ async function reconcileSource(
 
     if (run?.id) {
       await context.admin.from("legal_sync_runs").update({
-        status: "succeeded",
+        status: partialCode ? "partial" : "succeeded",
         records_received: result.received,
         records_created: result.created,
         records_ignored: result.ignored,
+        error_code: partialCode,
+        error_message: result.partialDetail ?? partialCode,
         finished_at: finishedAt,
       }).eq("id", run.id).eq("tenant_id", source.tenant_id);
     }
 
-    return { status: "succeeded", code: null };
+    return {
+      status: partialCode ? "partial" : "succeeded",
+      code: partialCode,
+    };
   } catch (error) {
     const code = errorCode(error);
     const finishedAt = new Date().toISOString();
@@ -918,26 +941,9 @@ async function reconcileSource(
   }
 }
 
-function dateOnly(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
 
-function djenStartDate(source: SyncSource, now: Date): string {
-  if (!source.last_success_at) {
-    return dateOnly(new Date(
-      now.getTime() - DJEN_INITIAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
-    ));
-  }
-  const lastSuccess = new Date(source.last_success_at);
-  if (Number.isNaN(lastSuccess.getTime())) {
-    return dateOnly(new Date(
-      now.getTime() - DJEN_INITIAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
-    ));
-  }
-  return dateOnly(new Date(
-    lastSuccess.getTime() - DJEN_OVERLAP_DAYS * 24 * 60 * 60 * 1000,
-  ));
-}
+
+// djenStartDate e nextDjenCursor vivem em _shared/djen-window.ts.
 
 async function openDjenRuns(
   context: ReconcileContext,
@@ -1085,7 +1091,11 @@ async function reconcileDjenGroup(
         // esconderia para sempre as publicações que ficaram para trás —
         // e publicação perdida é prazo perdido. Mantendo o cursor, a próxima
         // execução recomeça do mesmo ponto e completa o que faltou.
-        const cursorAfter = fetched.truncated ? source.sync_cursor : endDate;
+        const cursorAfter = nextDjenCursor({
+          currentCursor: source.sync_cursor,
+          windowEnd: endDate,
+          truncated: fetched.truncated,
+        });
         // Truncada, a fonte volta a rodar no intervalo curto de falha em vez
         // de esperar o ciclo normal de reconciliação.
         const nextSyncDelayMs = fetched.truncated

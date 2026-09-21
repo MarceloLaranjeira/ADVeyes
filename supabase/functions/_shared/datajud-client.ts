@@ -489,7 +489,48 @@ async function scanCourt(input: {
     searchAfter = cursor;
   }
 
-  // Saiu pelo teto de páginas: existe mais resultado no índice.
+  // Saiu pelo teto de páginas. Isso não prova que sobrou resultado: se o total
+  // for múltiplo exato de pageSize, a última página veio cheia e mesmo assim
+  // era a última. Uma sondagem barata (size 1) desfaz o empate — sem ela, todo
+  // índice nessa fronteira geraria alarme falso e revarredura perpétua.
+  try {
+    const probe = await input.fetcher(
+      `${DATAJUD_BASE}/api_publica_${input.court}/_search`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: input.authorization,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: input.query,
+          size: 1,
+          sort: [{ "@timestamp": { order: "asc" } }, { _id: "asc" }],
+          ...(searchAfter ? { search_after: searchAfter } : {}),
+        }),
+        signal: timeoutSignal(input.timeoutMs),
+      },
+    );
+    if (probe.ok) {
+      const payload = await probe.json() as DataJudSearchResponse;
+      if ((payload.hits?.hits ?? []).length === 0) {
+        return {
+          processes,
+          report: {
+            court: input.court,
+            status: "ok",
+            found: processes.length,
+            pages,
+            errorCode: null,
+          },
+        };
+      }
+    }
+  } catch {
+    // Sondagem é best-effort: falhar aqui só mantém o aviso conservador.
+  }
+
   return {
     processes,
     report: {
