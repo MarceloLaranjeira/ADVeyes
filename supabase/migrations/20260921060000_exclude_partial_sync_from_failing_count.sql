@@ -12,7 +12,14 @@
 --
 -- partial_count é exposto separadamente para a interface poder mostrar cada
 -- estado com o peso que ele merece.
-create or replace view public.legal_sync_source_summary
+--
+-- DROP antes do CREATE: `create or replace view` só aceita colunas novas no
+-- FIM da lista. Inserir partial_count entre pending_count e failing_count faz
+-- o Postgres ler a mudança como renomeação de coluna e recusar com 42P16.
+-- A view não guarda dado — recriá-la é seguro e instantâneo.
+drop view if exists public.legal_sync_source_summary;
+
+create view public.legal_sync_source_summary
 with (security_invoker = true)
 as
 with classified as (
