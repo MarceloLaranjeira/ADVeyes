@@ -44,6 +44,14 @@ export interface DjenFetchResult {
   totalReported: number | null;
   rateLimit: number | null;
   rateLimitRemaining: number | null;
+  /**
+   * Por que a varredura parou. Só `completed` autoriza tratar o resultado como
+   * a lista inteira do período — nos demais casos ficou publicação para trás e
+   * quem chamou precisa reagendar a janela.
+   */
+  stopReason: "completed" | "max_pages" | "rate_limited";
+  /** Atalho de leitura: verdadeiro quando sobrou publicação sem buscar. */
+  truncated: boolean;
 }
 
 export interface DjenCancellationPayload {
@@ -213,6 +221,7 @@ export async function fetchDjenPublications(input: {
   let totalReported: number | null = null;
   let rateLimit: number | null = null;
   let rateLimitRemaining: number | null = null;
+  let stopReason: DjenFetchResult["stopReason"] = "max_pages";
 
   for (let page = 1; page <= maxPages; page += 1) {
     const url = new URL(base);
@@ -234,14 +243,32 @@ export async function fetchDjenPublications(input: {
       response.headers.get("x-ratelimit-remaining"),
     );
 
+    // Página incompleta ou total já alcançado: acabou o período, sem sobra.
     if (
       pageItems.length < pageSize ||
       (totalReported !== null && items.length >= totalReported)
-    ) break;
-    if (rateLimitRemaining === 0) break;
+    ) {
+      stopReason = "completed";
+      break;
+    }
+    // Cota esgotada no meio da varredura: o que falta continua no DJEN.
+    // Antes isto era um `break` mudo e o chamador gravava a janela como
+    // sincronizada, perdendo as publicações restantes para sempre.
+    if (rateLimitRemaining === 0) {
+      stopReason = "rate_limited";
+      break;
+    }
   }
 
-  return { items, pages, totalReported, rateLimit, rateLimitRemaining };
+  return {
+    items,
+    pages,
+    totalReported,
+    rateLimit,
+    rateLimitRemaining,
+    stopReason,
+    truncated: stopReason !== "completed",
+  };
 }
 
 /** Consulta cancelamentos divulgados pelo endpoint público oficial do DJEN. */

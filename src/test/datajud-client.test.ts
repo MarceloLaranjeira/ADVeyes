@@ -50,8 +50,18 @@ describe("resolveDataJudEndpoint", () => {
 
 describe("courtsForOabState", () => {
   it("cobre a justiça estadual, federal e trabalhista da seccional", () => {
-    expect(courtsForOabState("AM")).toEqual(["tjam", "trf1", "trt11"]);
-    expect(courtsForOabState("sp")).toEqual(["tjsp", "trf3", "trt2"]);
+    // A lista cresceu para incluir tribunais superiores e justiça militar;
+    // o vínculo regional continua sendo o começo dela.
+    expect(courtsForOabState("AM").slice(0, 3)).toEqual([
+      "tjam",
+      "trf1",
+      "trt11",
+    ]);
+    expect(courtsForOabState("sp").slice(0, 3)).toEqual([
+      "tjsp",
+      "trf3",
+      "trt2",
+    ]);
   });
 
   it("retorna vazio para seccional desconhecida", () => {

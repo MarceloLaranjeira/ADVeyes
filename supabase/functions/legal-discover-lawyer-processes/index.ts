@@ -375,12 +375,12 @@ Deno.serve(async (request) => {
     }
 
     try {
-      const discovered = await discoverProcessesByOab({
+      const discovery = await discoverProcessesByOab({
         authorization,
         oabNumber: input.oabNumber,
         oabState: input.oabState,
       });
-      const rows = discovered
+      const rows = discovery.processes
         .map((item) =>
           dataJudDiscoveryRow(input.tenantId, registration.id, item)
         )
@@ -513,12 +513,12 @@ Deno.serve(async (request) => {
       const authorization = normalizeDataJudAuthorization(
         Deno.env.get("DATAJUD_API_KEY"),
       );
-      const discovered = await discoverProcessesByOab({
+      const discovery = await discoverProcessesByOab({
         authorization,
         oabNumber: input.oabNumber,
         oabState: input.oabState,
       });
-      const rows = discovered
+      const rows = discovery.processes
         .map((item) =>
           dataJudDiscoveryRow(input.tenantId, registration.id, item)
         )

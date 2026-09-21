@@ -39,6 +39,7 @@ const task: ActivityWithUserState = {
   processo_id: null,
   responsavel_id: "user-1",
   concluida_em: null,
+  deleted_at: null,
   categoria: "Prazo",
   pontos: 5,
   updated_at: "2026-08-08T12:00:00Z",
