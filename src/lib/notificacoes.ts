@@ -125,16 +125,19 @@ export function mergeNotificacao(
 export function reconciliarNotificacoes(
   current: Notificacao[],
   loaded: Notificacao[],
-  loadedWins = false,
+  touchedAfterSnapshot: ReadonlySet<string> = new Set(),
 ): Notificacao[] {
-  const byId = new Map<string, Notificacao>();
-  // Carga/catch-up: o estado atual pode conter realtime mais recente e vence.
-  // Rollback: o snapshot do banco é autoritativo para desfazer a ação otimista,
-  // mas itens current-only (INSERT durante a requisição) são preservados.
-  const first = loadedWins ? current : loaded;
-  const second = loadedWins ? loaded : current;
-  for (const item of first) byId.set(item.id, item);
-  for (const item of second) byId.set(item.id, item);
+  // O snapshot fresco do banco é autoritativo: linha ausente foi arquivada e
+  // linha presente carrega o estado de leitura atual. A única exceção são ids
+  // que o realtime tocou DEPOIS que a consulta começou — nesses casos o estado
+  // da tela é mais novo que o snapshot retornado.
+  const byId = new Map(loaded.map((item) => [item.id, item]));
+  const currentById = new Map(current.map((item) => [item.id, item]));
+  for (const id of touchedAfterSnapshot) {
+    const item = currentById.get(id);
+    if (item) byId.set(id, item);
+    else byId.delete(id); // UPDATE de arquivamento removeu durante a consulta
+  }
   return [...byId.values()].sort(
     (a, b) => b.dataNotificacao.getTime() - a.dataNotificacao.getTime(),
   );

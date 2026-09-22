@@ -50,9 +50,15 @@ export const NotificationPanel = () => {
   const scopeKey = `${userId ?? "anon"}:${tenantId ?? "legacy"}`;
   const scopeRef = useRef(scopeKey);
   scopeRef.current = scopeKey;
+  // Sequência monotônica de eventos realtime. Cada consulta captura o valor no
+  // início e protege somente ids tocados depois desse instante.
+  const realtimeSequenceRef = useRef(0);
+  const realtimeTouchedRef = useRef(new Map<string, number>());
   const unreadCount = contarNaoLidas(notifications);
 
   const handleRealtime = useCallback((event: NotificacaoRealtimeEvent) => {
+    const sequence = ++realtimeSequenceRef.current;
+    realtimeTouchedRef.current.set(event.notification.id, sequence);
     setNotifications((prev) =>
       event.kind === "insert"
         ? mergeNotificacao(prev, event.notification)
@@ -78,16 +84,22 @@ export const NotificationPanel = () => {
     handleRealtimeReady,
   );
 
-  const carregar = useCallback(async (loadedWins = false) => {
+  const carregar = useCallback(async () => {
     if (!userId) return;
     const requestedScope = scopeKey;
+    const sequenceAtStart = realtimeSequenceRef.current;
     try {
       const items = await notificationsService.list(userId, tenantId);
       // Uma resposta do tenant anterior nunca pode repovoar a caixa depois de
       // o usuário trocar de escritório.
       if (scopeRef.current !== requestedScope) return;
+      const touchedAfterSnapshot = new Set(
+        [...realtimeTouchedRef.current.entries()]
+          .filter(([, sequence]) => sequence > sequenceAtStart)
+          .map(([id]) => id),
+      );
       setNotifications((current) =>
-        reconciliarNotificacoes(current, items, loadedWins)
+        reconciliarNotificacoes(current, items, touchedAfterSnapshot)
       );
       setErro(false);
     } catch {
@@ -98,6 +110,8 @@ export const NotificationPanel = () => {
   // Troca de usuário/tenant limpa primeiro; a carga sempre MESCLA com eventos
   // que possam chegar enquanto a requisição está pendente.
   useEffect(() => {
+    realtimeSequenceRef.current = 0;
+    realtimeTouchedRef.current.clear();
     setNotifications([]);
     setErro(false);
     if (userId) void carregar();
@@ -122,7 +136,7 @@ export const NotificationPanel = () => {
     try {
       await notificationsService.marcarLida(id, userId, tenantId);
     } catch {
-      await carregar(true);
+      await carregar();
     }
   };
 
@@ -132,7 +146,7 @@ export const NotificationPanel = () => {
     try {
       await notificationsService.marcarTodasLidas(userId, tenantId);
     } catch {
-      await carregar(true);
+      await carregar();
     }
   };
 
@@ -143,7 +157,7 @@ export const NotificationPanel = () => {
     try {
       await notificationsService.arquivar(id, userId, tenantId);
     } catch {
-      await carregar(true);
+      await carregar();
     }
   };
 

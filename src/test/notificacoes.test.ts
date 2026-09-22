@@ -155,21 +155,43 @@ describe("reconciliarNotificacoes", () => {
       id: "antiga",
       dataNotificacao: new Date("2026-09-20T12:00:00Z"),
     });
-    expect(reconciliarNotificacoes([realtime], [loaded]).map((n) => n.id))
-      .toEqual(["nova", "antiga"]);
+    expect(
+      reconciliarNotificacoes([realtime], [loaded], new Set(["nova"]))
+        .map((n) => n.id),
+    ).toEqual(["nova", "antiga"]);
   });
 
   it("na carga normal o realtime mais novo vence o snapshot para o mesmo id", () => {
     const snapshot = notificacao({ id: "n-1", lida: false });
     const realtime = notificacao({ id: "n-1", lida: true });
-    expect(reconciliarNotificacoes([realtime], [snapshot])[0].lida).toBe(true);
+    expect(
+      reconciliarNotificacoes(
+        [realtime],
+        [snapshot],
+        new Set(["n-1"]),
+      )[0].lida,
+    ).toBe(true);
   });
 
   it("no rollback o snapshot do banco vence o estado otimista", () => {
     const banco = notificacao({ id: "n-1", lida: false });
     const otimista = notificacao({ id: "n-1", lida: true });
-    expect(reconciliarNotificacoes([otimista], [banco], true)[0].lida)
+    expect(reconciliarNotificacoes([otimista], [banco])[0].lida)
       .toBe(false);
+  });
+
+  it("catch-up remove linha arquivada antes do canal ficar pronto", () => {
+    const stale = notificacao({ id: "arquivada" });
+    expect(reconciliarNotificacoes([stale], [])).toEqual([]);
+  });
+
+  it("arquivamento realtime durante a consulta vence snapshot obsoleto", () => {
+    const staleSnapshot = notificacao({ id: "arquivada" });
+    // A linha já foi removida do estado pelo UPDATE realtime; proteger o id
+    // também a remove do snapshot que ainda a continha.
+    expect(
+      reconciliarNotificacoes([], [staleSnapshot], new Set(["arquivada"])),
+    ).toEqual([]);
   });
 });
 
