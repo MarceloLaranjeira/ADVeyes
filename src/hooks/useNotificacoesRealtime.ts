@@ -1,61 +1,81 @@
 /**
- * Hook para receber notificações em tempo real via Supabase Realtime.
- * Conecta ao canal da tabela `notificacoes` e dispara `onNova` a cada INSERT.
+ * Recebe notificações em tempo real via Supabase Realtime.
+ *
+ * O realtime é a camada de atualização, não a de memória: ele entrega apenas
+ * o que muda enquanto o canal está aberto. O histórico vem do banco pelo
+ * `notificationsService`.
+ *
+ * INSERT e UPDATE são necessários: sem UPDATE, uma leitura/arquivamento feito
+ * em outra aba ou dispositivo deixa este painel com linha e contador antigos.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Notificacao, UrgenciaNotificacao } from "@/types/notificacoes";
+import {
+  mapNotificacao,
+  notificacaoPertenceAoTenant,
+  type NotificacaoRow,
+} from "@/lib/notificacoes";
+import type { Notificacao } from "@/types/notificacoes";
 
-/** Linha crua da tabela `notificacoes`. Os campos chegam soltos do realtime. */
-interface NotificacaoRow {
-  id: string;
-  tipo?: string | null;
-  urgencia?: string | null;
-  titulo?: string | null;
-  mensagem?: string | null;
-  processo_numero?: string | null;
-  created_at?: string | null;
-  lida?: boolean | null;
+export interface NotificacaoRealtimeEvent {
+  kind: "insert" | "update";
+  notification: Notificacao;
+  archived: boolean;
+  /** Escopo capturado pela inscrição; callback atrasado de outro tenant morre. */
+  scopeKey: string;
 }
 
-function mapRowToNotificacao(row: NotificacaoRow): Notificacao {
-  return {
-    id: row.id,
-    tipo: row.tipo === "movimentacao" ? "NOVA_MOVIMENTACAO"
-      : row.tipo === "alerta" ? "PRAZO_VENCENDO"
-      : "GERAL",
-    urgencia: (row.urgencia ?? "MEDIA").toUpperCase() as UrgenciaNotificacao,
-    titulo: row.titulo ?? "Notificação",
-    mensagem: row.mensagem ?? "",
-    processoId: row.processo_numero ?? undefined,
-    dataNotificacao: new Date(row.created_at ?? Date.now()),
-    lida: row.lida ?? false,
-  };
-}
+export function useNotificacoesRealtime(
+  userId: string | undefined,
+  tenantId: string | null | undefined,
+  onChange: (event: NotificacaoRealtimeEvent) => void,
+  onReady?: () => void,
+) {
+  // Callbacks mudam a cada render. As refs impedem que o efeito recrie a
+  // inscrição a cada mudança e deixe janelas sem canal durante a reconexão.
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
 
-export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: Notificacao) => void) {
   useEffect(() => {
     if (!userId) return;
+    const subscriptionScope = `${userId}:${tenantId ?? "legacy"}`;
 
     const channel = supabase
       .channel(`notificacoes-${userId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "notificacoes",
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          onNova(mapRowToNotificacao(payload.new as NotificacaoRow));
-        }
+          if (payload.eventType !== "INSERT" && payload.eventType !== "UPDATE") {
+            return;
+          }
+          const row = payload.new as NotificacaoRow;
+          if (!notificacaoPertenceAoTenant(row.tenant_id, tenantId)) return;
+          changeRef.current({
+            kind: payload.eventType === "INSERT" ? "insert" : "update",
+            notification: mapNotificacao(row),
+            archived: Boolean(row.arquivada_em),
+            scopeKey: subscriptionScope,
+          });
+        },
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Uma carga depois do SUBSCRIBED fecha o intervalo entre o snapshot da
+        // primeira consulta e o canal ficar pronto. Ela é mesclada por id, não
+        // substitui eventos que já chegaram.
+        if (status === "SUBSCRIBED") readyRef.current?.();
+      });
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [userId, onNova]);
+  }, [userId, tenantId]);
 }

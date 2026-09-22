@@ -1,12 +1,19 @@
 /**
  * PAINEL DE NOTIFICAÇÕES DO HORUS
  *
- * Exibe notificações em tempo real no header do ADVeyes.
+ * Exibe as notificações do advogado no header do ADVeyes.
+ *
+ * A tabela `notificacoes` é a fonte da verdade: o painel carrega o histórico
+ * ao abrir e o realtime acrescenta o que chega depois. Antes o estado vivia em
+ * `localStorage` — o que significava que notificação gerada com a aba fechada
+ * nunca era vista, trocar de máquina zerava a caixa e "marcar como lida" não
+ * saía do dispositivo.
+ *
  * Todas as notificações são assinadas com 🦅 Horus.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { Bell, CheckCircle, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle, Bell, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,66 +24,146 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { Notificacao } from "@/types/notificacoes";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
+import { useTenant } from "@/contexts/TenantContext";
+import {
+  useNotificacoesRealtime,
+  type NotificacaoRealtimeEvent,
+} from "@/hooks/useNotificacoesRealtime";
+import { notificationsService } from "@/services/notifications";
+import {
+  aplicarAtualizacaoNotificacao,
+  contarNaoLidas,
+  eventoPertenceAoEscopo,
+  mergeNotificacao,
+  reconciliarNotificacoes,
+} from "@/lib/notificacoes";
 
 export const NotificationPanel = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [erro, setErro] = useState(false);
+  const [realtimeReadyVersion, setRealtimeReadyVersion] = useState(0);
 
-  // Carregar notificações do localStorage
-  useEffect(() => {
-    loadNotifications();
+  const userId = user?.id;
+  const tenantId = currentTenant?.tenantId ?? null;
+  const scopeKey = `${userId ?? "anon"}:${tenantId ?? "legacy"}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  // Sequência monotônica de eventos realtime. Cada consulta captura o valor no
+  // início e protege somente ids tocados depois desse instante.
+  const realtimeSequenceRef = useRef(0);
+  const realtimeTouchedRef = useRef(new Map<string, number>());
+  const unreadCount = contarNaoLidas(notifications);
+
+  const handleRealtime = useCallback((event: NotificacaoRealtimeEvent) => {
+    // O cleanup do canal é assíncrono. Um callback já enfileirado pelo tenant
+    // anterior pode chegar depois da troca; nunca toca estado nem sequência do
+    // novo escopo.
+    if (!eventoPertenceAoEscopo(event.scopeKey, scopeRef.current)) return;
+    const sequence = ++realtimeSequenceRef.current;
+    realtimeTouchedRef.current.set(event.notification.id, sequence);
+    setNotifications((prev) =>
+      event.kind === "insert"
+        ? mergeNotificacao(prev, event.notification)
+        : aplicarAtualizacaoNotificacao(
+          prev,
+          event.notification,
+          event.archived,
+        )
+    );
   }, []);
 
-  // Receber novas notificações via Supabase Realtime
-  const handleNova = useCallback((n: Notificacao) => {
-    setNotifications(prev => {
-      if (prev.some(p => p.id === n.id)) return prev;
-      const updated = [n, ...prev];
-      localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-      return updated;
-    });
-    setUnreadCount(c => c + 1);
+  const handleRealtimeReady = useCallback(() => {
+    setRealtimeReadyVersion((version) => version + 1);
   }, []);
 
-  useNotificacoesRealtime(user?.id, handleNova);
+  // A inscrição é registrada antes dos efeitos de carga. Quando o canal fica
+  // SUBSCRIBED, uma segunda carga de catch-up fecha qualquer intervalo entre o
+  // snapshot inicial e a assinatura estar pronta.
+  useNotificacoesRealtime(
+    userId,
+    tenantId,
+    handleRealtime,
+    handleRealtimeReady,
+  );
 
-  const loadNotifications = () => {
+  const carregar = useCallback(async () => {
+    if (!userId) return;
+    const requestedScope = scopeKey;
+    const sequenceAtStart = realtimeSequenceRef.current;
     try {
-      const stored = localStorage.getItem("adveyes_notifications");
-      if (stored) {
-        const loaded: Notificacao[] = JSON.parse(stored);
-        setNotifications(loaded);
-        setUnreadCount(loaded.filter(n => !n.lida).length);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar notificações:", error);
+      const items = await notificationsService.list(userId, tenantId);
+      // Uma resposta do tenant anterior nunca pode repovoar a caixa depois de
+      // o usuário trocar de escritório.
+      if (scopeRef.current !== requestedScope) return;
+      const touchedAfterSnapshot = new Set(
+        [...realtimeTouchedRef.current.entries()]
+          .filter(([, sequence]) => sequence > sequenceAtStart)
+          .map(([id]) => id),
+      );
+      setNotifications((current) =>
+        reconciliarNotificacoes(current, items, touchedAfterSnapshot)
+      );
+      setErro(false);
+    } catch {
+      if (scopeRef.current === requestedScope) setErro(true);
+    }
+  }, [scopeKey, tenantId, userId]);
+
+  // Troca de usuário/tenant limpa primeiro; a carga sempre MESCLA com eventos
+  // que possam chegar enquanto a requisição está pendente.
+  useEffect(() => {
+    realtimeSequenceRef.current = 0;
+    realtimeTouchedRef.current.clear();
+    setNotifications([]);
+    setErro(false);
+    if (userId) void carregar();
+  }, [scopeKey, userId, carregar]);
+
+  // Catch-up após o canal confirmar SUBSCRIBED. Não limpa a lista: eventos que
+  // já chegaram vencem o snapshot do banco para o mesmo id.
+  useEffect(() => {
+    if (realtimeReadyVersion > 0 && userId) void carregar();
+  }, [realtimeReadyVersion, userId, carregar]);
+
+  /**
+   * Atualiza a tela primeiro e persiste depois. Se o banco recusar, recarrega
+   * somente o escopo atual — restaurar um snapshot inteiro apagaria eventos
+   * realtime ou ações concorrentes que chegaram enquanto a chamada pendia.
+   */
+  const markAsRead = async (id: string) => {
+    if (!userId) return;
+    setNotifications((prev) =>
+      prev.map((item) => item.id === id ? { ...item, lida: true } : item)
+    );
+    try {
+      await notificationsService.marcarLida(id, userId, tenantId);
+    } catch {
+      await carregar();
     }
   };
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map(n =>
-      n.id === id ? { ...n, lida: true } : n
-    );
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(updated.filter(n => !n.lida).length);
+  const markAllAsRead = async () => {
+    if (!userId) return;
+    setNotifications((prev) => prev.map((item) => ({ ...item, lida: true })));
+    try {
+      await notificationsService.marcarTodasLidas(userId, tenantId);
+    } catch {
+      await carregar();
+    }
   };
 
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, lida: true }));
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(0);
-  };
-
-  const clearNotification = (id: string) => {
-    const updated = notifications.filter(n => n.id !== id);
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(updated.filter(n => !n.lida).length);
+  /** Arquiva: some da caixa, permanece no banco para auditoria. */
+  const clearNotification = async (id: string) => {
+    if (!userId) return;
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await notificationsService.arquivar(id, userId, tenantId);
+    } catch {
+      await carregar();
+    }
   };
 
   const getUrgencyIcon = (urgencia: string) => {
@@ -130,20 +217,29 @@ export const NotificationPanel = () => {
           <div>
             <h3 className="font-semibold text-sm">Notificações do Horus</h3>
             <p className="text-xs text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} não lida${unreadCount > 1 ? "s" : ""}` : "Tudo em dia"}
+              {unreadCount > 0
+                ? `${unreadCount} não lida${unreadCount > 1 ? "s" : ""}`
+                : "Tudo em dia"}
             </p>
           </div>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={markAllAsRead}
+              onClick={() => void markAllAsRead()}
               className="text-xs h-7"
             >
               Marcar todas como lidas
             </Button>
           )}
         </div>
+
+        {erro && (
+          <p className="border-b bg-amber-500/5 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Não foi possível carregar o histórico agora. As novas notificações
+            continuam chegando.
+          </p>
+        )}
 
         <ScrollArea className="h-[400px]">
           {notifications.length === 0 ? (
@@ -166,7 +262,9 @@ export const NotificationPanel = () => {
                       ? getUrgencyColor(notif.urgencia) + " border-l-4"
                       : "hover:bg-muted/50"
                   }`}
-                  onClick={() => !notif.lida && markAsRead(notif.id)}
+                  onClick={() => {
+                    if (!notif.lida) void markAsRead(notif.id);
+                  }}
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5">{getUrgencyIcon(notif.urgencia)}</div>
@@ -179,9 +277,10 @@ export const NotificationPanel = () => {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0"
+                          aria-label="Arquivar notificação"
                           onClick={(e) => {
                             e.stopPropagation();
-                            clearNotification(notif.id);
+                            void clearNotification(notif.id);
                           }}
                         >
                           <X className="h-3 w-3" />

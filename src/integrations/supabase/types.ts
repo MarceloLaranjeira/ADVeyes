@@ -2603,9 +2603,11 @@ export type Database = {
       }
       notificacoes: {
         Row: {
+          arquivada_em: string | null
           created_at: string
           id: string
           lida: boolean
+          lida_em: string | null
           mensagem: string
           origem: string | null
           processo_numero: string | null
@@ -2617,9 +2619,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          arquivada_em?: string | null
           created_at?: string
           id?: string
           lida?: boolean
+          lida_em?: string | null
           mensagem: string
           origem?: string | null
           processo_numero?: string | null
@@ -2631,9 +2635,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          arquivada_em?: string | null
           created_at?: string
           id?: string
           lida?: boolean
+          lida_em?: string | null
           mensagem?: string
           origem?: string | null
           processo_numero?: string | null

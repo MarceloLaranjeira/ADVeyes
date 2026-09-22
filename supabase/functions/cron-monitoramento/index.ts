@@ -84,6 +84,7 @@ serve(async (req) => {
               .eq("id", mon.id);
 
             await supabase.from("notificacoes").insert({
+              tenant_id: mon.tenant_id,
               user_id: mon.user_id,
               titulo: `Nova movimentação - ${mon.numero_processo}`,
               mensagem: `${lastMov} (${mon.tribunal.toUpperCase()})`,
@@ -142,17 +143,27 @@ serve(async (req) => {
       .gte("data_limite", hoje);
 
     for (const t of (tarefasUrgentes || [])) {
-      // Check if we already notified about this
-      const { data: existing } = await supabase
+      // Deduplica dentro do tenant. Sem o recorte, o mesmo usuário atuando em
+      // dois escritórios poderia ter o aviso de um cliente bloqueado pelo aviso
+      // homônimo de outro.
+      let existingQuery = supabase
         .from("notificacoes")
         .select("id")
         .eq("user_id", t.user_id)
         .eq("titulo", `Prazo próximo - ${t.titulo}`)
         .gte("created_at", hoje)
         .limit(1);
+      if (t.tenant_id) {
+        existingQuery = existingQuery.eq("tenant_id", t.tenant_id);
+      }
+      // Para tarefa legada sem tenant não filtramos por null: um trigger de
+      // compatibilidade pode atribuir o tenant efetivo ao INSERT. Filtrar null
+      // aqui não encontraria essa linha e recriaria o mesmo alerta a cada cron.
+      const { data: existing } = await existingQuery;
 
       if (!existing || existing.length === 0) {
         await supabase.from("notificacoes").insert({
+          tenant_id: t.tenant_id,
           user_id: t.user_id,
           titulo: `Prazo próximo - ${t.titulo}`,
           mensagem: `A tarefa "${t.titulo}" vence em ${new Date(t.data_limite).toLocaleDateString("pt-BR")}`,
