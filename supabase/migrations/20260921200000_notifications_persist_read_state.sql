@@ -34,14 +34,17 @@ language plpgsql
 set search_path = pg_catalog, public
 as $$
 begin
-  if new.lida is true
-     and old.lida is distinct from true
-     and old.lida_em is null then
+  -- Depois do primeiro registro, timestamps de auditoria são imutáveis. Uma
+  -- aba stale não pode substituir o instante original pelo relógio local.
+  if old.lida_em is not null then
+    new.lida_em := old.lida_em;
+  elsif new.lida is true and old.lida is distinct from true then
     new.lida_em := statement_timestamp();
   end if;
 
-  if new.arquivada_em is not null
-     and old.arquivada_em is null then
+  if old.arquivada_em is not null then
+    new.arquivada_em := old.arquivada_em;
+  elsif new.arquivada_em is not null then
     new.arquivada_em := statement_timestamp();
   end if;
 

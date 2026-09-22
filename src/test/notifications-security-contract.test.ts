@@ -41,9 +41,13 @@ describe("contrato de segurança das notificações", () => {
     );
   });
 
-  it("timestamps auditáveis vêm do relógio do banco", () => {
+  it("timestamps auditáveis vêm do relógio do banco e são imutáveis", () => {
     expect(executable).toContain("set_notificacao_audit_timestamps");
     expect(executable).toContain("statement_timestamp()");
     expect(executable).toContain("before update of lida, lida_em, arquivada_em");
+    expect(executable).toContain("if old.lida_em is not null then");
+    expect(executable).toContain("new.lida_em := old.lida_em");
+    expect(executable).toContain("if old.arquivada_em is not null then");
+    expect(executable).toContain("new.arquivada_em := old.arquivada_em");
   });
 });

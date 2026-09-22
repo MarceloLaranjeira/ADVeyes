@@ -47,36 +47,79 @@ describe("notificationsService", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("lista somente a caixa do usuário e do tenant atual", async () => {
-    const q = builder({ data: [raw] });
-    fromMock.mockReturnValue(q.chain);
+    const unread = builder({ data: [raw] });
+    const recent = builder({ data: [raw] });
+    fromMock
+      .mockReturnValueOnce(unread.chain)
+      .mockReturnValueOnce(recent.chain);
 
     const result = await notificationsService.list("user-1", "tenant-1");
 
-    expect(fromMock).toHaveBeenCalledWith("notificacoes");
-    expect(q.calls).toContainEqual(["eq", "user_id", "user-1"]);
-    expect(q.calls).toContainEqual(["is", "arquivada_em", null]);
-    expect(q.calls).toContainEqual([
-      "or",
-      "tenant_id.eq.tenant-1,tenant_id.is.null",
-    ]);
-    expect(q.calls).toContainEqual(["order", "created_at", { ascending: false }]);
-    expect(q.calls).toContainEqual(["limit", 50]);
+    expect(fromMock).toHaveBeenCalledTimes(2);
+    for (const query of [unread, recent]) {
+      expect(query.calls).toContainEqual(["eq", "user_id", "user-1"]);
+      expect(query.calls).toContainEqual(["is", "arquivada_em", null]);
+      expect(query.calls).toContainEqual([
+        "or",
+        "tenant_id.eq.tenant-1,tenant_id.is.null",
+      ]);
+      expect(query.calls).toContainEqual([
+        "order",
+        "created_at",
+        { ascending: false },
+      ]);
+    }
+    expect(unread.calls).toContainEqual(["eq", "lida", false]);
+    expect(unread.calls.some(([method]) => method === "limit")).toBe(false);
+    expect(recent.calls).toContainEqual(["limit", 50]);
+    // A mesma linha veio nas duas consultas e foi deduplicada.
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ id: "n-1", tipo: "PRAZO_VENCENDO" });
   });
 
   it("sem tenant traz apenas o histórico sem vínculo", async () => {
-    const q = builder({ data: [] });
-    fromMock.mockReturnValue(q.chain);
+    const unread = builder({ data: [] });
+    const recent = builder({ data: [] });
+    fromMock
+      .mockReturnValueOnce(unread.chain)
+      .mockReturnValueOnce(recent.chain);
 
     await notificationsService.list("user-1", null, 20);
 
-    expect(q.calls).toContainEqual(["is", "tenant_id", null]);
-    expect(q.calls).not.toContainEqual([
-      "or",
-      expect.stringContaining("tenant_id.eq"),
-    ]);
-    expect(q.calls).toContainEqual(["limit", 20]);
+    for (const query of [unread, recent]) {
+      expect(query.calls).toContainEqual(["is", "tenant_id", null]);
+      expect(query.calls).not.toContainEqual([
+        "or",
+        expect.stringContaining("tenant_id.eq"),
+      ]);
+    }
+    expect(recent.calls).toContainEqual(["limit", 20]);
+  });
+
+  it("não esconde não lida antiga fora das 50 recentes", async () => {
+    const antiga = {
+      ...raw,
+      id: "n-antiga",
+      created_at: "2026-01-01T10:00:00Z",
+      lida: false,
+    };
+    const lidaRecente = {
+      ...raw,
+      id: "n-recente",
+      created_at: "2026-09-20T10:00:00Z",
+      lida: true,
+      lida_em: "2026-09-20T10:01:00Z",
+    };
+    const unread = builder({ data: [antiga] });
+    const recent = builder({ data: [lidaRecente] });
+    fromMock
+      .mockReturnValueOnce(unread.chain)
+      .mockReturnValueOnce(recent.chain);
+
+    const result = await notificationsService.list("user-1", "tenant-1");
+
+    expect(result.map((item) => item.id)).toEqual(["n-recente", "n-antiga"]);
+    expect(result.find((item) => item.id === "n-antiga")?.lida).toBe(false);
   });
 
   it("marca uma notificação como lida sem tocar na de outro usuário", async () => {
@@ -128,6 +171,7 @@ describe("notificationsService", () => {
     expect((update?.[1] as { arquivada_em?: string }).arquivada_em).toBeTruthy();
     expect(q.calls).toContainEqual(["eq", "id", "n-1"]);
     expect(q.calls).toContainEqual(["eq", "user_id", "user-1"]);
+    expect(q.calls).toContainEqual(["is", "arquivada_em", null]);
     expect(q.calls).toContainEqual([
       "or",
       "tenant_id.eq.tenant-1,tenant_id.is.null",
@@ -135,8 +179,11 @@ describe("notificationsService", () => {
   });
 
   it("propaga erro do Supabase em vez de fingir sucesso", async () => {
-    const q = builder({ error: { message: "database unavailable" } });
-    fromMock.mockReturnValue(q.chain);
+    const unread = builder({ error: { message: "database unavailable" } });
+    const recent = builder({ data: [] });
+    fromMock
+      .mockReturnValueOnce(unread.chain)
+      .mockReturnValueOnce(recent.chain);
 
     await expect(notificationsService.list("user-1", "tenant-1"))
       .rejects.toThrow("database unavailable");

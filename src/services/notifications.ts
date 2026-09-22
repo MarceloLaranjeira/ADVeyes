@@ -15,8 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { mapNotificacao, type NotificacaoRow } from "@/lib/notificacoes";
 import type { Notificacao } from "@/types/notificacoes";
 
-/** Teto da carga inicial: o painel é uma caixa recente, não um arquivo. */
-const LIMITE_PADRAO = 50;
+/** Quantas já lidas ficam visíveis; todas as não lidas são sempre carregadas. */
+const LIMITE_RECENTES_LIDAS = 50;
 
 function fail(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
@@ -33,23 +33,53 @@ export const notificationsService = {
   async list(
     userId: string,
     tenantId: string | null,
-    limite = LIMITE_PADRAO,
+    limiteRecentesLidas = LIMITE_RECENTES_LIDAS,
   ): Promise<Notificacao[]> {
-    let query = supabase
+    // Todas as não lidas precisam estar acessíveis, mesmo quando há mais de 50
+    // linhas recentes. Caso contrário, o sino poderia exibir "Tudo em dia"
+    // enquanto um prazo antigo ainda não visto estivesse na página seguinte.
+    let unreadQuery = supabase
+      .from("notificacoes")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("lida", false)
+      .is("arquivada_em", null)
+      .order("created_at", { ascending: false });
+
+    let recentQuery = supabase
       .from("notificacoes")
       .select("*")
       .eq("user_id", userId)
       .is("arquivada_em", null)
       .order("created_at", { ascending: false })
-      .limit(limite);
+      .limit(limiteRecentesLidas);
 
-    query = tenantId
-      ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
-      : query.is("tenant_id", null);
+    if (tenantId) {
+      const scope = `tenant_id.eq.${tenantId},tenant_id.is.null`;
+      unreadQuery = unreadQuery.or(scope);
+      recentQuery = recentQuery.or(scope);
+    } else {
+      unreadQuery = unreadQuery.is("tenant_id", null);
+      recentQuery = recentQuery.is("tenant_id", null);
+    }
 
-    const { data, error } = await query;
-    fail(error);
-    return (data ?? []).map((row) => mapNotificacao(row as NotificacaoRow));
+    const [unreadResult, recentResult] = await Promise.all([
+      unreadQuery,
+      recentQuery,
+    ]);
+    fail(unreadResult.error);
+    fail(recentResult.error);
+
+    const byId = new Map<string, NotificacaoRow>();
+    for (const row of recentResult.data ?? []) {
+      byId.set(row.id, row as NotificacaoRow);
+    }
+    for (const row of unreadResult.data ?? []) {
+      byId.set(row.id, row as NotificacaoRow);
+    }
+    return [...byId.values()]
+      .map(mapNotificacao)
+      .sort((a, b) => b.dataNotificacao.getTime() - a.dataNotificacao.getTime());
   },
 
   /**
@@ -111,7 +141,8 @@ export const notificationsService = {
       .from("notificacoes")
       .update({ arquivada_em: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .is("arquivada_em", null);
     query = tenantId
       ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       : query.is("tenant_id", null);
