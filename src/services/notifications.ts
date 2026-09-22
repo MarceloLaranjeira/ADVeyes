@@ -29,7 +29,8 @@ async function listAllUnread(
   tenantId: string | null,
 ): Promise<NotificacaoRow[]> {
   const rows: NotificacaoRow[] = [];
-  for (let from = 0;; from += PAGINA_NAO_LIDAS) {
+  let cursor: { createdAt: string; id: string } | null = null;
+  while (true) {
     let query = supabase
       .from("notificacoes")
       .select("*")
@@ -37,7 +38,17 @@ async function listAllUnread(
       .eq("lida", false)
       .is("arquivada_em", null)
       .order("created_at", { ascending: false })
-      .range(from, from + PAGINA_NAO_LIDAS - 1);
+      .order("id", { ascending: false })
+      .limit(PAGINA_NAO_LIDAS);
+
+    // Keyset, não offset: se outra aba lê/arquiva uma linha da página anterior,
+    // o conjunto encolhe. Offset pularia a mesma quantidade na página seguinte;
+    // o cursor (created_at, id) permanece estável mesmo com essas remoções.
+    if (cursor) {
+      query = query.or(
+        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+      );
+    }
     query = tenantId
       ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       : query.is("tenant_id", null);
@@ -47,6 +58,8 @@ async function listAllUnread(
     const page = (data ?? []) as NotificacaoRow[];
     rows.push(...page);
     if (page.length < PAGINA_NAO_LIDAS) return rows;
+    const last = page[page.length - 1];
+    cursor = { createdAt: last.created_at!, id: last.id };
   }
 }
 

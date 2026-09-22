@@ -79,7 +79,8 @@ describe("notificationsService", () => {
       ]);
     }
     expect(unread.calls).toContainEqual(["eq", "lida", false]);
-    expect(unread.calls).toContainEqual(["range", 0, 499]);
+    expect(unread.calls).toContainEqual(["limit", 500]);
+    expect(unread.calls).toContainEqual(["order", "id", { ascending: false }]);
     expect(recent.calls).toContainEqual(["limit", 50]);
     // A mesma linha veio nas duas consultas e foi deduplicada.
     expect(result).toHaveLength(1);
@@ -152,8 +153,13 @@ describe("notificationsService", () => {
 
     const result = await notificationsService.list("user-1", "tenant-1");
 
-    expect(unread1.calls).toContainEqual(["range", 0, 499]);
-    expect(unread2.calls).toContainEqual(["range", 500, 999]);
+    expect(unread1.calls).toContainEqual(["limit", 500]);
+    expect(unread1.calls.some(([method]) => method === "range")).toBe(false);
+    expect(unread2.calls).toContainEqual(["limit", 500]);
+    expect(unread2.calls).toContainEqual([
+      "or",
+      "created_at.lt.2026-08-24T10:00:00Z,and(created_at.eq.2026-08-24T10:00:00Z,id.lt.unread-499)",
+    ]);
     expect(result).toHaveLength(501);
     expect(result.some((item) => item.id === "unread-500")).toBe(true);
   });
