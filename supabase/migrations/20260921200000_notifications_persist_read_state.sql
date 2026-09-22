@@ -25,6 +25,39 @@ update public.notificacoes
 set lida_em = coalesce(lida_em, created_at)
 where lida is true and lida_em is null;
 
+-- O browser inicia a mutação, mas o instante auditável vem do banco. Relógio
+-- do dispositivo pode estar adiantado, atrasado ou ser alterado pelo usuário;
+-- um prazo precisa registrar quando o servidor recebeu a leitura.
+create or replace function public.set_notificacao_audit_timestamps()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.lida is true
+     and old.lida is distinct from true
+     and old.lida_em is null then
+    new.lida_em := statement_timestamp();
+  end if;
+
+  if new.arquivada_em is not null
+     and old.arquivada_em is null then
+    new.arquivada_em := statement_timestamp();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notificacoes_audit_timestamps
+  on public.notificacoes;
+
+create trigger notificacoes_audit_timestamps
+before update of lida, lida_em, arquivada_em
+on public.notificacoes
+for each row
+execute function public.set_notificacao_audit_timestamps();
+
 -- A consulta do painel é sempre a mesma: as notificações não arquivadas de um
 -- usuário, mais recentes primeiro. Sem este índice ela vira varredura completa
 -- assim que a tabela crescer.

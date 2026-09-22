@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aplicarAtualizacaoNotificacao,
   contarNaoLidas,
+  eventoPertenceAoEscopo,
   mapData,
   mapNotificacao,
   mapTipo,
@@ -219,6 +220,20 @@ describe("notificacaoPertenceAoTenant", () => {
   it("sem tenant ativo rejeita linhas de qualquer tenant", () => {
     expect(notificacaoPertenceAoTenant("tenant-1", null)).toBe(false);
     expect(notificacaoPertenceAoTenant(null, null)).toBe(true);
+  });
+});
+
+describe("eventoPertenceAoEscopo", () => {
+  it("rejeita callback atrasado do tenant anterior", () => {
+    expect(eventoPertenceAoEscopo("user-1:tenant-a", "user-1:tenant-b"))
+      .toBe(false);
+  });
+
+  it("aceita somente o usuário e tenant capturados pela assinatura atual", () => {
+    expect(eventoPertenceAoEscopo("user-1:tenant-a", "user-1:tenant-a"))
+      .toBe(true);
+    expect(eventoPertenceAoEscopo("user-2:tenant-a", "user-1:tenant-a"))
+      .toBe(false);
   });
 });
 

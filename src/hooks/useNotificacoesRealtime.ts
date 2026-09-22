@@ -22,6 +22,8 @@ export interface NotificacaoRealtimeEvent {
   kind: "insert" | "update";
   notification: Notificacao;
   archived: boolean;
+  /** Escopo capturado pela inscrição; callback atrasado de outro tenant morre. */
+  scopeKey: string;
 }
 
 export function useNotificacoesRealtime(
@@ -39,6 +41,7 @@ export function useNotificacoesRealtime(
 
   useEffect(() => {
     if (!userId) return;
+    const subscriptionScope = `${userId}:${tenantId ?? "legacy"}`;
 
     const channel = supabase
       .channel(`notificacoes-${userId}`)
@@ -60,6 +63,7 @@ export function useNotificacoesRealtime(
             kind: payload.eventType === "INSERT" ? "insert" : "update",
             notification: mapNotificacao(row),
             archived: Boolean(row.arquivada_em),
+            scopeKey: subscriptionScope,
           });
         },
       )

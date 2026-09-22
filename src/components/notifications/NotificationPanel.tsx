@@ -33,6 +33,7 @@ import { notificationsService } from "@/services/notifications";
 import {
   aplicarAtualizacaoNotificacao,
   contarNaoLidas,
+  eventoPertenceAoEscopo,
   mergeNotificacao,
   reconciliarNotificacoes,
 } from "@/lib/notificacoes";
@@ -57,6 +58,10 @@ export const NotificationPanel = () => {
   const unreadCount = contarNaoLidas(notifications);
 
   const handleRealtime = useCallback((event: NotificacaoRealtimeEvent) => {
+    // O cleanup do canal é assíncrono. Um callback já enfileirado pelo tenant
+    // anterior pode chegar depois da troca; nunca toca estado nem sequência do
+    // novo escopo.
+    if (!eventoPertenceAoEscopo(event.scopeKey, scopeRef.current)) return;
     const sequence = ++realtimeSequenceRef.current;
     realtimeTouchedRef.current.set(event.notification.id, sequence);
     setNotifications((prev) =>

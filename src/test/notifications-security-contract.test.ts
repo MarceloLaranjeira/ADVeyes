@@ -40,4 +40,10 @@ describe("contrato de segurança das notificações", () => {
       'drop policy if exists "notificacoes_scoped_to_user_and_tenant"',
     );
   });
+
+  it("timestamps auditáveis vêm do relógio do banco", () => {
+    expect(executable).toContain("set_notificacao_audit_timestamps");
+    expect(executable).toContain("statement_timestamp()");
+    expect(executable).toContain("before update of lida, lida_em, arquivada_em");
+  });
 });

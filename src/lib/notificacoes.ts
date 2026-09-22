@@ -169,3 +169,11 @@ export function notificacaoPertenceAoTenant(
     ? !rowTenantId || rowTenantId === tenantId
     : !rowTenantId;
 }
+
+/** Callback já enfileirado de outro usuário/tenant nunca toca o escopo atual. */
+export function eventoPertenceAoEscopo(
+  eventScope: string,
+  currentScope: string,
+): boolean {
+  return eventScope === currentScope;
+}
