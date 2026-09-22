@@ -17,9 +17,57 @@ import type { Notificacao } from "@/types/notificacoes";
 
 /** Quantas já lidas ficam visíveis; todas as não lidas são sempre carregadas. */
 const LIMITE_RECENTES_LIDAS = 50;
+/** Abaixo do teto padrão de 1.000 linhas do PostgREST. */
+const PAGINA_NAO_LIDAS = 500;
 
 function fail(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
+}
+
+async function listAllUnread(
+  userId: string,
+  tenantId: string | null,
+): Promise<NotificacaoRow[]> {
+  const rows: NotificacaoRow[] = [];
+  for (let from = 0;; from += PAGINA_NAO_LIDAS) {
+    let query = supabase
+      .from("notificacoes")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("lida", false)
+      .is("arquivada_em", null)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGINA_NAO_LIDAS - 1);
+    query = tenantId
+      ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+      : query.is("tenant_id", null);
+
+    const { data, error } = await query;
+    fail(error);
+    const page = (data ?? []) as NotificacaoRow[];
+    rows.push(...page);
+    if (page.length < PAGINA_NAO_LIDAS) return rows;
+  }
+}
+
+async function listRecent(
+  userId: string,
+  tenantId: string | null,
+  limit: number,
+): Promise<NotificacaoRow[]> {
+  let query = supabase
+    .from("notificacoes")
+    .select("*")
+    .eq("user_id", userId)
+    .is("arquivada_em", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  query = tenantId
+    ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+    : query.is("tenant_id", null);
+  const { data, error } = await query;
+  fail(error);
+  return (data ?? []) as NotificacaoRow[];
 }
 
 export const notificationsService = {
@@ -35,48 +83,14 @@ export const notificationsService = {
     tenantId: string | null,
     limiteRecentesLidas = LIMITE_RECENTES_LIDAS,
   ): Promise<Notificacao[]> {
-    // Todas as não lidas precisam estar acessíveis, mesmo quando há mais de 50
-    // linhas recentes. Caso contrário, o sino poderia exibir "Tudo em dia"
-    // enquanto um prazo antigo ainda não visto estivesse na página seguinte.
-    let unreadQuery = supabase
-      .from("notificacoes")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("lida", false)
-      .is("arquivada_em", null)
-      .order("created_at", { ascending: false });
-
-    let recentQuery = supabase
-      .from("notificacoes")
-      .select("*")
-      .eq("user_id", userId)
-      .is("arquivada_em", null)
-      .order("created_at", { ascending: false })
-      .limit(limiteRecentesLidas);
-
-    if (tenantId) {
-      const scope = `tenant_id.eq.${tenantId},tenant_id.is.null`;
-      unreadQuery = unreadQuery.or(scope);
-      recentQuery = recentQuery.or(scope);
-    } else {
-      unreadQuery = unreadQuery.is("tenant_id", null);
-      recentQuery = recentQuery.is("tenant_id", null);
-    }
-
-    const [unreadResult, recentResult] = await Promise.all([
-      unreadQuery,
-      recentQuery,
+    const [unreadRows, recentRows] = await Promise.all([
+      listAllUnread(userId, tenantId),
+      listRecent(userId, tenantId, limiteRecentesLidas),
     ]);
-    fail(unreadResult.error);
-    fail(recentResult.error);
 
     const byId = new Map<string, NotificacaoRow>();
-    for (const row of recentResult.data ?? []) {
-      byId.set(row.id, row as NotificacaoRow);
-    }
-    for (const row of unreadResult.data ?? []) {
-      byId.set(row.id, row as NotificacaoRow);
-    }
+    for (const row of recentRows) byId.set(row.id, row);
+    for (const row of unreadRows) byId.set(row.id, row);
     return [...byId.values()]
       .map(mapNotificacao)
       .sort((a, b) => b.dataNotificacao.getTime() - a.dataNotificacao.getTime());

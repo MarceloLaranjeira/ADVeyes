@@ -14,7 +14,16 @@ import { notificationsService } from "@/services/notifications";
 function builder(result: { data?: unknown; error?: { message: string } | null }) {
   const calls: Array<[string, ...unknown[]]> = [];
   const chain: Record<string, unknown> = {};
-  for (const method of ["select", "eq", "is", "order", "limit", "or", "update"]) {
+  for (const method of [
+    "select",
+    "eq",
+    "is",
+    "order",
+    "limit",
+    "range",
+    "or",
+    "update",
+  ]) {
     chain[method] = vi.fn((...args: unknown[]) => {
       calls.push([method, ...args]);
       return chain;
@@ -70,7 +79,7 @@ describe("notificationsService", () => {
       ]);
     }
     expect(unread.calls).toContainEqual(["eq", "lida", false]);
-    expect(unread.calls.some(([method]) => method === "limit")).toBe(false);
+    expect(unread.calls).toContainEqual(["range", 0, 499]);
     expect(recent.calls).toContainEqual(["limit", 50]);
     // A mesma linha veio nas duas consultas e foi deduplicada.
     expect(result).toHaveLength(1);
@@ -120,6 +129,33 @@ describe("notificationsService", () => {
 
     expect(result.map((item) => item.id)).toEqual(["n-recente", "n-antiga"]);
     expect(result.find((item) => item.id === "n-antiga")?.lida).toBe(false);
+  });
+
+  it("pagina além do teto de 500 até carregar todas as não lidas", async () => {
+    const primeiraPagina = Array.from({ length: 500 }, (_, index) => ({
+      ...raw,
+      id: `unread-${index}`,
+      created_at: `2026-08-${String((index % 28) + 1).padStart(2, "0")}T10:00:00Z`,
+    }));
+    const ultimaPagina = [{
+      ...raw,
+      id: "unread-500",
+      created_at: "2026-07-01T10:00:00Z",
+    }];
+    const unread1 = builder({ data: primeiraPagina });
+    const recent = builder({ data: [] });
+    const unread2 = builder({ data: ultimaPagina });
+    fromMock
+      .mockReturnValueOnce(unread1.chain)
+      .mockReturnValueOnce(recent.chain)
+      .mockReturnValueOnce(unread2.chain);
+
+    const result = await notificationsService.list("user-1", "tenant-1");
+
+    expect(unread1.calls).toContainEqual(["range", 0, 499]);
+    expect(unread2.calls).toContainEqual(["range", 500, 999]);
+    expect(result).toHaveLength(501);
+    expect(result.some((item) => item.id === "unread-500")).toBe(true);
   });
 
   it("marca uma notificação como lida sem tocar na de outro usuário", async () => {
