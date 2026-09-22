@@ -2,29 +2,40 @@
  * Recebe notificações em tempo real via Supabase Realtime.
  *
  * O realtime é a camada de atualização, não a de memória: ele entrega apenas
- * o que é inserido enquanto o canal está aberto. O histórico vem do banco pelo
- * `notificationsService` — antes o painel dependia só deste hook e perdia toda
- * notificação gerada com a aba fechada.
+ * o que muda enquanto o canal está aberto. O histórico vem do banco pelo
+ * `notificationsService`.
  *
- * O recorte por tenant é feito no cliente porque o filtro do canal aceita uma
- * única igualdade: a assinatura já limita ao `user_id`, e aqui descartamos o
- * que pertence a outro escritório do mesmo advogado.
+ * INSERT e UPDATE são necessários: sem UPDATE, uma leitura/arquivamento feito
+ * em outra aba ou dispositivo deixa este painel com linha e contador antigos.
  */
 
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { mapNotificacao, type NotificacaoRow } from "@/lib/notificacoes";
+import {
+  mapNotificacao,
+  notificacaoPertenceAoTenant,
+  type NotificacaoRow,
+} from "@/lib/notificacoes";
 import type { Notificacao } from "@/types/notificacoes";
+
+export interface NotificacaoRealtimeEvent {
+  kind: "insert" | "update";
+  notification: Notificacao;
+  archived: boolean;
+}
 
 export function useNotificacoesRealtime(
   userId: string | undefined,
   tenantId: string | null | undefined,
-  onNova: (n: Notificacao) => void,
+  onChange: (event: NotificacaoRealtimeEvent) => void,
+  onReady?: () => void,
 ) {
-  // O callback muda a cada render do painel. Sem a ref, o efeito recriaria a
-  // inscrição a cada mudança e o canal ficaria reconectando sem parar.
-  const callbackRef = useRef(onNova);
-  callbackRef.current = onNova;
+  // Callbacks mudam a cada render. As refs impedem que o efeito recrie a
+  // inscrição a cada mudança e deixe janelas sem canal durante a reconexão.
+  const changeRef = useRef(onChange);
+  changeRef.current = onChange;
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
 
   useEffect(() => {
     if (!userId) return;
@@ -34,21 +45,30 @@ export function useNotificacoesRealtime(
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "notificacoes",
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
+          if (payload.eventType !== "INSERT" && payload.eventType !== "UPDATE") {
+            return;
+          }
           const row = payload.new as NotificacaoRow;
-          // Notificação de outro escritório do mesmo advogado não entra na
-          // caixa do escritório aberto agora. Linha sem tenant é histórico
-          // anterior ao multi-tenant e pertence ao usuário.
-          if (tenantId && row.tenant_id && row.tenant_id !== tenantId) return;
-          callbackRef.current(mapNotificacao(row));
+          if (!notificacaoPertenceAoTenant(row.tenant_id, tenantId)) return;
+          changeRef.current({
+            kind: payload.eventType === "INSERT" ? "insert" : "update",
+            notification: mapNotificacao(row),
+            archived: Boolean(row.arquivada_em),
+          });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Uma carga depois do SUBSCRIBED fecha o intervalo entre o snapshot da
+        // primeira consulta e o canal ficar pronto. Ela é mesclada por id, não
+        // substitui eventos que já chegaram.
+        if (status === "SUBSCRIBED") readyRef.current?.();
+      });
 
     return () => {
       void supabase.removeChannel(channel);

@@ -116,7 +116,53 @@ export function mergeNotificacao(
   return [incoming, ...current];
 }
 
+/**
+ * Reconcilia o snapshot do banco com eventos que já chegaram pelo realtime.
+ * O item mais novo por id vence e a lista volta ordenada por data. Isso fecha
+ * a corrida "INSERT chegou enquanto list() ainda estava pendente" sem perder
+ * nenhum dos dois lados.
+ */
+export function reconciliarNotificacoes(
+  current: Notificacao[],
+  loaded: Notificacao[],
+  loadedWins = false,
+): Notificacao[] {
+  const byId = new Map<string, Notificacao>();
+  // Carga/catch-up: o estado atual pode conter realtime mais recente e vence.
+  // Rollback: o snapshot do banco é autoritativo para desfazer a ação otimista,
+  // mas itens current-only (INSERT durante a requisição) são preservados.
+  const first = loadedWins ? current : loaded;
+  const second = loadedWins ? loaded : current;
+  for (const item of first) byId.set(item.id, item);
+  for (const item of second) byId.set(item.id, item);
+  return [...byId.values()].sort(
+    (a, b) => b.dataNotificacao.getTime() - a.dataNotificacao.getTime(),
+  );
+}
+
+/** Aplica UPDATE realtime ou remove a linha que foi arquivada em outra tela. */
+export function aplicarAtualizacaoNotificacao(
+  current: Notificacao[],
+  updated: Notificacao,
+  archived: boolean,
+): Notificacao[] {
+  if (archived) return current.filter((item) => item.id !== updated.id);
+  const index = current.findIndex((item) => item.id === updated.id);
+  if (index < 0) return mergeNotificacao(current, updated);
+  return current.map((item) => item.id === updated.id ? updated : item);
+}
+
 /** Não lidas na lista carregada — o número que aparece no sino. */
 export function contarNaoLidas(items: Notificacao[]): number {
   return items.filter((item) => !item.lida).length;
+}
+
+/** Uma linha pertence ao tenant aberto; sem tenant, apenas legado sem tenant. */
+export function notificacaoPertenceAoTenant(
+  rowTenantId: string | null | undefined,
+  tenantId: string | null | undefined,
+): boolean {
+  return tenantId
+    ? !rowTenantId || rowTenantId === tenantId
+    : !rowTenantId;
 }

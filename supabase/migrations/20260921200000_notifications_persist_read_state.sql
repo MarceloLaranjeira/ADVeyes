@@ -32,32 +32,38 @@ create index if not exists notificacoes_user_recentes_idx
   on public.notificacoes (user_id, created_at desc)
   where arquivada_em is null;
 
--- A política original isolava por usuário (auth.uid() = user_id), o que já
--- impede um advogado de ler a caixa de outro. Falta o recorte de tenant: sem
--- ele, um usuário que atua em dois escritórios vê as duas caixas misturadas na
--- mesma tela, e uma notificação de um cliente aparece no contexto do outro.
+-- As policies `tenant_v2_*` já protegem as linhas modernas com tenant:
+--   * SELECT/UPDATE/DELETE exigem usuário dono + membership ativa;
+--   * INSERT exige também a permissão legal.create.
 --
--- `private.is_active_tenant_member` é o mesmo helper que as demais políticas
--- do projeto usam para esse recorte — reaproveitá-lo mantém uma definição só
--- de "membro ativo". Linha sem tenant_id continua visível: é o histórico
--- anterior ao multi-tenant, que pertence ao usuário e não a um escritório.
+-- Não criamos uma policy FOR ALL: policies permissivas são combinadas com OR,
+-- e isso ampliaria INSERT para qualquer membro ativo, contornando legal.create.
+-- O que falta é somente compatibilidade com o histórico anterior ao
+-- multi-tenant (`tenant_id is null`), restrita a leitura e atualização pelo
+-- próprio dono. INSERT e DELETE legados continuam sem permissão de browser.
 drop policy if exists "Users can CRUD own notificacoes" on public.notificacoes;
+drop policy if exists "notificacoes_scoped_to_user_and_tenant" on public.notificacoes;
+drop policy if exists "notificacoes_legacy_select" on public.notificacoes;
+drop policy if exists "notificacoes_legacy_update" on public.notificacoes;
 
-create policy "notificacoes_scoped_to_user_and_tenant"
+create policy "notificacoes_legacy_select"
   on public.notificacoes
-  for all
+  for select
   to authenticated
   using (
     auth.uid() = user_id
-    and (
-      tenant_id is null
-      or (select private.is_active_tenant_member(auth.uid(), tenant_id))
-    )
+    and tenant_id is null
+  );
+
+create policy "notificacoes_legacy_update"
+  on public.notificacoes
+  for update
+  to authenticated
+  using (
+    auth.uid() = user_id
+    and tenant_id is null
   )
   with check (
     auth.uid() = user_id
-    and (
-      tenant_id is null
-      or (select private.is_active_tenant_member(auth.uid(), tenant_id))
-    )
+    and tenant_id is null
   );

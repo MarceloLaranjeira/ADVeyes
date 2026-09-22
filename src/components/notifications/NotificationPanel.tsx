@@ -12,7 +12,7 @@
  * Todas as notificações são assinadas com 🦅 Horus.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, Bell, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,9 +25,17 @@ import { Badge } from "@/components/ui/badge";
 import type { Notificacao } from "@/types/notificacoes";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
-import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
+import {
+  useNotificacoesRealtime,
+  type NotificacaoRealtimeEvent,
+} from "@/hooks/useNotificacoesRealtime";
 import { notificationsService } from "@/services/notifications";
-import { contarNaoLidas, mergeNotificacao } from "@/lib/notificacoes";
+import {
+  aplicarAtualizacaoNotificacao,
+  contarNaoLidas,
+  mergeNotificacao,
+  reconciliarNotificacoes,
+} from "@/lib/notificacoes";
 
 export const NotificationPanel = () => {
   const { user } = useAuth();
@@ -35,80 +43,107 @@ export const NotificationPanel = () => {
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
   const [open, setOpen] = useState(false);
   const [erro, setErro] = useState(false);
+  const [realtimeReadyVersion, setRealtimeReadyVersion] = useState(0);
 
   const userId = user?.id;
   const tenantId = currentTenant?.tenantId ?? null;
+  const scopeKey = `${userId ?? "anon"}:${tenantId ?? "legacy"}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
   const unreadCount = contarNaoLidas(notifications);
 
-  // Carga inicial do banco. Sem ela o painel só mostraria o que chegasse
-  // durante a sessão — e o aviso de prazo da madrugada nunca apareceria.
-  useEffect(() => {
-    if (!userId) {
-      setNotifications([]);
-      return;
-    }
-
-    let ativo = true;
-    notificationsService.list(userId, tenantId)
-      .then((items) => {
-        if (!ativo) return;
-        setNotifications(items);
-        setErro(false);
-      })
-      .catch(() => {
-        // Falha de carga não pode derrubar o header: o sino continua ali e o
-        // realtime segue entregando o que chegar.
-        if (ativo) setErro(true);
-      });
-
-    return () => {
-      ativo = false;
-    };
-  }, [userId, tenantId]);
-
-  const handleNova = useCallback((nova: Notificacao) => {
-    setNotifications((prev) => mergeNotificacao(prev, nova));
+  const handleRealtime = useCallback((event: NotificacaoRealtimeEvent) => {
+    setNotifications((prev) =>
+      event.kind === "insert"
+        ? mergeNotificacao(prev, event.notification)
+        : aplicarAtualizacaoNotificacao(
+          prev,
+          event.notification,
+          event.archived,
+        )
+    );
   }, []);
 
-  useNotificacoesRealtime(userId, tenantId, handleNova);
+  const handleRealtimeReady = useCallback(() => {
+    setRealtimeReadyVersion((version) => version + 1);
+  }, []);
+
+  // A inscrição é registrada antes dos efeitos de carga. Quando o canal fica
+  // SUBSCRIBED, uma segunda carga de catch-up fecha qualquer intervalo entre o
+  // snapshot inicial e a assinatura estar pronta.
+  useNotificacoesRealtime(
+    userId,
+    tenantId,
+    handleRealtime,
+    handleRealtimeReady,
+  );
+
+  const carregar = useCallback(async (loadedWins = false) => {
+    if (!userId) return;
+    const requestedScope = scopeKey;
+    try {
+      const items = await notificationsService.list(userId, tenantId);
+      // Uma resposta do tenant anterior nunca pode repovoar a caixa depois de
+      // o usuário trocar de escritório.
+      if (scopeRef.current !== requestedScope) return;
+      setNotifications((current) =>
+        reconciliarNotificacoes(current, items, loadedWins)
+      );
+      setErro(false);
+    } catch {
+      if (scopeRef.current === requestedScope) setErro(true);
+    }
+  }, [scopeKey, tenantId, userId]);
+
+  // Troca de usuário/tenant limpa primeiro; a carga sempre MESCLA com eventos
+  // que possam chegar enquanto a requisição está pendente.
+  useEffect(() => {
+    setNotifications([]);
+    setErro(false);
+    if (userId) void carregar();
+  }, [scopeKey, userId, carregar]);
+
+  // Catch-up após o canal confirmar SUBSCRIBED. Não limpa a lista: eventos que
+  // já chegaram vencem o snapshot do banco para o mesmo id.
+  useEffect(() => {
+    if (realtimeReadyVersion > 0 && userId) void carregar();
+  }, [realtimeReadyVersion, userId, carregar]);
 
   /**
-   * Atualiza a tela primeiro e persiste depois. Se o banco recusar, desfaz —
-   * o contador do sino não pode divergir do que está gravado.
+   * Atualiza a tela primeiro e persiste depois. Se o banco recusar, recarrega
+   * somente o escopo atual — restaurar um snapshot inteiro apagaria eventos
+   * realtime ou ações concorrentes que chegaram enquanto a chamada pendia.
    */
   const markAsRead = async (id: string) => {
     if (!userId) return;
-    const anterior = notifications;
     setNotifications((prev) =>
       prev.map((item) => item.id === id ? { ...item, lida: true } : item)
     );
     try {
-      await notificationsService.marcarLida(id, userId);
+      await notificationsService.marcarLida(id, userId, tenantId);
     } catch {
-      setNotifications(anterior);
+      await carregar(true);
     }
   };
 
   const markAllAsRead = async () => {
     if (!userId) return;
-    const anterior = notifications;
     setNotifications((prev) => prev.map((item) => ({ ...item, lida: true })));
     try {
       await notificationsService.marcarTodasLidas(userId, tenantId);
     } catch {
-      setNotifications(anterior);
+      await carregar(true);
     }
   };
 
   /** Arquiva: some da caixa, permanece no banco para auditoria. */
   const clearNotification = async (id: string) => {
     if (!userId) return;
-    const anterior = notifications;
     setNotifications((prev) => prev.filter((item) => item.id !== id));
     try {
-      await notificationsService.arquivar(id, userId);
+      await notificationsService.arquivar(id, userId, tenantId);
     } catch {
-      setNotifications(anterior);
+      await carregar(true);
     }
   };
 

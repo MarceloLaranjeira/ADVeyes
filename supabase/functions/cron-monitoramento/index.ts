@@ -153,9 +153,12 @@ serve(async (req) => {
         .eq("titulo", `Prazo próximo - ${t.titulo}`)
         .gte("created_at", hoje)
         .limit(1);
-      existingQuery = t.tenant_id
-        ? existingQuery.eq("tenant_id", t.tenant_id)
-        : existingQuery.is("tenant_id", null);
+      if (t.tenant_id) {
+        existingQuery = existingQuery.eq("tenant_id", t.tenant_id);
+      }
+      // Para tarefa legada sem tenant não filtramos por null: um trigger de
+      // compatibilidade pode atribuir o tenant efetivo ao INSERT. Filtrar null
+      // aqui não encontraria essa linha e recriaria o mesmo alerta a cada cron.
       const { data: existing } = await existingQuery;
 
       if (!existing || existing.length === 0) {

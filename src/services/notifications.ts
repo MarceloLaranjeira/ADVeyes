@@ -56,13 +56,21 @@ export const notificationsService = {
    * Marca uma notificação como lida. Grava o instante, não só o booleano:
    * sem ele não dá para auditar se o aviso foi visto antes do prazo vencer.
    */
-  async marcarLida(id: string, userId: string): Promise<void> {
-    const { error } = await supabase
+  async marcarLida(
+    id: string,
+    userId: string,
+    tenantId: string | null,
+  ): Promise<void> {
+    let query = supabase
       .from("notificacoes")
       .update({ lida: true, lida_em: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", userId)
       .is("lida_em", null);
+    query = tenantId
+      ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+      : query.is("tenant_id", null);
+    const { error } = await query;
     fail(error);
   },
 
@@ -94,12 +102,20 @@ export const notificationsService = {
    * Tira a notificação da caixa sem apagar a linha. O histórico continua
    * disponível para auditoria — um aviso de prazo é registro, não rascunho.
    */
-  async arquivar(id: string, userId: string): Promise<void> {
-    const { error } = await supabase
+  async arquivar(
+    id: string,
+    userId: string,
+    tenantId: string | null,
+  ): Promise<void> {
+    let query = supabase
       .from("notificacoes")
       .update({ arquivada_em: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", userId);
+    query = tenantId
+      ? query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+      : query.is("tenant_id", null);
+    const { error } = await query;
     fail(error);
   },
 };

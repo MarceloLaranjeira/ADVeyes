@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  aplicarAtualizacaoNotificacao,
   contarNaoLidas,
   mapData,
   mapNotificacao,
   mapTipo,
   mapUrgencia,
   mergeNotificacao,
+  notificacaoPertenceAoTenant,
+  reconciliarNotificacoes,
   type NotificacaoRow,
 } from "@/lib/notificacoes";
 import type { Notificacao } from "@/types/notificacoes";
@@ -139,6 +142,61 @@ describe("mergeNotificacao", () => {
     const lista = [notificacao({ id: "n-1" })];
     expect(mergeNotificacao(lista, notificacao({ id: "n-1" }))).toBe(lista);
     expect(mergeNotificacao(lista, notificacao({ id: "n-1" }))).toHaveLength(1);
+  });
+});
+
+describe("reconciliarNotificacoes", () => {
+  it("preserva INSERT realtime que chegou durante a carga inicial", () => {
+    const realtime = notificacao({
+      id: "nova",
+      dataNotificacao: new Date("2026-09-21T12:00:00Z"),
+    });
+    const loaded = notificacao({
+      id: "antiga",
+      dataNotificacao: new Date("2026-09-20T12:00:00Z"),
+    });
+    expect(reconciliarNotificacoes([realtime], [loaded]).map((n) => n.id))
+      .toEqual(["nova", "antiga"]);
+  });
+
+  it("na carga normal o realtime mais novo vence o snapshot para o mesmo id", () => {
+    const snapshot = notificacao({ id: "n-1", lida: false });
+    const realtime = notificacao({ id: "n-1", lida: true });
+    expect(reconciliarNotificacoes([realtime], [snapshot])[0].lida).toBe(true);
+  });
+
+  it("no rollback o snapshot do banco vence o estado otimista", () => {
+    const banco = notificacao({ id: "n-1", lida: false });
+    const otimista = notificacao({ id: "n-1", lida: true });
+    expect(reconciliarNotificacoes([otimista], [banco], true)[0].lida)
+      .toBe(false);
+  });
+});
+
+describe("aplicarAtualizacaoNotificacao", () => {
+  it("reflete leitura feita em outra aba", () => {
+    const lista = [notificacao({ id: "n-1", lida: false })];
+    const atualizada = notificacao({ id: "n-1", lida: true });
+    expect(aplicarAtualizacaoNotificacao(lista, atualizada, false)[0].lida)
+      .toBe(true);
+  });
+
+  it("remove da caixa quando outra aba arquiva", () => {
+    const lista = [notificacao({ id: "n-1" })];
+    expect(aplicarAtualizacaoNotificacao(lista, notificacao(), true)).toEqual([]);
+  });
+});
+
+describe("notificacaoPertenceAoTenant", () => {
+  it("com tenant ativo aceita o próprio tenant e o histórico legado", () => {
+    expect(notificacaoPertenceAoTenant("tenant-1", "tenant-1")).toBe(true);
+    expect(notificacaoPertenceAoTenant(null, "tenant-1")).toBe(true);
+    expect(notificacaoPertenceAoTenant("tenant-2", "tenant-1")).toBe(false);
+  });
+
+  it("sem tenant ativo rejeita linhas de qualquer tenant", () => {
+    expect(notificacaoPertenceAoTenant("tenant-1", null)).toBe(false);
+    expect(notificacaoPertenceAoTenant(null, null)).toBe(true);
   });
 });
 

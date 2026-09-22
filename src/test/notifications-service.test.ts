@@ -83,14 +83,24 @@ describe("notificationsService", () => {
     const q = builder({});
     fromMock.mockReturnValue(q.chain);
 
-    await notificationsService.marcarLida("n-1", "user-1");
+    const before = Date.now();
+    await notificationsService.marcarLida("n-1", "user-1", "tenant-1");
+    const after = Date.now();
 
     const update = q.calls.find(([method]) => method === "update");
     expect(update?.[1]).toMatchObject({ lida: true });
-    expect((update?.[1] as { lida_em?: string }).lida_em).toMatch(/^2026|^20/);
+    const lidaEm = (update?.[1] as { lida_em?: string }).lida_em;
+    expect(lidaEm).toBeTruthy();
+    const timestamp = Date.parse(lidaEm!);
+    expect(timestamp).toBeGreaterThanOrEqual(before);
+    expect(timestamp).toBeLessThanOrEqual(after);
     expect(q.calls).toContainEqual(["eq", "id", "n-1"]);
     expect(q.calls).toContainEqual(["eq", "user_id", "user-1"]);
     expect(q.calls).toContainEqual(["is", "lida_em", null]);
+    expect(q.calls).toContainEqual([
+      "or",
+      "tenant_id.eq.tenant-1,tenant_id.is.null",
+    ]);
   });
 
   it("marca todas no recorte do tenant, em uma única atualização", async () => {
@@ -112,12 +122,16 @@ describe("notificationsService", () => {
     const q = builder({});
     fromMock.mockReturnValue(q.chain);
 
-    await notificationsService.arquivar("n-1", "user-1");
+    await notificationsService.arquivar("n-1", "user-1", "tenant-1");
 
     const update = q.calls.find(([method]) => method === "update");
     expect((update?.[1] as { arquivada_em?: string }).arquivada_em).toBeTruthy();
     expect(q.calls).toContainEqual(["eq", "id", "n-1"]);
     expect(q.calls).toContainEqual(["eq", "user_id", "user-1"]);
+    expect(q.calls).toContainEqual([
+      "or",
+      "tenant_id.eq.tenant-1,tenant_id.is.null",
+    ]);
   });
 
   it("propaga erro do Supabase em vez de fingir sucesso", async () => {
