@@ -1,40 +1,31 @@
 /**
- * Hook para receber notificações em tempo real via Supabase Realtime.
- * Conecta ao canal da tabela `notificacoes` e dispara `onNova` a cada INSERT.
+ * Recebe notificações em tempo real via Supabase Realtime.
+ *
+ * O realtime é a camada de atualização, não a de memória: ele entrega apenas
+ * o que é inserido enquanto o canal está aberto. O histórico vem do banco pelo
+ * `notificationsService` — antes o painel dependia só deste hook e perdia toda
+ * notificação gerada com a aba fechada.
+ *
+ * O recorte por tenant é feito no cliente porque o filtro do canal aceita uma
+ * única igualdade: a assinatura já limita ao `user_id`, e aqui descartamos o
+ * que pertence a outro escritório do mesmo advogado.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { Notificacao, UrgenciaNotificacao } from "@/types/notificacoes";
+import { mapNotificacao, type NotificacaoRow } from "@/lib/notificacoes";
+import type { Notificacao } from "@/types/notificacoes";
 
-/** Linha crua da tabela `notificacoes`. Os campos chegam soltos do realtime. */
-interface NotificacaoRow {
-  id: string;
-  tipo?: string | null;
-  urgencia?: string | null;
-  titulo?: string | null;
-  mensagem?: string | null;
-  processo_numero?: string | null;
-  created_at?: string | null;
-  lida?: boolean | null;
-}
+export function useNotificacoesRealtime(
+  userId: string | undefined,
+  tenantId: string | null | undefined,
+  onNova: (n: Notificacao) => void,
+) {
+  // O callback muda a cada render do painel. Sem a ref, o efeito recriaria a
+  // inscrição a cada mudança e o canal ficaria reconectando sem parar.
+  const callbackRef = useRef(onNova);
+  callbackRef.current = onNova;
 
-function mapRowToNotificacao(row: NotificacaoRow): Notificacao {
-  return {
-    id: row.id,
-    tipo: row.tipo === "movimentacao" ? "NOVA_MOVIMENTACAO"
-      : row.tipo === "alerta" ? "PRAZO_VENCENDO"
-      : "GERAL",
-    urgencia: (row.urgencia ?? "MEDIA").toUpperCase() as UrgenciaNotificacao,
-    titulo: row.titulo ?? "Notificação",
-    mensagem: row.mensagem ?? "",
-    processoId: row.processo_numero ?? undefined,
-    dataNotificacao: new Date(row.created_at ?? Date.now()),
-    lida: row.lida ?? false,
-  };
-}
-
-export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: Notificacao) => void) {
   useEffect(() => {
     if (!userId) return;
 
@@ -49,13 +40,18 @@ export function useNotificacoesRealtime(userId: string | undefined, onNova: (n: 
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          onNova(mapRowToNotificacao(payload.new as NotificacaoRow));
-        }
+          const row = payload.new as NotificacaoRow;
+          // Notificação de outro escritório do mesmo advogado não entra na
+          // caixa do escritório aberto agora. Linha sem tenant é histórico
+          // anterior ao multi-tenant e pertence ao usuário.
+          if (tenantId && row.tenant_id && row.tenant_id !== tenantId) return;
+          callbackRef.current(mapNotificacao(row));
+        },
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [userId, onNova]);
+  }, [userId, tenantId]);
 }

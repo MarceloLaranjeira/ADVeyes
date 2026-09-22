@@ -1,12 +1,19 @@
 /**
  * PAINEL DE NOTIFICAÇÕES DO HORUS
  *
- * Exibe notificações em tempo real no header do ADVeyes.
+ * Exibe as notificações do advogado no header do ADVeyes.
+ *
+ * A tabela `notificacoes` é a fonte da verdade: o painel carrega o histórico
+ * ao abrir e o realtime acrescenta o que chega depois. Antes o estado vivia em
+ * `localStorage` — o que significava que notificação gerada com a aba fechada
+ * nunca era vista, trocar de máquina zerava a caixa e "marcar como lida" não
+ * saía do dispositivo.
+ *
  * Todas as notificações são assinadas com 🦅 Horus.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { Bell, CheckCircle, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, AlertTriangle, Bell, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,66 +24,92 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { Notificacao } from "@/types/notificacoes";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { useNotificacoesRealtime } from "@/hooks/useNotificacoesRealtime";
+import { notificationsService } from "@/services/notifications";
+import { contarNaoLidas, mergeNotificacao } from "@/lib/notificacoes";
 
 export const NotificationPanel = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [erro, setErro] = useState(false);
 
-  // Carregar notificações do localStorage
+  const userId = user?.id;
+  const tenantId = currentTenant?.tenantId ?? null;
+  const unreadCount = contarNaoLidas(notifications);
+
+  // Carga inicial do banco. Sem ela o painel só mostraria o que chegasse
+  // durante a sessão — e o aviso de prazo da madrugada nunca apareceria.
   useEffect(() => {
-    loadNotifications();
+    if (!userId) {
+      setNotifications([]);
+      return;
+    }
+
+    let ativo = true;
+    notificationsService.list(userId, tenantId)
+      .then((items) => {
+        if (!ativo) return;
+        setNotifications(items);
+        setErro(false);
+      })
+      .catch(() => {
+        // Falha de carga não pode derrubar o header: o sino continua ali e o
+        // realtime segue entregando o que chegar.
+        if (ativo) setErro(true);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [userId, tenantId]);
+
+  const handleNova = useCallback((nova: Notificacao) => {
+    setNotifications((prev) => mergeNotificacao(prev, nova));
   }, []);
 
-  // Receber novas notificações via Supabase Realtime
-  const handleNova = useCallback((n: Notificacao) => {
-    setNotifications(prev => {
-      if (prev.some(p => p.id === n.id)) return prev;
-      const updated = [n, ...prev];
-      localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-      return updated;
-    });
-    setUnreadCount(c => c + 1);
-  }, []);
+  useNotificacoesRealtime(userId, tenantId, handleNova);
 
-  useNotificacoesRealtime(user?.id, handleNova);
-
-  const loadNotifications = () => {
+  /**
+   * Atualiza a tela primeiro e persiste depois. Se o banco recusar, desfaz —
+   * o contador do sino não pode divergir do que está gravado.
+   */
+  const markAsRead = async (id: string) => {
+    if (!userId) return;
+    const anterior = notifications;
+    setNotifications((prev) =>
+      prev.map((item) => item.id === id ? { ...item, lida: true } : item)
+    );
     try {
-      const stored = localStorage.getItem("adveyes_notifications");
-      if (stored) {
-        const loaded: Notificacao[] = JSON.parse(stored);
-        setNotifications(loaded);
-        setUnreadCount(loaded.filter(n => !n.lida).length);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar notificações:", error);
+      await notificationsService.marcarLida(id, userId);
+    } catch {
+      setNotifications(anterior);
     }
   };
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map(n =>
-      n.id === id ? { ...n, lida: true } : n
-    );
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(updated.filter(n => !n.lida).length);
+  const markAllAsRead = async () => {
+    if (!userId) return;
+    const anterior = notifications;
+    setNotifications((prev) => prev.map((item) => ({ ...item, lida: true })));
+    try {
+      await notificationsService.marcarTodasLidas(userId, tenantId);
+    } catch {
+      setNotifications(anterior);
+    }
   };
 
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, lida: true }));
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(0);
-  };
-
-  const clearNotification = (id: string) => {
-    const updated = notifications.filter(n => n.id !== id);
-    setNotifications(updated);
-    localStorage.setItem("adveyes_notifications", JSON.stringify(updated));
-    setUnreadCount(updated.filter(n => !n.lida).length);
+  /** Arquiva: some da caixa, permanece no banco para auditoria. */
+  const clearNotification = async (id: string) => {
+    if (!userId) return;
+    const anterior = notifications;
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await notificationsService.arquivar(id, userId);
+    } catch {
+      setNotifications(anterior);
+    }
   };
 
   const getUrgencyIcon = (urgencia: string) => {
@@ -130,20 +163,29 @@ export const NotificationPanel = () => {
           <div>
             <h3 className="font-semibold text-sm">Notificações do Horus</h3>
             <p className="text-xs text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} não lida${unreadCount > 1 ? "s" : ""}` : "Tudo em dia"}
+              {unreadCount > 0
+                ? `${unreadCount} não lida${unreadCount > 1 ? "s" : ""}`
+                : "Tudo em dia"}
             </p>
           </div>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={markAllAsRead}
+              onClick={() => void markAllAsRead()}
               className="text-xs h-7"
             >
               Marcar todas como lidas
             </Button>
           )}
         </div>
+
+        {erro && (
+          <p className="border-b bg-amber-500/5 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+            Não foi possível carregar o histórico agora. As novas notificações
+            continuam chegando.
+          </p>
+        )}
 
         <ScrollArea className="h-[400px]">
           {notifications.length === 0 ? (
@@ -166,7 +208,9 @@ export const NotificationPanel = () => {
                       ? getUrgencyColor(notif.urgencia) + " border-l-4"
                       : "hover:bg-muted/50"
                   }`}
-                  onClick={() => !notif.lida && markAsRead(notif.id)}
+                  onClick={() => {
+                    if (!notif.lida) void markAsRead(notif.id);
+                  }}
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5">{getUrgencyIcon(notif.urgencia)}</div>
@@ -179,9 +223,10 @@ export const NotificationPanel = () => {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0"
+                          aria-label="Arquivar notificação"
                           onClick={(e) => {
                             e.stopPropagation();
-                            clearNotification(notif.id);
+                            void clearNotification(notif.id);
                           }}
                         >
                           <X className="h-3 w-3" />
