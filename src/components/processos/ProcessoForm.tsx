@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { overrideParaStatus } from "@/lib/carteira";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +57,21 @@ export const ProcessoForm = ({ open, onOpenChange, onSuccess, editData }: Proces
     setLoading(true);
 
     if (editData) {
-      const { error } = await supabase.from("processos").update(form).eq("id", editData.id);
+      // O status escolhido aqui precisa alimentar a sobreposição manual,
+      // senão marcar "Arquivado" num processo reativado não faz nada: a
+      // sobreposição vence o texto e o salvamento mente que deu certo.
+      const { error } = await supabase.from("processos")
+        .update({
+          ...form,
+          arquivado_manual: overrideParaStatus(
+            form.status,
+            (editData as { arquivado_manual?: boolean | null }).arquivado_manual,
+            // O status como veio do banco. Sem ele, salvar qualquer outro
+            // campo apagaria a decisão de arquivamento.
+            editData.status ?? null,
+          ),
+        } as never)
+        .eq("id", editData.id);
       if (error) {
         toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
       } else {

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { carteiraAtivaQuery } from "@/lib/carteira-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { recognizeDocument, type DocumentInfo } from "@/lib/document-recognition";
@@ -47,7 +48,7 @@ const Documentos = () => {
   };
 
   const fetchProcessos = async () => {
-    const { data } = await supabase.from("processos").select("id, numero, cliente_nome");
+    const { data } = await carteiraAtivaQuery().select("id, numero, cliente_nome");
     if (data) setProcessos(data);
   };
 
