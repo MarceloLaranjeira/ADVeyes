@@ -222,18 +222,55 @@ export function buildCalendar(
       if (isWeekend(date)) {
         return date.getUTCDay() === 0 ? "domingo" : "sábado";
       }
-      if (isInRecess(date)) {
-        return "recesso forense (CPC, art. 220)";
-      }
+      // O feriado é avaliado ANTES do recesso, e a ordem tem consequência.
+      //
+      // 25 de dezembro e 1º de janeiro caem dentro do recesso. Enquanto o
+      // recesso respondia primeiro, o motivo devolvido era sempre "art. 220",
+      // e o feriado ficava invisível para quem consultasse o calendário. Isso
+      // quebrava `semRecessoForense`: ao remover o recesso para a contagem
+      // criminal, o Natal ia junto, e um vencimento penal caía em 25/12 sem a
+      // prorrogação que o CPP, art. 798, §3 manda aplicar.
+      //
+      // Para o cível não muda nada: o dia continua não útil pelos dois
+      // motivos, e o que muda é só qual deles é nomeado.
       const holiday = holidays.get(toIsoDate(date));
       if (holiday && !holiday.partialExpedient) {
         return holiday.description;
+      }
+      if (isInRecess(date)) {
+        return "recesso forense (CPC, art. 220)";
       }
       return null;
     },
     isPartialExpedient(date: Date): boolean {
       return holidays.get(toIsoDate(date))?.partialExpedient === true;
     },
+  };
+}
+
+/**
+ * O mesmo calendário, sem o recesso do art. 220.
+ *
+ * O recesso é do CPC e suspende prazo cível. O CPP, art. 798 diz o oposto
+ * para o criminal: os prazos são contínuos e **não se interrompem por
+ * férias**. Como o recesso entrava em `nonBusinessReason` junto de domingo e
+ * feriado, um vencimento criminal que caísse num dia útil dentro do recesso
+ * — 22 de dezembro, digamos — era empurrado até 21 de janeiro. Quase um mês
+ * de prazo inventado num processo criminal, que é o erro mais grave que este
+ * módulo pode cometer.
+ *
+ * Domingo e feriado continuam valendo: o art. 798, §3 prorroga o vencimento
+ * que cai neles. O que sai é só a suspensão que a lei criminal não conhece.
+ */
+export function semRecessoForense(
+  calendar: ForensicCalendar,
+): ForensicCalendar {
+  return {
+    nonBusinessReason(date: Date): string | null {
+      const motivo = calendar.nonBusinessReason(date);
+      return motivo?.includes("art. 220") ? null : motivo;
+    },
+    isPartialExpedient: (date: Date) => calendar.isPartialExpedient(date),
   };
 }
 
@@ -293,6 +330,21 @@ export interface ComputeDeadlineOptions {
    * pessoal, juntada de AR), a regra do art. 224, §2 não se aplica.
    */
   intimacaoPessoal?: boolean;
+  /**
+   * Regime do CPP: o termo inicial corre do dia seguinte ao ato, sem
+   * protração para dia útil.
+   *
+   * A protração do art. 224, §3 do CPC é do processo civil. No penal o
+   * art. 798, §1 apenas exclui o dia do começo, e o §3 protrai somente o
+   * VENCIMENTO que cair em dia sem expediente. Sem esta distinção, uma
+   * intimação pessoal na sexta-feira só começaria a contar na segunda, e a
+   * data fatal sairia depois da devida.
+   *
+   * Não basta olhar `diasCorridos`: prazo civel em dias corridos existe
+   * (art. 231 e prazos de direito material) e nesses o termo inicial segue
+   * a regra do CPC. Quem chama decide, a partir do diploma aplicável.
+   */
+  regimePenal?: boolean;
   extraHolidays?: HolidayInput[];
 }
 
@@ -305,7 +357,12 @@ export interface ComputeDeadlineOptions {
 export function computeDeadline(
   options: ComputeDeadlineOptions,
 ): DeadlineComputation {
-  const { dias, diasCorridos = false, intimacaoPessoal = false } = options;
+  const {
+    dias,
+    diasCorridos = false,
+    intimacaoPessoal = false,
+    regimePenal = false,
+  } = options;
 
   if (!Number.isInteger(dias) || dias < 1) {
     throw new Error("prazo deve ser um número inteiro de dias maior que zero");
@@ -340,11 +397,33 @@ export function computeDeadline(
     );
   }
 
-  // Art. 224, §3 — a contagem começa no primeiro dia útil após a publicação.
-  const termoInicial = nextBusinessDay(addDays(publicacao, 1), calendar);
+  // O termo inicial depende do diploma E do marco.
+  //
+  // A dispensa de protração no penal vale para o ato que não passa pelo
+  // diário — a intimação pessoal, em que o art. 798, §1 do CPP apenas
+  // exclui o dia do começo. Quando o marco é publicação no diário
+  // eletrônico, a regra específica é outra e alcança também o processo
+  // penal: a Lei 11.419/2006 se aplica indistintamente aos processos civil,
+  // penal e trabalhista (art. 1º, §1º), e o art. 4º, §4º manda o prazo
+  // começar no primeiro dia útil seguinte ao da publicação.
+  //
+  // Sem essa distinção, uma publicação penal disponibilizada antes do fim
+  // de semana começaria a contar no sábado e a data fatal sairia ANTES da
+  // devida — o erro espelhado do que esta função corrigiu antes.
+  const semProtracaoInicial = regimePenal && intimacaoPessoal;
+  const termoInicial = semProtracaoInicial
+    ? addDays(publicacao, 1)
+    : nextBusinessDay(addDays(publicacao, 1), calendar);
   fundamentos.push(
-    "CPC, art. 224, §3 — contagem iniciada no primeiro dia útil seguinte " +
-      "ao da publicação.",
+    semProtracaoInicial
+      ? "CPP, art. 798, §1 — exclui-se o dia do começo; a contagem corre a " +
+        "partir do dia seguinte, sem protração para dia útil."
+      : regimePenal
+      ? "Lei 11.419/2006, art. 4º, §4º — prazo iniciado no primeiro dia " +
+        "útil seguinte ao da publicação no diário eletrônico, regra que " +
+        "alcança o processo penal (art. 1º, §1º)."
+      : "CPC, art. 224, §3 — contagem iniciada no primeiro dia útil " +
+        "seguinte ao da publicação.",
   );
 
   const diasNaoUteis: CalendarDay[] = [];
@@ -380,14 +459,25 @@ export function computeDeadline(
   }
 
   // Art. 224, §1 — vencimento em dia de expediente reduzido é protraído.
+  //
+  // No criminal a prorrogação usa o calendário sem o recesso: o art. 798, §3
+  // prorroga por domingo e feriado, mas o recesso do art. 220 é do CPC e não
+  // suspende prazo criminal. Prorrogar por ele esticaria a data até 21 de
+  // janeiro.
+  const calendarioDaProrrogacao = regimePenal
+    ? semRecessoForense(calendar)
+    : calendar;
   if (
-    calendar.isPartialExpedient(vencimento) ||
-    calendar.nonBusinessReason(vencimento) !== null
+    calendarioDaProrrogacao.isPartialExpedient(vencimento) ||
+    calendarioDaProrrogacao.nonBusinessReason(vencimento) !== null
   ) {
-    vencimento = nextBusinessDay(vencimento, calendar);
+    vencimento = nextBusinessDay(vencimento, calendarioDaProrrogacao);
     fundamentos.push(
-      "CPC, art. 224, §1 — vencimento protraído para o primeiro dia útil " +
-        "seguinte por queda em dia sem expediente normal.",
+      regimePenal
+        ? "CPP, art. 798, §3 — vencimento em domingo ou feriado prorrogado " +
+          "para o dia útil imediato."
+        : "CPC, art. 224, §1 — vencimento protraído para o primeiro dia " +
+          "útil seguinte por queda em dia sem expediente normal.",
     );
   }
 
@@ -407,4 +497,57 @@ export function computeDeadline(
     diasNaoUteis,
     fundamentos,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Antecedência — prazo interno                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recua `dias` dias úteis a partir de `date`, para o prazo interno.
+ *
+ * A contagem tem de ser em dias úteis pelo mesmo calendário do prazo fatal,
+ * senão a folga evapora justamente quando é mais necessária: três dias
+ * corridos antes de uma segunda-feira caem na sexta anterior — véspera, com
+ * o fim de semana no meio. Três dias úteis caem na quarta da semana
+ * anterior, que é o que o escritório quer dizer ao pedir "três dias de
+ * antecedência".
+ *
+ * O dia de partida não conta: recuar 1 dia útil de uma quarta devolve terça.
+ * Com `dias` zero ou negativo, devolve o primeiro dia útil em `date` ou
+ * antes dela — nunca uma data em que o fórum está fechado.
+ *
+ * Dia de expediente reduzido conta como útil aqui, ao contrário do que faz
+ * `nextBusinessDay`. A protração do art. 224, §1 protege o termo legal; o
+ * prazo interno é convenção do escritório, e um dia de meio expediente
+ * ainda é um dia em que dá para trabalhar e protocolar.
+ */
+export function subtractBusinessDays(
+  date: Date,
+  dias: number,
+  calendar: ForensicCalendar,
+): Date {
+  const passos = Math.max(0, Math.trunc(dias));
+  let cursor = date;
+
+  // O limite protege contra calendário mal formado, como em nextBusinessDay.
+  const recuarAteDiaUtil = () => {
+    for (let guard = 0; guard < 400; guard += 1) {
+      if (calendar.nonBusinessReason(cursor) === null) return;
+      cursor = addDays(cursor, -1);
+    }
+    throw new Error("nenhum dia útil encontrado em 400 dias");
+  };
+
+  if (passos === 0) {
+    recuarAteDiaUtil();
+    return cursor;
+  }
+
+  for (let restantes = passos; restantes > 0; restantes -= 1) {
+    cursor = addDays(cursor, -1);
+    recuarAteDiaUtil();
+  }
+
+  return cursor;
 }

@@ -23,6 +23,16 @@ export type DeadlineConfidence = "explicito" | "inferido" | "residual";
 export interface ExtractedDeadline {
   dias: number;
   diasCorridos: boolean;
+  /**
+   * O qualificador que o ato usou, quando usou algum.
+   *
+   * `diasCorridos` sozinho nao distingue "5 dias uteis" escrito com todas as
+   * letras de "5 dias" sem qualificador — os dois viram `false`. A diferenca
+   * importa: num processo criminal a regra do ramo impoe dias corridos, mas
+   * se o juiz escreveu "uteis" e o sistema contar corrido, a data fatal sai
+   * diferente da que foi expressamente determinada.
+   */
+  qualificadorExplicito: "uteis" | "corridos" | null;
   confianca: DeadlineConfidence;
   /** Ato processual reconhecido, quando houver. */
   ato: string | null;
@@ -191,10 +201,14 @@ const WARNING_RULES: WarningRule[] = [
       "físicos, o prazo é em dobro (CPC, art. 229).",
   },
   {
+    // Este aviso afirmava "contam-se em dias corridos" como fato. O
+    // resolver de ramo calcula o Juizado em dias úteis, então os dois
+    // chegavam juntos ao cartão dizendo o oposto um do outro sobre a mesma
+    // data. A controvérsia é real; a certeza é que não era.
     pattern: /(juizado especial|lei 9.?099)/,
     message:
-      "Juizado Especial: os prazos seguem a Lei 9.099/95 e contam-se em " +
-      "dias corridos. Confira o rito.",
+      "Juizado Especial: a contagem no rito da Lei 9.099/95 é " +
+      "controvertida. Confira o rito antes de usar a data como prazo fatal.",
   },
   {
     pattern: /intimac.{0,20}pessoal/,
@@ -209,16 +223,37 @@ const WARNING_RULES: WarningRule[] = [
 /* ------------------------------------------------------------------ */
 
 /**
+ * O qualificador de contagem, incluindo as formas separadas do número.
+ *
+ * A versão anterior só aceitava "5 dias úteis", colado. Mas a redação mais
+ * comum nos diários é "prazo de 5 dias, contados em dias úteis" — e ali o
+ * qualificador ficava para trás, `qualificadorExplicito` saía nulo e a
+ * dedução por ramo assumia o comando. Num processo criminal isso propunha
+ * contagem contínua contra uma ordem expressa em sentido contrário, ou seja,
+ * uma data fatal mais curta do que a que o juízo determinou.
+ *
+ * Aceita, depois de "dias": vírgula ou parêntese opcionais, e as fórmulas
+ * "contados em", "contado em", "contando-se em", "computados em".
+ */
+const QUALIFICADOR =
+  "(?:[,;]?\\s*(?:\\(\\s*)?(?:contados?|contando-se|computados?)?\\s*(?:em\\s+)?" +
+  "(?:dias\\s+)?(uteis|corridos)\\s*\\)?)";
+
+/**
  * Captura "prazo de 15 (quinze) dias", "em 5 dias úteis", "prazo: 10 dias"
  * e variações. O numeral por extenso entre parênteses é redundante no texto
  * jurídico, então o dígito tem precedência e o extenso serve de conferência.
  */
-const EXPLICIT_PATTERN =
-  /(?:prazo\s*(?:de|:)?\s*|dentro\s+de\s+|em\s+)(\d{1,3})\s*(?:\(\s*([a-z\s]{3,20})\s*\)\s*)?dias?(\s+uteis|\s+corridos)?/;
+const EXPLICIT_PATTERN = new RegExp(
+  "(?:prazo\\s*(?:de|:)?\\s*|dentro\\s+de\\s+|em\\s+)(\\d{1,3})\\s*" +
+    "(?:\\(\\s*([a-z\\s]{3,20})\\s*\\)\\s*)?dias?" + QUALIFICADOR + "?",
+);
 
 /** Fallback para o caso de o número vir só por extenso. */
-const WORD_ONLY_PATTERN =
-  /(?:prazo\s*(?:de|:)?\s*|dentro\s+de\s+|em\s+)([a-z]{3,12})\s*dias?(\s+uteis|\s+corridos)?/;
+const WORD_ONLY_PATTERN = new RegExp(
+  "(?:prazo\\s*(?:de|:)?\\s*|dentro\\s+de\\s+|em\\s+)([a-z]{3,12})\\s*dias?" +
+    QUALIFICADOR + "?",
+);
 
 function findWarnings(normalized: string): string[] {
   return WARNING_RULES
@@ -265,12 +300,23 @@ export function extractDeadline(content: string): ExtractedDeadline {
       return {
         dias,
         diasCorridos: qualificador === "corridos",
+        qualificadorExplicito: qualificador === "corridos"
+          ? "corridos"
+          : qualificador === "uteis"
+            ? "uteis"
+            : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
+        // O fundamento diz de onde saiu o NÚMERO de dias, e só isso. O modo
+        // de contagem e sua base legal vêm do resolver de ramo, que sabe se
+        // o processo corre pelo CPC, pela CLT ou pelo CPP — afirmar aqui
+        // "dias úteis na forma do art. 219" produzia justificativa
+        // contraditória num processo criminal.
         fundamento: qualificador === "corridos"
           ? "Prazo em dias corridos declarado na própria publicação."
-          : "Prazo declarado na própria publicação; contagem em dias úteis " +
-            "na forma do CPC, art. 219.",
+          : qualificador === "uteis"
+            ? "Prazo em dias úteis declarado na própria publicação."
+            : "Prazo declarado na própria publicação.",
         trecho: explicitMatch[0],
         alertas,
       };
@@ -281,14 +327,18 @@ export function extractDeadline(content: string): ExtractedDeadline {
   if (wordMatch) {
     const dias = NUMERAIS[wordMatch[1]];
     if (dias !== undefined) {
+      const qualificadorPorExtenso = wordMatch[2]?.trim();
       return {
         dias,
-        diasCorridos: wordMatch[2]?.trim() === "corridos",
+        diasCorridos: qualificadorPorExtenso === "corridos",
+        qualificadorExplicito: qualificadorPorExtenso === "corridos"
+          ? "corridos"
+          : qualificadorPorExtenso === "uteis"
+            ? "uteis"
+            : null,
         confianca: "explicito",
         ato: act?.ato ?? null,
-        fundamento:
-          "Prazo declarado por extenso na publicação; contagem em dias " +
-          "úteis na forma do CPC, art. 219.",
+        fundamento: "Prazo declarado por extenso na publicação.",
         trecho: wordMatch[0],
         alertas,
       };
@@ -299,6 +349,7 @@ export function extractDeadline(content: string): ExtractedDeadline {
     return {
       dias: act.dias,
       diasCorridos: false,
+      qualificadorExplicito: null,
       confianca: "inferido",
       ato: act.ato,
       fundamento: act.fundamento,
@@ -314,6 +365,7 @@ export function extractDeadline(content: string): ExtractedDeadline {
   return {
     dias: 5,
     diasCorridos: false,
+    qualificadorExplicito: null,
     confianca: "residual",
     ato: null,
     fundamento: "CPC, art. 218, §3º — cinco dias quando a lei é omissa.",
