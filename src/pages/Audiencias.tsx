@@ -21,6 +21,7 @@ import { loadHearingsWorkspace, type HearingSignalRow } from "@/services/hearing
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isLegalPortalConnected, legalPortalMessage, legalPortalService, type LegalPortalOverview } from "@/services/legal-portal";
 import { defaultHearingFilters, filterHearings, paginateHearings, type HearingFilters } from "@/lib/hearing-filters";
+import { hearingFacts } from "@/lib/hearing-facts";
 import { BRAZIL_ZONES, DEFAULT_ZONE, formatInZone, inputToIso, isKnownZone, isoToInput, zoneName } from "@/lib/timezone";
 
 const VIEW_ZONE_KEY = "adveyes.hearingViewZone";
@@ -53,6 +54,8 @@ interface Audiencia {
   event_status?: string;
   court_code?: string;
   event_timezone?: string | null;
+  ends_at?: string | null;
+  modality?: string | null;
 }
 
 interface Processo {
@@ -72,7 +75,7 @@ const statusColors: Record<string, string> = {
   Cancelada: "bg-destructive/10 text-destructive",
 };
 
-const emptyForm = { tipo: "Instrução e Julgamento", data_hora: "", vara: "", juiz: "", local: "", observacoes: "", status: "Agendada", processo_id: "", processo_numero: "", cliente_nome: "" };
+const emptyForm = { tipo: "Instrução e Julgamento", data_hora: "", ends_at: "", vara: "", juiz: "", local: "", observacoes: "", status: "Agendada", processo_id: "", processo_numero: "", cliente_nome: "" };
 
 const Audiencias = () => {
   const { user } = useAuth();
@@ -248,13 +251,20 @@ const Audiencias = () => {
 
   const hearingLabel = (a: Audiencia) => {
     const zone = zoneOf(a);
+    // Sessão virtual tem janela de dias: o 00:00 do início é real, não "sem horário".
+    if (a.ends_at) {
+      return `${formatInZone(a.data_hora, zone).text} até ${formatInZone(a.ends_at, zone).text} (${zoneName(zone)})`;
+    }
     const label = formatInZone(a.data_hora, zone, Boolean(a.source_provider) && a.source_provider !== "manual");
     return label.hasTime ? `${label.text} (${zoneName(zone)})` : `${label.text} · horário não informado`;
   };
 
   const changeFormZone = (zone: string) => {
-    const iso = inputToIso(form.data_hora, formZone);
-    setForm({ ...form, data_hora: iso ? isoToInput(iso, zone) : form.data_hora });
+    const convert = (value: string) => {
+      const iso = value ? inputToIso(value, formZone) : null;
+      return iso ? isoToInput(iso, zone) : value;
+    };
+    setForm({ ...form, data_hora: convert(form.data_hora), ends_at: convert(form.ends_at) });
     setFormZone(zone);
   };
 
@@ -263,7 +273,7 @@ const Audiencias = () => {
     const zone = zoneOf(a);
     setFormZone(zone);
     setForm({
-      tipo: a.tipo, data_hora: a.data_hora ? isoToInput(a.data_hora, zone) : "", vara: a.vara || "", juiz: a.juiz || "",
+      tipo: a.tipo, data_hora: a.data_hora ? isoToInput(a.data_hora, zone) : "", ends_at: a.ends_at ? isoToInput(a.ends_at, zone) : "", vara: a.vara || "", juiz: a.juiz || "",
       local: a.local || "", observacoes: a.observacoes || "", status: a.status,
       processo_id: a.processo_id || "", processo_numero: a.processo_numero || "", cliente_nome: a.cliente_nome || "",
     });
@@ -293,6 +303,7 @@ const Audiencias = () => {
       ...form, user_id: user!.id,
       // O horário digitado vale no fuso escolhido no formulário, não no do navegador.
       data_hora: instant,
+      ends_at: form.ends_at ? inputToIso(form.ends_at, formZone) : null,
       event_timezone: formZone,
       tenant_id: tenantId,
       processo_id: form.processo_id || null,
@@ -414,13 +425,21 @@ const Audiencias = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold">{a.tipo}</h3>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {hearingFacts(a).badges.map((badge) => (
+                        <span key={badge} className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{badge}</span>
+                      ))}
+                    </div>
                     {a.processo_numero && <p className="text-sm text-muted-foreground font-mono mt-0.5">{a.processo_numero}</p>}
                     <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{hearingLabel(a)}</span>
                       {a.vara && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{a.vara}</span>}
                       {a.cliente_nome && <span className="flex items-center gap-1"><User className="w-3 h-3" />{a.cliente_nome}</span>}
                     </div>
-                    {a.juiz && <p className="text-xs text-muted-foreground mt-1">Magistrado: {a.juiz}</p>}
+                    {a.juiz && <p className="text-xs text-muted-foreground mt-1">Relator/magistrado: {a.juiz}</p>}
+                    {hearingFacts(a).details.filter((item) => item.label !== "Recurso").map((item) => (
+                      <p key={item.label} className="text-xs text-muted-foreground mt-0.5">{item.label}: {item.value}</p>
+                    ))}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -457,10 +476,14 @@ const Audiencias = () => {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-[1fr_auto] gap-4">
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-4">
                 <div className="space-y-2">
-                  <Label>Data e Hora *</Label>
+                  <Label>Início *</Label>
                   <Input type="datetime-local" value={form.data_hora} onChange={(e) => setForm({ ...form, data_hora: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Término (sessão virtual)</Label>
+                  <Input type="datetime-local" value={form.ends_at} min={form.data_hora || undefined} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Fuso do horário</Label>

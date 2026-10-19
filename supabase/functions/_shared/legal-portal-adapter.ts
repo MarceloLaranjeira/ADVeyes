@@ -34,6 +34,16 @@ export interface LegalPortalHearing {
   remoteUrl: string | null;
   evidence: string;
   sourceUrl: string;
+  /** Relator ou magistrado, quando a pauta o informa. */
+  judge?: string | null;
+  /** Natureza do recurso deduzida do polo da parte (ex.: "Apelação"). */
+  recourse?: string | null;
+  /** Classe, matéria e assunto lidos da página do processo. */
+  classLabel?: string | null;
+  matter?: string | null;
+  subject?: string | null;
+  /** Link seguro para a página do processo no portal, usado só para enriquecer. */
+  detailUrl?: string | null;
 }
 
 export interface LegalPortalSnapshot {

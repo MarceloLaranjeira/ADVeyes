@@ -652,11 +652,10 @@ function agendaNavigationHints(html: string, pageUrl: string): Record<string, st
 }
 
 function isoManaus(date: RegExpMatchArray, time: RegExpMatchArray): string | null {
-  const day = Number(date[1]);
-  const month = Number(date[2]);
-  const year = Number(date[3]);
-  const hour = Number(time[1]);
-  const minute = Number(time[2]);
+  return isoManausParts(Number(date[1]), Number(date[2]), Number(date[3]), Number(time[1]), Number(time[2]));
+}
+
+function isoManausParts(day: number, month: number, year: number, hour: number, minute: number): string | null {
   if (year < 2000 || year > 2200 || month < 1 || month > 12 || hour > 23 || minute > 59) return null;
   const check = new Date(Date.UTC(year, month - 1, day));
   if (check.getUTCDate() !== day || check.getUTCMonth() !== month - 1) return null;
@@ -678,6 +677,64 @@ function safeSourceUrl(value: string): string {
   url.search = "";
   url.hash = "";
   return url.toString();
+}
+
+const RECOURSE_BY_ROLE: Record<string, string> = {
+  apelante: "Apelação", apelado: "Apelação", apelada: "Apelação",
+  agravante: "Agravo", agravado: "Agravo", agravada: "Agravo",
+  embargante: "Embargos de declaração", embargado: "Embargos de declaração",
+  recorrente: "Recurso", recorrido: "Recurso", recorrida: "Recurso",
+  impetrante: "Habeas corpus", paciente: "Habeas corpus",
+};
+
+/** Na linha da pauta, entre o número do processo e o polo vem o nome do relator. */
+export function parseSessionRowParties(text: string, processNumber: string) {
+  const after = text.slice(text.indexOf(processNumber) + processNumber.length).trim();
+  const roles = Object.keys(RECOURSE_BY_ROLE).join("|");
+  const match = after.match(new RegExp(`^(.*?)\\s*\\b(${roles})\\s*:`, "i"));
+  if (!match) return null;
+  const judge = match[1].replace(/^(?:rel(?:ator(?:a)?)?\.?:?\s*|des(?:embargador(?:a)?)?\.?\s*)/i, "").trim();
+  return {
+    judge: judge.length >= 3 && judge.length <= 120 ? judge : null,
+    recourse: RECOURSE_BY_ROLE[match[2].toLowerCase()] ?? null,
+  };
+}
+
+export interface ProjudiProcessDetail {
+  judgingBody: string | null;
+  reporter: string | null;
+  classLabel: string | null;
+  subject: string | null;
+  matter: string | null;
+  virtualSession: { startsAt: string; endsAt: string } | null;
+}
+
+const labelValue = (text: string, label: string, next: string): string | null => {
+  const match = text.match(new RegExp(`${label}\\s*:\\s*(?:\\d+\\s*-\\s*)?(.+?)\\s+(?:${next})\\s*:`, "i"));
+  const value = match?.[1]?.trim() ?? "";
+  return value && value.length <= 160 ? value : null;
+};
+
+/**
+ * Lê o cabeçalho do processo recursal e a sessão virtual
+ * ("SESSÃO VIRTUAL DE 03/11/2026 00:00 ATÉ 08/11/2026 23:59") do texto visível.
+ */
+export function parseProjudiTjamProcessDetail(html: string): ProjudiProcessDetail {
+  const text = visibleText(activeHtml(html));
+  const range = text.match(
+    /SESS[ÃA]O\s+VIRTUAL\s+DE\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s+AT[ÉE]\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/i,
+  );
+  const part = (index: number) => Number(range?.[index]);
+  const startsAt = range ? isoManausParts(part(1), part(2), part(3), part(4), part(5)) : null;
+  const endsAt = range ? isoManausParts(part(6), part(7), part(8), part(9), part(10)) : null;
+  return {
+    judgingBody: labelValue(text, "[ÓO]rg[ãa]o\\s+Julgador", "Relator|Revisor|Classe"),
+    reporter: labelValue(text, "Relator", "Revisor|Classe"),
+    classLabel: labelValue(text, "Classe\\s+Processual", "Assunto(?:\\s+Principal)?|Mat[ée]ria"),
+    subject: labelValue(text, "Assunto\\s+Principal", "Mat[ée]ria|N[ií]vel(?:\\s+de\\s+Sigilo)?"),
+    matter: labelValue(text, "Mat[ée]ria", "N[ií]vel(?:\\s+de\\s+Sigilo)?|Prioridade"),
+    virtualSession: startsAt && endsAt ? { startsAt, endsAt } : null,
+  };
 }
 
 export function parseProjudiTjamHearings(html: string, sourceUrl: string): LegalPortalHearing[] {
@@ -725,10 +782,18 @@ export function parseProjudiTjamHearings(html: string, sourceUrl: string): Legal
       .find(href => href && /^https:\/\/(?:[^/]+\.)?(?:teams\.microsoft|zoom\.us|meet\.google|webex)\./i.test(href)) ?? null;
     const normalizedProcess = process?.replace(/\D/g, "") ?? "sem-processo";
     const externalId = `agenda:${fingerprint(`${normalizedProcess}|${startsAt}|${type}|${text}`)}`;
+    const parties = process ? parseSessionRowParties(text, process) : null;
+    const detailUrl = [...row.matchAll(/<a\b[^>]*>/gi)]
+      .map(match => safePortalNavigation(attribute(match[0], "href"), sourceUrl))
+      .find(Boolean) ?? null;
     events.set(externalId, {
       externalId,
       processNumber: process,
-      type,
+      // A pauta das turmas (sessaoTurmaBusca) só lista sessões de julgamento.
+      type: type === "Audiência" && /sessaoturma/i.test(sourceUrl) ? "Sessão de julgamento" : type,
+      judge: parties?.judge ?? null,
+      recourse: parties?.recourse ?? null,
+      detailUrl: detailUrl ? safeSourceUrl(detailUrl) : null,
       startsAt,
       endsAt: null,
       timezone: TIMEZONE,
@@ -742,6 +807,66 @@ export function parseProjudiTjamHearings(html: string, sourceUrl: string): Legal
     });
   }
   return [...events.values()].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+}
+
+const MAX_DETAIL_PAGES = 8;
+const DAY_MS = 86_400_000;
+
+/** A aba de movimentações costuma ser carregada por setTab('...ovimenta...'). */
+function movementTabUrl(html: string, pageUrl: string): string | null {
+  const match = activeHtml(html).match(/setTab\(\s*['"]([^'"]*ovimenta[^'"]*)['"]/i);
+  return match ? safePortalNavigation(decodeEntities(match[1]), pageUrl) : null;
+}
+
+/**
+ * Abre a página do processo de cada sessão de julgamento para ler início e fim
+ * da sessão virtual, relator, classe e assunto. Falhas aqui nunca derrubam a
+ * sincronização: a audiência continua salva com os dados da pauta.
+ */
+async function enrichSessionHearings(
+  session: PortalSession,
+  hearings: Map<string, LegalPortalHearing>,
+): Promise<Record<string, string | number | boolean>> {
+  const stats: Record<string, string | number | boolean> = {
+    detail_candidates: 0, detail_ok: 0, detail_labels: 0, detail_range: 0, movement_tab: 0,
+  };
+  const targets = [...hearings.values()]
+    .filter(hearing => hearing.detailUrl && /sess[ãa]o/i.test(hearing.type))
+    .slice(0, MAX_DETAIL_PAGES);
+  stats.detail_candidates = targets.length;
+  for (const hearing of targets) {
+    try {
+      const page = await session.request(hearing.detailUrl as string, { headers: { Referer: hearing.sourceUrl } });
+      assertAuthenticated(page.html);
+      stats.detail_ok = Number(stats.detail_ok) + 1;
+      let detail = parseProjudiTjamProcessDetail(page.html);
+      if (!detail.virtualSession) {
+        const tab = movementTabUrl(page.html, page.url);
+        if (tab) {
+          stats.movement_tab = Number(stats.movement_tab) + 1;
+          const moves = await session.request(tab, { headers: { "X-Requested-With": "XMLHttpRequest", Referer: page.url } });
+          detail = { ...detail, virtualSession: parseProjudiTjamProcessDetail(moves.html).virtualSession };
+        }
+      }
+      if (detail.classLabel || detail.reporter || detail.judgingBody) stats.detail_labels = Number(stats.detail_labels) + 1;
+      hearing.judge = detail.reporter ?? hearing.judge ?? null;
+      hearing.courtBody = detail.judgingBody ?? hearing.courtBody;
+      hearing.classLabel = detail.classLabel;
+      hearing.matter = detail.matter;
+      hearing.subject = detail.subject;
+      const sessionRange = detail.virtualSession;
+      if (sessionRange && Math.abs(Date.parse(sessionRange.startsAt) - Date.parse(hearing.startsAt)) < DAY_MS) {
+        stats.detail_range = Number(stats.detail_range) + 1;
+        hearing.endsAt = sessionRange.endsAt;
+        hearing.type = "Sessão virtual de julgamento";
+        hearing.modality = "remote";
+        hearing.location = "Sessão virtual";
+      }
+    } catch (error) {
+      stats.detail_error = error instanceof LegalPortalError ? error.code : "detail_failed";
+    }
+  }
+  return stats;
 }
 
 export class ProjudiTjamClient implements LegalPortalAdapter {
@@ -852,6 +977,7 @@ export class ProjudiTjamClient implements LegalPortalAdapter {
       hearings: hearings.size,
     });
     if (!recognizedAgenda) throw new LegalPortalError("agenda_page_changed");
+    const enrichment = await enrichSessionHearings(session, hearings);
 
     return {
       provider: this.provider,
@@ -873,6 +999,7 @@ export class ProjudiTjamClient implements LegalPortalAdapter {
         initial_tab_forms: tabRequests.length,
         requests_visited: visited.size,
         agenda_recognized: recognizedAgenda,
+        ...enrichment,
         request_hints: requestHints.join(",").slice(0, 1800),
         ...(sourceAgendaHints?.tab_action_context
           ? { tab_action_context: String(sourceAgendaHints.tab_action_context).slice(0, 1000) }
