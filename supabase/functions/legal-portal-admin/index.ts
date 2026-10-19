@@ -229,7 +229,7 @@ Deno.serve(async request => {
           session_expires_at: validation.session.expiresAt,
           last_error_code: null,
           last_error_at: null,
-          last_result: null,
+          last_result: {},
           updated_by: auth.user.id,
         }).eq("tenant_id", body.tenantId).eq("id", connection.id);
         if (activeError) throw activeError;
@@ -239,17 +239,20 @@ Deno.serve(async request => {
         return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), queued: true });
       } catch (error) {
         const code = error instanceof LegalPortalError ? error.code : "operation_failed";
-        if (!(error instanceof LegalPortalError)) {
-          // Só a mensagem técnica; credenciais nunca entram no erro.
-          const detail = error as { code?: string; message?: string };
-          console.error("legal-portal-admin: connect failed", detail.code ?? "", String(detail.message ?? error).slice(0, 300));
+        let diagnostic: Record<string, string | number | boolean> | null = null;
+        if (error instanceof LegalPortalError) {
+          diagnostic = error.diagnostic;
+        } else {
+          // Só a causa técnica; a senha nunca faz parte de uma mensagem de erro.
+          const detail = error as { name?: string; code?: string; message?: string };
+          diagnostic = {
+            errorName: String(detail.name ?? "Error").slice(0, 60),
+            errorCode: String(detail.code ?? "").slice(0, 40),
+            errorMessage: String(detail.message ?? error).slice(0, 240),
+          };
+          console.error("legal-portal-admin: connect failed", diagnostic.errorName, diagnostic.errorCode, diagnostic.errorMessage);
         }
-        await recordPortalFailure(
-          auth.admin,
-          connection,
-          code,
-          error instanceof LegalPortalError ? error.diagnostic : null,
-        );
+        await recordPortalFailure(auth.admin, connection, code, diagnostic);
         await audit(auth.admin, auth.user.id, "legal_portal_connection_failed", body.tenantId, { code });
         if (error instanceof LegalPortalError) return json({ error: code }, 422);
         throw error;
