@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Briefcase, Users, KanbanSquare, Calendar,
   CheckSquare, Gavel, Newspaper, Wallet,
   Clock, FileSignature, FolderOpen, BarChart3, MessageSquare,
-  ExternalLink, Settings, Sparkles, UserCog, Link2, ShieldCheck, ClipboardCheck,
+  CreditCard, ExternalLink, FileText, Handshake, Settings, Sparkles, UserCog, Link2, ShieldCheck, ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
@@ -39,6 +39,7 @@ const sections: Array<{
     items: [
       { label: "Contatos", icon: Users, path: "/clientes" },
       { label: "CRM — Leads", icon: KanbanSquare, path: "/crm" },
+      { label: "Parceiros", icon: Handshake, path: "/parceiros" },
     ],
   },
   {
@@ -47,6 +48,7 @@ const sections: Array<{
       { label: "Agenda", icon: Calendar, path: "/agenda" },
       { label: "Tarefas", icon: CheckSquare, path: "/tarefas" },
       { label: "Documentos", icon: FolderOpen, path: "/documentos" },
+      { label: "Modelos", icon: FileText, path: "/modelos" },
     ],
   },
   {
@@ -67,6 +69,7 @@ const sections: Array<{
       { label: "WhatsApp", icon: MessageSquare, path: "/whatsapp" },
       { label: "Portal do cliente", icon: ExternalLink, path: "/portal-cliente" },
       { label: "Configurações", icon: Settings, path: "/configuracoes" },
+      { label: "Conta e assinatura", icon: CreditCard, path: "/conta" },
     ],
   },
 ];

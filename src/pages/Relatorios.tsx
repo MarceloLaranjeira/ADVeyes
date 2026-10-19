@@ -2,9 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { exportRelatorioGeralPDF } from "@/lib/pdf-export";
+import { AgilityPanel } from "@/components/relatorios/AgilityPanel";
+import type { AgilityTask } from "@/lib/task-agility";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area,
@@ -18,6 +21,8 @@ const COLORS = ["hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--suc
 const MONTH_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 const Relatorios = () => {
+  const { currentTenant } = useTenant();
+  const tenantId = currentTenant?.tenantId ?? null;
   const [processos, setProcessos] = useState<Record<string, any>[]>([]);
   const [clientes, setClientes] = useState<Record<string, any>[]>([]);
   const [financeiro, setFinanceiro] = useState<Record<string, any>[]>([]);
@@ -26,13 +31,14 @@ const Relatorios = () => {
   const [audiencias, setAudiencias] = useState<Record<string, any>[]>([]);
 
   useEffect(() => {
+    if (!tenantId) { setProcessos([]); setClientes([]); setFinanceiro([]); setDocumentos([]); setTarefas([]); setAudiencias([]); return; }
     Promise.all([
-      supabase.from("processos").select("*"),
-      supabase.from("clientes").select("*"),
-      supabase.from("financeiro").select("*"),
-      supabase.from("documentos").select("*"),
-      supabase.from("tarefas").select("*"),
-      supabase.from("audiencias").select("*"),
+      supabase.from("processos").select("*").eq("tenant_id", tenantId),
+      supabase.from("clientes").select("*").eq("tenant_id", tenantId),
+      supabase.from("financeiro").select("*").eq("tenant_id", tenantId),
+      supabase.from("documentos").select("*").eq("tenant_id", tenantId),
+      supabase.from("tarefas").select("*").eq("tenant_id", tenantId),
+      supabase.from("audiencias").select("*").eq("tenant_id", tenantId),
     ]).then(([p, c, f, d, t, a]) => {
       if (p.data) setProcessos(p.data);
       if (c.data) setClientes(c.data);
@@ -41,7 +47,7 @@ const Relatorios = () => {
       if (t.data) setTarefas(t.data);
       if (a.data) setAudiencias(a.data);
     });
-  }, []);
+  }, [tenantId]);
 
   const processosPorArea = useMemo(() => {
     const map: Record<string, number> = {};
@@ -74,13 +80,13 @@ const Relatorios = () => {
 
   // Task productivity
   const tarefasStats = useMemo(() => {
-    const concluidas = tarefas.filter((t) => t.status === "concluida").length;
+    const concluidas = tarefas.filter((t) => t.status === "concluída").length;
     const pendentes = tarefas.filter((t) => t.status === "pendente").length;
     const emAndamento = tarefas.filter((t) => t.status === "em_andamento").length;
     const total = tarefas.length;
     const taxaConclusao = total > 0 ? Math.round((concluidas / total) * 100) : 0;
     const atrasadas = tarefas.filter((t) => {
-      if (!t.data_limite || t.status === "concluida") return false;
+      if (!t.data_limite || t.status === "concluída") return false;
       return new Date(t.data_limite) < new Date();
     }).length;
     return { concluidas, pendentes, emAndamento, total, taxaConclusao, atrasadas };
@@ -93,7 +99,7 @@ const Relatorios = () => {
       const p = t.prioridade || "media";
       if (!map[p]) map[p] = { concluidas: 0, total: 0 };
       map[p].total++;
-      if (t.status === "concluida") map[p].concluidas++;
+      if (t.status === "concluída") map[p].concluidas++;
     });
     return Object.entries(map).map(([name, v]) => ({
       name: name === "alta" ? "Alta" : name === "media" ? "Média" : "Baixa",
@@ -143,6 +149,8 @@ const Relatorios = () => {
             <Download className="w-4 h-4" /> Exportar PDF
           </Button>
         </div>
+
+        <AgilityPanel tasks={tarefas as AgilityTask[]} />
 
         {/* KPI Cards — Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-8">

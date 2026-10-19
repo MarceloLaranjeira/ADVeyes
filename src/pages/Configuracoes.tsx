@@ -28,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { IdentidadeVisual } from "@/components/configuracoes/IdentidadeVisual";
 import { PreferenciasNotificacao } from "@/components/configuracoes/PreferenciasNotificacao";
 import { ApiIntegrationSettings } from "@/components/configuracoes/ApiIntegrationSettings";
+import { OfficeCatalogs } from "@/components/configuracoes/OfficeCatalogs";
+import { TaskWorkflowSettings } from "@/components/configuracoes/TaskWorkflowSettings";
 import { useTenant } from "@/contexts/TenantContext";
 import {
   generateOpenAITts,
@@ -297,7 +299,8 @@ const Configuracoes = () => {
             <TabsTrigger value="usuarios" className="gap-2 text-xs"><User className="w-3.5 h-3.5" /> Usuários & Equipe</TabsTrigger>
             <TabsTrigger value="voz" className="gap-2 text-xs"><Bot className="w-3.5 h-3.5" /> IA & Prompt</TabsTrigger>
             <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> OABs & Monitoramento</TabsTrigger>
-            <TabsTrigger value="tarefas" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
+            <TabsTrigger value="cadastros" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Cadastros</TabsTrigger>
+<TabsTrigger value="tarefas"className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
             <TabsTrigger value="integracoes" className="gap-2 text-xs">
               <Zap className="w-3.5 h-3.5" /> Integrações & API
               {planData?.status === "trial" && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 ml-0.5" />}
@@ -397,43 +400,17 @@ const Configuracoes = () => {
             </Card>
           </TabsContent>
 
+          {/* === CADASTROS DO ESCRITÓRIO === */}
+          <TabsContent value="cadastros" className="space-y-4">
+            {currentTenant ? (
+              <OfficeCatalogs tenantId={currentTenant.tenantId} canManage={["owner", "admin"].includes(currentTenant.role)} />
+            ) : null}
+          </TabsContent>
+
           {/* === TAREFAS & WORKFLOWS === */}
           <TabsContent value="tarefas" className="space-y-4">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-3">
-                    <SlidersHorizontal className="w-5 h-5 text-primary" />
-                    <div>
-                      <h3 className="font-semibold font-serif">Tarefas, Metas e Workflows</h3>
-                      <p className="text-xs text-muted-foreground">Pontuação de produtividade (TaskScore), categorias e fluxos de trabalho</p>
-                    </div>
-                  </div>
-                  <Button size="sm" onClick={() => navigate("/tarefas")} className="gap-2">
-                    <SlidersHorizontal className="w-3.5 h-3.5" /> Ir para Tarefas
-                  </Button>
-                </div>
-                <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs font-semibold">Meta Semanal por Colaborador (Pontos)</Label>
-                      <Input type="number" defaultValue="50" className="mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold">Pontos por Tarefa Concluída</Label>
-                      <Input type="number" defaultValue="1" className="mt-1" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-3">
-                    <div>
-                      <Label className="font-medium text-sm">Criar tarefa automática para novas intimações</Label>
-                      <p className="text-xs text-muted-foreground">Gera tarefa pendente em /tarefas para toda publicação oficial do DJEN/PJe</p>
-                    </div>
-                    <Switch defaultChecked />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex justify-end"><Button size="sm" onClick={() => navigate("/tarefas")} className="gap-2"><SlidersHorizontal className="w-3.5 h-3.5" /> Ir para Tarefas</Button></div>
+            {currentTenant ? <TaskWorkflowSettings tenantId={currentTenant.tenantId} canManage={["owner", "admin"].includes(currentTenant.role)} /> : null}
           </TabsContent>
 
           {/* === VOZ & IA === */}

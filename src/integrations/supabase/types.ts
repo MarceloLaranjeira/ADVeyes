@@ -786,10 +786,220 @@ export type Database = {
           },
         ]
       }
+      catalogo_escritorio: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          ordem: number
+          tenant_id: string
+          tipo: string
+          updated_at: string
+          valor: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          ordem?: number
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          ordem?: number
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number | null
+        }
+        Relationships: []
+      }
+      escritorio_perfil: {
+        Row: {
+          celular: string | null
+          cidade: string | null
+          created_at: string
+          documento: string | null
+          email: string | null
+          estado: string | null
+          nome_fantasia: string | null
+          pais: string
+          razao_social: string | null
+          telefone: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          celular?: string | null
+          cidade?: string | null
+          created_at?: string
+          documento?: string | null
+          email?: string | null
+          estado?: string | null
+          nome_fantasia?: string | null
+          pais?: string
+          razao_social?: string | null
+          telefone?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          celular?: string | null
+          cidade?: string | null
+          created_at?: string
+          documento?: string | null
+          email?: string | null
+          estado?: string | null
+          nome_fantasia?: string | null
+          pais?: string
+          razao_social?: string | null
+          telefone?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      parceiros: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          nome: string
+          oab: string | null
+          observacoes: string | null
+          telefone: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          nome: string
+          oab?: string | null
+          observacoes?: string | null
+          telefone?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          nome?: string
+          oab?: string | null
+          observacoes?: string | null
+          telefone?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      parceiro_processos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          demanda_descricao: string | null
+          demanda_pendente: boolean
+          direcao: string
+          id: string
+          parceiro_id: string
+          processo_id: string
+          tenant_id: string
+          tipo_acao: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          demanda_descricao?: string | null
+          demanda_pendente?: boolean
+          direcao?: string
+          id?: string
+          parceiro_id: string
+          processo_id: string
+          tenant_id: string
+          tipo_acao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          demanda_descricao?: string | null
+          demanda_pendente?: boolean
+          direcao?: string
+          id?: string
+          parceiro_id?: string
+          processo_id?: string
+          tenant_id?: string
+          tipo_acao?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      modelos_documento: {
+        Row: {
+          ativo: boolean
+          categoria: string | null
+          conteudo: string
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: string | null
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string | null
+          conteudo?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           classification_locked: boolean
           cpf: string | null
+          data_nascimento: string | null
+          profissao: string | null
+          origem: string | null
           created_at: string
           deleted_at: string | null
           document_hash: string | null
@@ -812,6 +1022,9 @@ export type Database = {
         Insert: {
           classification_locked?: boolean
           cpf?: string | null
+          data_nascimento?: string | null
+          profissao?: string | null
+          origem?: string | null
           created_at?: string
           deleted_at?: string | null
           document_hash?: string | null
@@ -834,6 +1047,9 @@ export type Database = {
         Update: {
           classification_locked?: boolean
           cpf?: string | null
+          data_nascimento?: string | null
+          profissao?: string | null
+          origem?: string | null
           created_at?: string
           deleted_at?: string | null
           document_hash?: string | null
@@ -4365,6 +4581,53 @@ export type Database = {
           },
         ]
       }
+      tipos_tarefa: {
+        Row: {
+          ativo: boolean
+          categoria: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          pontos: number
+          prazo_padrao_dias: number | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          pontos?: number
+          prazo_padrao_dias?: number | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          pontos?: number
+          prazo_padrao_dias?: number | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipos_tarefa_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_access_links: {
         Row: {
           created_at: string
@@ -5376,6 +5639,95 @@ export type Database = {
           },
         ]
       }
+      workflow_tarefa_etapas: {
+        Row: {
+          created_at: string
+          id: string
+          ordem: number
+          prazo_offset_dias: number
+          tenant_id: string
+          tipo_tarefa_id: string
+          updated_at: string
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ordem: number
+          prazo_offset_dias?: number
+          tenant_id: string
+          tipo_tarefa_id: string
+          updated_at?: string
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ordem?: number
+          prazo_offset_dias?: number
+          tenant_id?: string
+          tipo_tarefa_id?: string
+          updated_at?: string
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_tarefa_etapas_tenant_id_tipo_tarefa_id_fkey"
+            columns: ["tenant_id", "tipo_tarefa_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_tarefa"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "workflow_tarefa_etapas_tenant_id_workflow_id_fkey"
+            columns: ["tenant_id", "workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows_tarefa"
+            referencedColumns: ["tenant_id", "id"]
+          },
+        ]
+      }
+      workflows_tarefa: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflows_tarefa_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_endpoints: {
         Row: {
           active: boolean
@@ -5765,6 +6117,29 @@ export type Database = {
           process_number: string
           tribunal: string
         }[]
+      }
+      convert_lead_to_client: {
+        Args: { p_lead_id: string; p_tenant_id: string }
+        Returns: string
+      }
+      create_task_workflow: {
+        Args: {
+          p_descricao?: string | null
+          p_etapas?: Json
+          p_nome: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
+      apply_task_workflow: {
+        Args: {
+          p_inicio?: string
+          p_processo_id?: string | null
+          p_responsavel_id?: string | null
+          p_tenant_id: string
+          p_workflow_id: string
+        }
+        Returns: number
       }
       current_user_tenants: {
         Args: never

@@ -345,7 +345,10 @@ Deno.serve(async (request) => {
 
     if (planError || !plan) {
       console.error("platform-admin: partner plan lookup failed", planError);
-      return json({ error: "operation_failed" }, 500);
+      return json({
+        error: "partner_plan_unavailable",
+        detail: "O Plano Parceiro não está disponível na base publicada.",
+      }, 500);
     }
 
     const { error: subError } = await auth.admin
@@ -363,7 +366,10 @@ Deno.serve(async (request) => {
 
     if (subError) {
       console.error("platform-admin: subscription upsert failed", subError);
-      return json({ error: "operation_failed" }, 500);
+      return json({
+        error: "partner_subscription_failed",
+        detail: "Não foi possível ativar a assinatura Parceiro deste escritório.",
+      }, 500);
     }
 
     await auth.admin

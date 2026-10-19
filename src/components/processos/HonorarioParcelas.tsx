@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,31 +30,36 @@ interface Props {
 
 export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: Props) => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const tenantId = currentTenant?.tenantId ?? null;
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ valor: "", data_vencimento: "", descricao: "" });
 
   const fetchParcelas = useCallback(async () => {
+    if (!tenantId) { setParcelas([]); return; }
     const { data } = await supabase
       .from("honorario_parcelas")
       .select("*")
+      .eq("tenant_id", tenantId)
       .eq("processo_id", processoId)
       .order("numero_parcela");
     if (data) setParcelas(data);
-  }, [processoId]);
+  }, [processoId, tenantId]);
 
   useEffect(() => { fetchParcelas(); }, [fetchParcelas]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.valor || !form.data_vencimento) return;
+    if (!form.valor || !form.data_vencimento || !user || !tenantId) return;
     setLoading(true);
     const nextNum = parcelas.length + 1;
     const { error } = await supabase.from("honorario_parcelas").insert({
       processo_id: processoId,
-      user_id: user!.id,
+      tenant_id: tenantId,
+      user_id: user.id,
       numero_parcela: nextNum,
       valor: parseFloat(form.valor),
       data_vencimento: form.data_vencimento,
@@ -72,16 +78,18 @@ export const HonorarioParcelas = ({ processoId, processoNumero, clienteNome }: P
   };
 
   const togglePago = async (parcela: Parcela) => {
+    if (!tenantId) return;
     const newStatus = parcela.status === "pago" ? "pendente" : "pago";
     await supabase.from("honorario_parcelas").update({
       status: newStatus,
       data_pagamento: newStatus === "pago" ? new Date().toISOString().slice(0, 10) : null,
-    }).eq("id", parcela.id);
+    }).eq("tenant_id", tenantId).eq("id", parcela.id);
     fetchParcelas();
   };
 
   const deleteParcela = async (id: string) => {
-    await supabase.from("honorario_parcelas").delete().eq("id", id);
+    if (!tenantId) return;
+    await supabase.from("honorario_parcelas").delete().eq("tenant_id", tenantId).eq("id", id);
     fetchParcelas();
   };
 

@@ -17,6 +17,8 @@ const MENSAGENS: Record<string, string> = {
   permission_denied: "Você não tem permissão para esta ação.",
   invalid_payload: "Confira os dados informados.",
   operation_failed: "A operação falhou. Tente novamente.",
+  partner_plan_unavailable: "O Plano Parceiro não está disponível na base publicada.",
+  partner_subscription_failed: "Não foi possível ativar a assinatura Parceiro deste escritório.",
   llm_not_configured: "A IA ainda não foi configurada nesta plataforma.",
   llm_unauthorized: "A chave da IA foi recusada.",
   llm_rate_limited: "O limite de consultas da IA foi atingido.",

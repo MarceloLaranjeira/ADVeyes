@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
+import { crmService } from "@/services/crm";
+import type { CRMLead, CRMLeadInput } from "@/types/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,10 +33,12 @@ const areas = ["Cível", "Criminal", "Trabalhista", "Família", "Empresarial", "
 
 const CRM = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const [leads, setLeads] = useState<Record<string, any>[]>([]);
+  const tenantId = currentTenant?.tenantId ?? null;
+  const [leads, setLeads] = useState<CRMLead[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [editLead, setEditLead] = useState<Record<string, any> | null>(null);
+  const [editLead, setEditLead] = useState<CRMLead | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "lista">("kanban");
   const [filterStatus, setFilterStatus] = useState("todos");
@@ -46,12 +50,23 @@ const CRM = () => {
     proximo_contato: "", observacoes: "",
   });
 
-  const fetchLeads = async () => {
-    const { data } = await (supabase.from as any)("leads").select("*").order("created_at", { ascending: false });
-    if (data) setLeads(data);
-  };
+  const fetchLeads = useCallback(async () => {
+    if (!tenantId) {
+      setLeads([]);
+      return;
+    }
+    try {
+      setLeads(await crmService.list(tenantId));
+    } catch (error) {
+      toast({
+        title: "Não foi possível carregar os leads",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  }, [tenantId, toast]);
 
-  useEffect(() => { fetchLeads(); }, []);
+  useEffect(() => { void fetchLeads(); }, [fetchLeads]);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -78,7 +93,7 @@ const CRM = () => {
     setEditLead(null);
   };
 
-  const openEdit = (lead: Record<string, any>) => {
+  const openEdit = (lead: CRMLead) => {
     setForm({
       nome: lead.nome || "", email: lead.email || "", telefone: lead.telefone || "",
       origem: lead.origem || "indicacao", area_interesse: lead.area_interesse || "",
@@ -97,43 +112,52 @@ const CRM = () => {
       toast({ title: "Nome é obrigatório", variant: "destructive" });
       return;
     }
+    if (!tenantId || !user) return;
     setLoading(true);
-    const payload = {
+    const payload: CRMLeadInput = {
       ...form,
       valor_estimado: form.valor_estimado ? parseFloat(form.valor_estimado) : null,
+      email: form.email || null,
+      telefone: form.telefone || null,
+      area_interesse: form.area_interesse || null,
+      descricao: form.descricao || null,
+      data_contato: form.data_contato || null,
       proximo_contato: form.proximo_contato || null,
-      user_id: user!.id,
+      observacoes: form.observacoes || null,
     };
-    const { error } = editLead
-      ? await (supabase.from as any)("leads").update(payload).eq("id", editLead.id)
-      : await (supabase.from as any)("leads").insert(payload);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      if (editLead) await crmService.update(tenantId, editLead.id, payload);
+      else await crmService.create(tenantId, user.id, payload);
       toast({ title: editLead ? "Lead atualizado!" : "Lead cadastrado!" });
       resetForm();
       setShowForm(false);
-      fetchLeads();
+      await fetchLeads();
+    } catch (error) {
+      toast({ title: "Erro", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const updateStatus = async (id: string, status: string) => {
-    await (supabase.from as any)("leads").update({ status }).eq("id", id);
-    fetchLeads();
-    toast({ title: `Status atualizado para "${statusFunil.find(s => s.id === status)?.label}"` });
+    if (!tenantId) return;
+    try {
+      await crmService.update(tenantId, id, { status });
+      await fetchLeads();
+      toast({ title: `Status atualizado para "${statusFunil.find(s => s.id === status)?.label}"` });
+    } catch (error) {
+      toast({ title: "Não foi possível atualizar o lead", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" });
+    }
   };
 
-  const convertToClient = async (lead: Record<string, any>) => {
-    const { data, error } = await supabase.from("clientes").insert({
-      nome: lead.nome, email: lead.email, telefone: lead.telefone,
-      observacoes: `Convertido do CRM. Origem: ${lead.origem}. ${lead.descricao || ""}`,
-      user_id: user!.id,
-    }).select().single();
-    if (!error && data) {
-      await (supabase.from as any)("leads").update({ status: "convertido", convertido: true, cliente_id: data.id }).eq("id", lead.id);
+  const convertToClient = async (lead: CRMLead) => {
+    if (!tenantId) return;
+    try {
+      await crmService.convert(tenantId, lead.id);
       toast({ title: "Lead convertido em cliente!", description: `${lead.nome} foi adicionado como cliente.` });
-      fetchLeads();
+      await fetchLeads();
+    } catch (error) {
+      toast({ title: "Não foi possível converter o lead", description: error instanceof Error ? error.message : "Tente novamente.", variant: "destructive" });
     }
   };
 

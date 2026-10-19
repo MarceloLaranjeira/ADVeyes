@@ -134,7 +134,7 @@ export const RESOURCE_CONTRACTS: Record<ApiResource, ResourceContract> = {
 };
 
 export interface ParsedApiRoute {
-  resource: ApiResource | "webhook-endpoints" | "health" | "tenants";
+  resource: ApiResource | "webhook-endpoints" | "health" | "tenants" | "advbox";
   id: string | null;
 }
 

@@ -12,6 +12,8 @@ import {
   resolveRequestTenant,
   type ApiResource,
 } from "../_shared/public-api-contract.ts";
+import { parseAdvboxPath } from "../_shared/advbox-compat.ts";
+import { handleAdvbox } from "./advbox.ts";
 import {
   createWebhookSecret,
   encryptWebhookSecret,
@@ -21,7 +23,7 @@ import {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type, idempotency-key",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 };
 const RATE_LIMIT_PER_MINUTE = 120;
 const WEBHOOK_EVENTS = new Set([
@@ -474,7 +476,10 @@ Deno.serve(async (request) => {
   const admin = serverClient();
   if (!admin) return response(problem("server_configuration_error", 500, requestId), requestId);
   const url = new URL(request.url);
-  const route = parsePublicApiPath(url.pathname);
+  const advboxRoute = parsePublicApiPath(url.pathname) ? null : parseAdvboxPath(url.pathname);
+  const route = advboxRoute
+    ? { resource: "advbox" as const, id: advboxRoute.id }
+    : parsePublicApiPath(url.pathname);
   if (!route) return response(problem("not_found", 404, requestId), requestId);
   if (route.resource === "health") {
     return response(success({ status: "ok", version: "v1" }), requestId);
@@ -483,7 +488,7 @@ Deno.serve(async (request) => {
   const rawToken = await authenticate(request, admin);
   if (!rawToken) return response(problem("unauthorized", 401, requestId), requestId);
   let result: ApiResult;
-  const normalizedRoute = `/api/v1/${route.resource}${route.id ? `/${route.id}` : ""}`;
+  const normalizedRoute = `/api/v1/${advboxRoute?.resource ?? route.resource}${route.id ? `/${route.id}` : ""}`;
   let reservation: { key: string; hash: string } | null = null;
   let effectiveTenantId: string | null = rawToken.tenantId;
   try {
@@ -508,8 +513,11 @@ Deno.serve(async (request) => {
           actorUserId: rawToken.actorUserId,
         };
         const method = request.method.toUpperCase();
-        const mutating = ["POST", "PATCH", "DELETE"].includes(method);
-        const rawBody = method === "POST" || method === "PATCH" ? await request.text() : "";
+        // As rotas no formato ADVBOX não exigem Idempotency-Key: os clientes
+        // existentes dessa API não enviam o cabeçalho.
+        const mutating = !advboxRoute && ["POST", "PATCH", "DELETE"].includes(method);
+        const rawBody = method === "POST" || method === "PATCH" || method === "PUT"
+          ? await request.text() : "";
         let parsedBody: unknown = {};
         if (rawBody) {
           try {
@@ -518,7 +526,9 @@ Deno.serve(async (request) => {
             throw new PublicApiContractError("invalid_json", 400);
           }
         }
-        if (mutating) {
+        if (route.resource === "advbox") {
+          result = await handleAdvbox(admin, token, method, advboxRoute!, url, parsedBody);
+        } else if (mutating) {
           const key = request.headers.get("Idempotency-Key")?.trim() ?? "";
           if (key.length < 8 || key.length > 200) {
             throw new PublicApiContractError("idempotency_key_required", 400);
