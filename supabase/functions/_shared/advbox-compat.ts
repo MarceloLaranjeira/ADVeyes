@@ -195,6 +195,15 @@ export function lawsuitToOutput(row: Record<string, unknown>) {
   };
 }
 
+/** Dia do andamento em UTC (AAAA-MM-DD); o banco devolve o instante no fuso da sessão. */
+export function utcDay(value: unknown): string | null {
+  const time = typeof value === "string" ? Date.parse(value) : NaN;
+  return Number.isNaN(time) ? null : new Date(time).toISOString().slice(0, 10);
+}
+
+/** Andamento manual só tem data: o meio-dia UTC mantém o mesmo dia em qualquer fuso do Brasil. */
+export const movementTimestamp = (day: string | null) => (day ? `${day}T12:00:00Z` : null);
+
 export function movementFromInput(input: unknown) {
   const s = body(input);
   const description = required(s, "description");
@@ -212,7 +221,7 @@ export function movementToOutput(
 ) {
   return {
     lawsuit_id: lawsuitId,
-    date: row.data_andamento,
+    date: utcDay(row.data_andamento),
     title: row.tipo ?? null,
     header: row.descricao,
     process_number: row.numero_processo,
@@ -301,4 +310,93 @@ export function publicationToOutput(
 /** Escapa curingas do LIKE para a busca parcial `name`. */
 export function likePattern(value: string): string {
   return `%${value.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+/** "250,50", "1.250,50" ou 250.5 viram número; zero e negativos são recusados. */
+export function parseAmount(value: unknown, field = "amount"): number {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const amount = Number(normalized);
+  if (!normalized || !Number.isFinite(amount) || amount <= 0) {
+    throw new PublicApiContractError("invalid_amount", 422, field);
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+const STATUS_IN: Record<string, string> = { paid: "pago", pending: "pendente", overdue: "atrasado" };
+const STATUS_OUT: Record<string, string> = { pago: "paid", pendente: "pending", atrasado: "overdue" };
+
+export function transactionFromInput(input: unknown, mode: "create" | "update") {
+  const s = body(input);
+  const patch: Record<string, unknown> = {};
+  const refs: { categoryId: string | null; costCenterId: string | null; accountId: string | null; lawsuitId: string | null; customerId: string | null } =
+    { categoryId: null, costCenterId: null, accountId: null, lawsuitId: null, customerId: null };
+
+  if (mode === "create" || "entry_type" in s) {
+    const type = required(s, "entry_type");
+    if (type !== "income" && type !== "expense") {
+      throw new PublicApiContractError("invalid_entry_type", 422, "entry_type");
+    }
+    patch.tipo = type === "income" ? "honorario" : "despesa";
+  }
+  if (mode === "create" || "amount" in s) patch.valor = parseAmount(s.amount);
+  if (mode === "create" || "date_due" in s) {
+    const due = advboxDate(mode === "create" ? required(s, "date_due") : s.date_due, "date_due");
+    if (!due) throw new PublicApiContractError("required_field", 422, "date_due");
+    patch.data_vencimento = due;
+  }
+  if (mode === "create") {
+    refs.accountId = required(s, "debit_account");
+    refs.categoryId = required(s, "categories_id");
+    refs.costCenterId = required(s, "cost_centers_id");
+    patch.descricao = text(s.description ?? s.notes ?? s.comments, "description", 300) ?? "Lançamento via API";
+    refs.lawsuitId = text(s.lawsuits_id, "lawsuits_id", 80);
+    refs.customerId = text(s.customers_id, "customers_id", 80);
+    if (refs.lawsuitId && !refs.customerId) {
+      throw new PublicApiContractError("customers_id_required", 422, "customers_id");
+    }
+  }
+  if ("status" in s) {
+    const status = STATUS_IN[String(s.status)];
+    if (!status) throw new PublicApiContractError("invalid_status", 422, "status");
+    patch.status = status;
+    if (status === "pago" && !("date_payment" in s)) patch.data_pagamento = new Date().toISOString().slice(0, 10);
+    if (status !== "pago") patch.data_pagamento = null;
+  }
+  if ("date_payment" in s) patch.data_pagamento = advboxDate(s.date_payment, "date_payment");
+  if (mode === "update" && Object.keys(patch).length === 0) {
+    throw new PublicApiContractError("empty_update", 400);
+  }
+  return { patch, refs };
+}
+
+export function transactionToOutput(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    entry_type: row.tipo === "honorario" ? "income" : "expense",
+    amount: row.valor,
+    date_due: row.data_vencimento ?? null,
+    date_payment: row.data_pagamento ?? null,
+    status: STATUS_OUT[String(row.status)] ?? row.status,
+    description: row.descricao,
+    lawsuits_id: row.processo_id ?? null,
+    customers_id: row.cliente_id ?? null,
+    categories_id: row.categoria_id ?? null,
+    cost_centers_id: row.centro_custo_id ?? null,
+    debit_account: row.conta_id ?? null,
+    created_at: row.created_at,
+  };
+}
+
+export function documentToOutput(row: Record<string, unknown>, lawsuit: Record<string, unknown> | null) {
+  return {
+    id: row.id,
+    name: row.nome,
+    size: row.tamanho ?? null,
+    links: { download: `/api/v1/documents/${row.id}/download` },
+    attached_to: row.processo_id
+      ? { type: "lawsuit", id: row.processo_id, label: lawsuit?.numero ?? row.processo_numero ?? null }
+      : null,
+    uploaded_at: row.created_at,
+  };
 }

@@ -1655,6 +1655,9 @@ export type Database = {
       financeiro: {
         Row: {
           cliente_id: string | null
+          categoria_id: string | null
+          centro_custo_id: string | null
+          conta_id: string | null
           created_at: string
           data_pagamento: string | null
           data_vencimento: string | null
@@ -1670,6 +1673,9 @@ export type Database = {
         }
         Insert: {
           cliente_id?: string | null
+          categoria_id?: string | null
+          centro_custo_id?: string | null
+          conta_id?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string | null
@@ -1685,6 +1691,9 @@ export type Database = {
         }
         Update: {
           cliente_id?: string | null
+          categoria_id?: string | null
+          centro_custo_id?: string | null
+          conta_id?: string | null
           created_at?: string
           data_pagamento?: string | null
           data_vencimento?: string | null

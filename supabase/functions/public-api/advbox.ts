@@ -1,13 +1,18 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
+  advboxDate,
   advboxPage,
   customerFromInput,
   customerToOutput,
+  documentToOutput,
+  transactionFromInput,
+  transactionToOutput,
   historyToOutput,
   lawsuitFromInput,
   lawsuitToOutput,
   likePattern,
   movementFromInput,
+  movementTimestamp,
   movementToOutput,
   postFromInput,
   postToOutput,
@@ -174,7 +179,7 @@ async function movements(
     if (!lawsuit) throw new PublicApiContractError("invalid_relationship", 422, "lawsuit_id");
     await must(admin.from("andamentos").insert({
       tenant_id: t, user_id: token.actorUserId, processo_id: lawsuit.id,
-      numero_processo: lawsuit.numero, data_andamento: data.date,
+      numero_processo: lawsuit.numero, data_andamento: movementTimestamp(data.date),
       descricao: data.description, origem: "manual", tipo: "manual",
     }).select("id").single());
     return ok({ success: true, lawsuits_id: lawsuit.id }, 201);
@@ -319,8 +324,130 @@ async function settings(admin: SupabaseClient, token: AdvboxToken): Promise<Advb
     tasks: types.map((type) => ({ id: type.id, name: type.nome, reward: type.pontos })),
     stages: named(distinct("status")),
     lawsuit_types: named(distinct("area")),
-    financial: { banks: [], categories: [], cost_centers: [], departments: [] },
+    financial: {
+      banks: await financeCatalog(admin, t, "conta_bancaria"),
+      categories: await financeCatalog(admin, t, "categoria_financeira"),
+      cost_centers: await financeCatalog(admin, t, "centro_custo"),
+      departments: await financeCatalog(admin, t, "departamento"),
+    },
   });
+}
+
+async function financeCatalog(admin: SupabaseClient, tenantId: string, tipo: string) {
+  const rows = (await must(admin.from("catalogo_escritorio").select("id, nome")
+    .eq("tenant_id", tenantId).eq("tipo", tipo).eq("ativo", true).order("nome"))) as Row[];
+  return rows.map((row) => ({ id: row.id, name: row.nome }));
+}
+
+/** Confere que o item do catálogo existe no escritório e é do tipo esperado. */
+async function catalogRef(admin: SupabaseClient, tenantId: string, tipo: string, id: string, field: string) {
+  const row = await must(admin.from("catalogo_escritorio").select("id").eq("tenant_id", tenantId)
+    .eq("tipo", tipo).eq("ativo", true).eq("id", id).maybeSingle()) as Row | null;
+  if (!row) throw new PublicApiContractError("invalid_relationship", 422, field);
+  return row.id as string;
+}
+
+async function transactions(
+  admin: SupabaseClient, token: AdvboxToken, method: string, route: AdvboxRoute,
+  url: URL, input: unknown,
+): Promise<AdvboxResult> {
+  const t = token.tenantId;
+  if (method === "POST") {
+    requireScope(token.scopes, "finance:write");
+    const { patch, refs } = transactionFromInput(input, "create");
+    patch.categoria_id = await catalogRef(admin, t, "categoria_financeira", refs.categoryId as string, "categories_id");
+    patch.centro_custo_id = await catalogRef(admin, t, "centro_custo", refs.costCenterId as string, "cost_centers_id");
+    patch.conta_id = await catalogRef(admin, t, "conta_bancaria", refs.accountId as string, "debit_account");
+    if (refs.customerId) {
+      const customer = await must(admin.from("clientes").select("id").eq("tenant_id", t)
+        .eq("id", refs.customerId).is("deleted_at", null).maybeSingle()) as Row | null;
+      if (!customer) throw new PublicApiContractError("invalid_relationship", 422, "customers_id");
+      patch.cliente_id = customer.id;
+    }
+    if (refs.lawsuitId) {
+      const lawsuit = await lawsuitById(admin, t, refs.lawsuitId);
+      if (!lawsuit) throw new PublicApiContractError("invalid_relationship", 422, "lawsuits_id");
+      patch.processo_id = lawsuit.id;
+    }
+    const data = await must(admin.from("financeiro").insert({ ...patch, tenant_id: t, user_id: token.actorUserId })
+      .select("id").single()) as Row;
+    return ok({ success: true, transactions_id: data.id }, 201);
+  }
+  if (method === "PUT") {
+    requireScope(token.scopes, "finance:write");
+    if (!route.id) throw new PublicApiContractError("resource_id_required", 400);
+    const { patch } = transactionFromInput(input, "update");
+    const data = await must(admin.from("financeiro").update(patch).eq("tenant_id", t).eq("id", route.id)
+      .select("id").maybeSingle()) as Row | null;
+    return data ? ok({ success: true, transactions_id: data.id }) : notFound();
+  }
+  requireScope(token.scopes, "finance:read");
+  if (route.id) {
+    const row = await must(admin.from("financeiro").select("*").eq("tenant_id", t).eq("id", route.id)
+      .maybeSingle()) as Row | null;
+    return row ? ok(transactionToOutput(row)) : notFound();
+  }
+  const { limit, offset } = advboxPage(url.searchParams);
+  const p = url.searchParams;
+  let query = admin.from("financeiro").select("*", { count: "exact" }).eq("tenant_id", t)
+    .order("data_vencimento", { ascending: false }).range(offset, offset + limit - 1);
+  const type = p.get("entry_type") ?? p.get("type");
+  if (type === "income") query = query.eq("tipo", "honorario");
+  else if (type === "expense") query = query.neq("tipo", "honorario");
+  const status = p.get("status");
+  if (status) query = query.eq("status", status === "paid" ? "pago" : status === "pending" ? "pendente" : status === "overdue" ? "atrasado" : status);
+  if (p.get("date_start")) query = query.gte("data_vencimento", advboxDate(p.get("date_start"), "date_start") as string);
+  if (p.get("date_end")) query = query.lte("data_vencimento", advboxDate(p.get("date_end"), "date_end") as string);
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return envelope(((data ?? []) as Row[]).map(transactionToOutput), count ?? 0, limit, offset, Object.fromEntries(p));
+}
+
+const DOCUMENT_URL_SECONDS = 300;
+
+async function documents(
+  admin: SupabaseClient, token: AdvboxToken, route: AdvboxRoute, url: URL,
+): Promise<AdvboxResult> {
+  requireScope(token.scopes, "processes:read");
+  const t = token.tenantId;
+  if (route.id) {
+    const row = await must(admin.from("documentos").select("id, nome, arquivo_path")
+      .eq("tenant_id", t).eq("id", route.id).maybeSingle()) as Row | null;
+    if (!row) return notFound();
+    const signed = await admin.storage.from("documentos").createSignedUrl(row.arquivo_path as string, DOCUMENT_URL_SECONDS);
+    if (signed.error || !signed.data) throw new PublicApiContractError("document_unavailable", 502);
+    return ok({ data: { id: row.id, name: row.nome, temporary_url: signed.data.signedUrl, expires_in_seconds: DOCUMENT_URL_SECONDS } });
+  }
+  const p = url.searchParams;
+  const name = p.get("name");
+  const customerId = p.get("customer_id");
+  const lawsuitId = p.get("lawsuit_id");
+  if (!name && !customerId && !lawsuitId) {
+    throw new PublicApiContractError("filter_required", 422, "name");
+  }
+  if (name && name.trim().length < 3) throw new PublicApiContractError("name_too_short", 422, "name");
+  const { limit, offset } = advboxPage(p);
+  let query = admin.from("documentos").select("*", { count: "exact" }).eq("tenant_id", t)
+    .order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+  if (name) query = query.ilike("nome", likePattern(name.trim()));
+  if (lawsuitId) query = query.eq("processo_id", lawsuitId);
+  if (customerId) {
+    const ids = ((await must(admin.from("processos").select("id").eq("tenant_id", t)
+      .eq("cliente_id", customerId).is("deleted_at", null))) as Row[]).map((row) => row.id as string);
+    if (ids.length === 0) return envelope([], 0, limit, offset, Object.fromEntries(p));
+    query = query.in("processo_id", ids);
+  }
+  const { data, error, count } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as Row[];
+  const lawsuitIds = [...new Set(rows.map((row) => row.processo_id).filter(Boolean))] as string[];
+  const related = lawsuitIds.length
+    ? (await must(admin.from("processos").select("id, numero").eq("tenant_id", t).in("id", lawsuitIds))) as Row[]
+    : [];
+  return envelope(
+    rows.map((row) => documentToOutput(row, related.find((item) => item.id === row.processo_id) ?? null)),
+    count ?? rows.length, limit, offset, Object.fromEntries(p),
+  );
 }
 
 /**
@@ -375,9 +502,14 @@ export async function handleAdvbox(
     case "settings":
       if (read && !route.id) return await settings(admin, token);
       break;
-    default:
-      // transactions e documents: ainda sem modelo equivalente no ADVeyes.
-      throw new PublicApiContractError("not_implemented", 501);
+    case "transactions":
+      if (read || method === "POST" || (method === "PUT" && route.id)) {
+        return await transactions(admin, token, method, route, url, input);
+      }
+      break;
+    case "documents":
+      if (read) return await documents(admin, token, route, url);
+      break;
   }
   throw new PublicApiContractError("method_not_allowed", 405);
 }

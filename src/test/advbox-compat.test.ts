@@ -3,11 +3,18 @@ import {
   advboxDate,
   advboxPage,
   customerFromInput,
+  documentToOutput,
   lawsuitFromInput,
   lawsuitToOutput,
   movementFromInput,
+  movementTimestamp,
+  movementToOutput,
   parseAdvboxPath,
+  parseAmount,
   postFromInput,
+  transactionFromInput,
+  transactionToOutput,
+  utcDay,
 } from "../../supabase/functions/_shared/advbox-compat.ts";
 
 describe("parseAdvboxPath", () => {
@@ -74,11 +81,75 @@ describe("entradas", () => {
   });
 });
 
+describe("datas de andamento", () => {
+  it("devolve o dia UTC mesmo com o instante em outro fuso", () => {
+    expect(utcDay("2026-10-18T20:00:00-04:00")).toBe("2026-10-19");
+    expect(utcDay("2026-10-19T12:00:00+00:00")).toBe("2026-10-19");
+    expect(utcDay(null)).toBeNull();
+  });
+
+  it("grava a data ao meio-dia UTC e volta no mesmo dia", () => {
+    const stored = movementTimestamp("2026-10-19");
+    expect(stored).toBe("2026-10-19T12:00:00Z");
+    expect(utcDay(stored)).toBe("2026-10-19");
+    expect(movementToOutput({ data_andamento: "2026-10-19T08:00:00-04:00", descricao: "x" }, "l1").date).toBe("2026-10-19");
+  });
+});
+
 describe("saída", () => {
   it("processo mantém o formato ADVBOX com nulos nos campos não modelados", () => {
     const out = lawsuitToOutput({ id: "l1", numero: "0001", cliente_id: "c1", cliente_nome: "Ana", status: "ativo" });
     expect(out.process_number).toBe("0001");
     expect(out.customers).toEqual([{ customer_id: "c1", name: "Ana" }]);
     expect(out.fees_money).toBeNull();
+  });
+});
+
+describe("transações", () => {
+  const base = { entry_type: "income", debit_account: "a", categories_id: "c", cost_centers_id: "k", amount: "250,50", date_due: "05/11/2026" };
+
+  it("converte valores em formato brasileiro e recusa zero e lixo", () => {
+    expect(parseAmount("250,50")).toBe(250.5);
+    expect(parseAmount("1.250,50")).toBe(1250.5);
+    expect(parseAmount(99.9)).toBe(99.9);
+    expect(() => parseAmount("0")).toThrow();
+    expect(() => parseAmount("abc")).toThrow();
+    expect(() => parseAmount("-5")).toThrow();
+  });
+
+  it("cria receita como honorário e despesa como despesa", () => {
+    const income = transactionFromInput(base, "create");
+    expect(income.patch).toMatchObject({ tipo: "honorario", valor: 250.5, data_vencimento: "2026-11-05" });
+    expect(income.refs).toMatchObject({ accountId: "a", categoryId: "c", costCenterId: "k" });
+    expect(transactionFromInput({ ...base, entry_type: "expense" }, "create").patch.tipo).toBe("despesa");
+  });
+
+  it("exige tipo válido, classificação e cliente quando há processo", () => {
+    expect(() => transactionFromInput({ ...base, entry_type: "x" }, "create")).toThrow();
+    expect(() => transactionFromInput({ ...base, categories_id: undefined }, "create")).toThrow();
+    expect(() => transactionFromInput({ ...base, lawsuits_id: "l1" }, "create")).toThrow();
+  });
+
+  it("atualiza valor, vencimento e pagamento", () => {
+    expect(transactionFromInput({ amount: "10,00" }, "update").patch).toEqual({ valor: 10 });
+    const paid = transactionFromInput({ status: "paid", date_payment: "06/11/2026" }, "update").patch;
+    expect(paid).toMatchObject({ status: "pago", data_pagamento: "2026-11-06" });
+    expect(transactionFromInput({ status: "pending" }, "update").patch).toMatchObject({ status: "pendente", data_pagamento: null });
+    expect(() => transactionFromInput({}, "update")).toThrow();
+    expect(() => transactionFromInput({ status: "xyz" }, "update")).toThrow();
+  });
+
+  it("devolve o lançamento no formato ADVBOX", () => {
+    const out = transactionToOutput({ id: "t1", tipo: "despesa", valor: 30, status: "atrasado", descricao: "x", data_vencimento: "2026-11-05" });
+    expect(out).toMatchObject({ id: "t1", entry_type: "expense", amount: 30, status: "overdue", date_due: "2026-11-05" });
+  });
+});
+
+describe("documentos", () => {
+  it("monta o link de download e o vínculo com o processo", () => {
+    const out = documentToOutput({ id: "d1", nome: "peticao.pdf", tamanho: 10, processo_id: "p1", created_at: "x" }, { numero: "0001" });
+    expect(out.links.download).toBe("/api/v1/documents/d1/download");
+    expect(out.attached_to).toEqual({ type: "lawsuit", id: "p1", label: "0001" });
+    expect(documentToOutput({ id: "d2", nome: "a" }, null).attached_to).toBeNull();
   });
 });

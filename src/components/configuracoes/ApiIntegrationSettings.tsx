@@ -20,6 +20,8 @@ const SCOPE_LABELS: Record<string, string> = {
   "processes:write": "Gravar processos",
   "tasks:read": "Ler tarefas",
   "tasks:write": "Gravar tarefas",
+  "finance:read": "Ler financeiro",
+  "finance:write": "Gravar financeiro",
   "webhooks:manage": "Gerenciar webhooks",
 };
 

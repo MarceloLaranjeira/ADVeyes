@@ -9,6 +9,8 @@ export const API_SCOPES = [
   "processes:write",
   "tasks:read",
   "tasks:write",
+  "finance:read",
+  "finance:write",
   "webhooks:manage",
 ] as const;
 
