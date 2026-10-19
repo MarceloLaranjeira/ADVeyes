@@ -18,6 +18,8 @@ import {
   toPlatformTenantMembership,
   type PlatformOverview,
 } from "@/services/platform-admin";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertTriangle,
   Building2,
@@ -43,11 +45,40 @@ type TenantListMode = "all" | "active" | "members" | "monitored" | "failures";
 
 const PlatformAdmin = () => {
   const { selectPlatformTenant } = useTenant();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [listMode, setListMode] = useState<TenantListMode>("all");
+  const [promotingId, setPromotingId] = useState<string | null>(null);
+
+  const handlePromotePartner = async (tenantId: string, tenantName: string) => {
+    if (
+      !window.confirm(
+        `Promover o escritório "${tenantName}" para o Plano Parceiro com 50 usuários e todos os módulos liberados?`,
+      )
+    ) {
+      return;
+    }
+    setPromotingId(tenantId);
+    try {
+      await platformAdmin.promotePartner(tenantId);
+      toast({
+        title: "Escritório promovido a Parceiro!",
+        description: `O escritório "${tenantName}" agora possui o Plano Parceiro ativo.`,
+      });
+      await load();
+    } catch (err) {
+      toast({
+        title: "Erro ao promover escritório",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setPromotingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -228,7 +259,33 @@ const PlatformAdmin = () => {
                             {statusLabel[tenant.status] ?? tenant.status}
                           </TableCell>
                           <TableCell>
-                            {tenant.subscription?.planCode ?? "Sem plano"}
+                            {tenant.subscription?.planCode === "parceiro" ? (
+                              <Badge className="border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                                Parceiro
+                              </Badge>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">
+                                  {tenant.subscription?.planCode ?? "Sem plano"}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px]"
+                                  onClick={() =>
+                                    void handlePromotePartner(
+                                      tenant.id,
+                                      tenant.displayName,
+                                    )
+                                  }
+                                  disabled={promotingId === tenant.id}
+                                >
+                                  {promotingId === tenant.id
+                                    ? "Ativando..."
+                                    : "Tornar Parceiro"}
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             {tenant.activeMembers}

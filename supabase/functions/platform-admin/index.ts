@@ -21,7 +21,8 @@ interface PlatformAdminRequest {
     | "end_support"
     | "list_platform_tokens"
     | "create_platform_token"
-    | "revoke_platform_token";
+    | "revoke_platform_token"
+    | "promote_partner";
   tenantId?: string;
   reason?: string;
   token?: string;
@@ -325,6 +326,74 @@ Deno.serve(async (request) => {
       });
     }
     return json({ active: false, session: null });
+  }
+
+  if (action === "promote_partner") {
+    const tenantId = typeof body.tenantId === "string" ? body.tenantId : "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantId)) {
+      return json({ error: "invalid_payload" }, 400);
+    }
+
+    const { data: plan, error: planError } = await auth.admin
+      .from("billing_plans")
+      .select("id, code")
+      .eq("code", "parceiro")
+      .eq("is_active", true)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (planError || !plan) {
+      console.error("platform-admin: partner plan lookup failed", planError);
+      return json({
+        error: "partner_plan_unavailable",
+        detail: "O Plano Parceiro não está disponível na base publicada.",
+      }, 500);
+    }
+
+    const { error: subError } = await auth.admin
+      .from("tenant_subscriptions")
+      .upsert({
+        tenant_id: tenantId,
+        plan_id: plan.id,
+        status: "active",
+        billing_cycle: "annual",
+        price_snapshot: { plan_code: "parceiro", price_cents: 109900 },
+        trial_ends_at: null,
+        canceled_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "tenant_id" });
+
+    if (subError) {
+      console.error("platform-admin: subscription upsert failed", subError);
+      return json({
+        error: "partner_subscription_failed",
+        detail: "Não foi possível ativar a assinatura Parceiro deste escritório.",
+      }, 500);
+    }
+
+    await auth.admin
+      .from("tenant_memberships")
+      .update({
+        status: "active",
+        data_scope: "tenant",
+        permission_overrides: {},
+        suspended_at: null,
+        removed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", tenantId)
+      .eq("role", "owner");
+
+    await auth.admin.from("platform_audit_events").insert({
+      actor_user_id: auth.user.id,
+      action: "platform.tenant_promoted_partner",
+      target_type: "tenant",
+      target_id: tenantId,
+      metadata: { plan: "parceiro" },
+    });
+
+    return json({ success: true, plan: "parceiro" });
   }
 
   if (action !== "overview") {

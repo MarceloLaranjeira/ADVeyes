@@ -24,6 +24,12 @@ begin
       message = 'tenant_id cannot be reassigned';
   end if;
 
+  -- Notificações são destinadas a um destinatário (user_id do destinatário)
+  -- que pode diferir do usuário logado ou ser gerada por automações de sistema.
+  if tg_table_name = 'notificacoes' then
+    return new;
+  end if;
+
   if nullif(row_data ->> 'user_id', '') is not null then
     row_user_id := (row_data ->> 'user_id')::uuid;
   end if;

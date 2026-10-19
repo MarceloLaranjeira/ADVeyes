@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { ClienteForm } from "@/components/clientes/ClienteForm";
+import { ContactInsights } from "@/components/clientes/ContactInsights";
+import type { InsightProcess } from "@/lib/contact-insights";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +75,7 @@ const Clientes = () => {
   const { currentTenant } = useTenant();
   const [searchParams] = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [processos, setProcessos] = useState<InsightProcess[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState<Record<string, any> | null>(null);
@@ -80,10 +83,15 @@ const Clientes = () => {
 
   const fetchClientes = useCallback(async () => {
     if (!currentTenant) return;
-    const { data } = await supabase.from("clientes").select("*")
-      .eq("tenant_id", currentTenant.tenantId)
-      .order("created_at", { ascending: false });
-    if (data) setClientes(data);
+    const [contacts, linked] = await Promise.all([
+      supabase.from("clientes").select("*")
+        .eq("tenant_id", currentTenant.tenantId)
+        .order("created_at", { ascending: false }),
+      supabase.from("processos").select("cliente_id, status")
+        .eq("tenant_id", currentTenant.tenantId).is("deleted_at", null),
+    ]);
+    if (contacts.data) setClientes(contacts.data);
+    if (linked.data) setProcessos(linked.data);
   }, [currentTenant]);
 
   useEffect(() => { void fetchClientes(); }, [fetchClientes]);
@@ -124,6 +132,8 @@ const Clientes = () => {
             <Plus className="w-4 h-4" /> Novo Cliente
           </Button>
         </div>
+
+        <ContactInsights contacts={clientes} processes={processos} />
 
         <div className="relative max-w-md mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

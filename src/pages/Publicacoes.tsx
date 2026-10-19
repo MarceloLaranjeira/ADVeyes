@@ -1,5 +1,7 @@
 import { DepthCard } from "@/components/dashboard/DepthCard";
+import { matchesPeriod, PERIOD_LABELS, type PublicationPeriod } from "@/lib/publication-filters";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +46,7 @@ import {
   FileClock,
   FileText,
   ExternalLink,
+  Printer,
   RefreshCw,
   Search,
   Scale,
@@ -52,6 +55,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { decodeHtmlEntities } from "@/lib/html-entities";
+import {
+  type ProviderHealthRow,
+  summarizeProviderHealth,
+} from "@/lib/legal-provider-health";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
@@ -239,6 +246,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [syncSources, setSyncSources] = useState<SyncSource[]>([]);
   const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
+  const [providerHealth, setProviderHealth] = useState<ProviderHealthRow[]>([]);
   const [taskByPublication, setTaskByPublication] = useState<Map<string, string>>(
     new Map(),
   );
@@ -287,6 +295,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
       sourcesResult,
       summaryResult,
       linksResult,
+      healthResult,
     ] = await Promise.all([
         publicationsQuery,
         supabase
@@ -323,6 +332,12 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
           .from("publication_task_links")
           .select("publication_id, task_id")
           .eq("tenant_id", tenantId),
+        // View nova, ainda fora do arquivo de tipos gerado.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("legal_sync_provider_health")
+          .select("provider, healthy_count, failing_count, top_failure_code")
+          .eq("tenant_id", tenantId),
       ]);
 
     const auxiliaryError = runsResult.error ?? sourcesResult.error ??
@@ -353,6 +368,11 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
     }
     if (!summaryResult.error) {
       setSyncSummary((summaryResult.data ?? null) as SyncSummary | null);
+    }
+    // O alerta por provedor é opcional: sem a view, a página segue sem ele e
+    // sem toast, já que o painel de sincronização mostra as mesmas falhas.
+    if (!healthResult.error) {
+      setProviderHealth((healthResult.data ?? []) as ProviderHealthRow[]);
     }
     if (!linksResult.error) {
       setTaskByPublication(new Map(
@@ -408,9 +428,28 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
     if (publicationId) setExpandedId(publicationId);
   }, [searchParams]);
 
+  // A publicação não guarda responsável: vale o advogado do processo vinculado.
+  const [lawyerByProcess, setLawyerByProcess] = useState<Map<string, string>>(new Map());
+  const [period, setPeriod] = useState<PublicationPeriod>("todas");
+  const [lawyer, setLawyer] = useState("todos");
+  const tenantForLawyers = currentTenant?.tenantId ?? null;
+  useEffect(() => {
+    if (!tenantForLawyers) return;
+    let cancelled = false;
+    void supabase.from("processos").select("id, advogado")
+      .eq("tenant_id", tenantForLawyers).is("deleted_at", null).not("advogado", "is", null)
+      .then(({ data }) => {
+        if (!cancelled) setLawyerByProcess(new Map((data ?? []).map((row) => [row.id, row.advogado as string])));
+      });
+    return () => { cancelled = true; };
+  }, [tenantForLawyers]);
+  const lawyers = useMemo(() => [...new Set(lawyerByProcess.values())].sort((a, b) => a.localeCompare(b, "pt-BR")), [lawyerByProcess]);
+
   const filteredPublications = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase("pt-BR");
     return publicacoes.filter((publication) => {
+      if (!matchesPeriod(publication.data_publicacao, period)) return false;
+      if (lawyer !== "todos" && lawyerByProcess.get(publication.process_id ?? "") !== lawyer) return false;
       if (status !== "todos" && publication.status !== status) return false;
       if (source !== "todas" && publication.origin_system !== source) {
         return false;
@@ -433,7 +472,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
         value?.toLocaleLowerCase("pt-BR").includes(normalized)
       );
     });
-  }, [communicationType, publicacoes, search, source, status]);
+  }, [communicationType, lawyer, lawyerByProcess, period, publicacoes, search, source, status]);
 
   const communicationTypes = useMemo(() => [...new Set(
     publicacoes.map(item => item.communication_type).filter((value): value is string => Boolean(value)),
@@ -704,6 +743,7 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
   }, [syncSources, syncSummary]);
 
   const lastSync = syncRuns[0];
+  const providerAlert = summarizeProviderHealth(providerHealth);
 
   return (
     <AppLayout>
@@ -728,6 +768,43 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
             {syncing ? "Sincronizando..." : "Sincronizar agora"}
           </Button>
         </div>
+
+        {providerAlert && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>
+              {providerAlert.failing.length === 1
+                ? "1 sistema de monitoramento apresentou falhas"
+                : `${providerAlert.failing.length} sistemas de monitoramento apresentaram falhas`}
+            </AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p>
+                  {providerAlert.failing
+                    .map((item) => {
+                      const reason = failureLabel(item.top_failure_code);
+                      return `${providerLabels[item.provider] ?? item.provider}: ${item.failing_count} fonte(s)${reason ? ` · ${reason}` : ""}`;
+                    })
+                    .join("; ")}
+                </p>
+                <p className="font-medium">
+                  {providerAlert.working.length > 0
+                    ? `Monitorando normalmente apenas: ${providerAlert.working.map((provider) => providerLabels[provider] ?? provider).join(", ")}.`
+                    : "Nenhum sistema está operando sem falhas. Novas intimações podem não chegar."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => navigate("/integracoes-juridicas")}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Corrigir
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <DepthCard
@@ -951,6 +1028,28 @@ const Publicacoes = ({ mode = "publicacoes" }: PublicacoesProps) => {
             </div>
             {activeTab === "publicacoes" && (
               <>
+                <Select value={period} onValueChange={(value) => setPeriod(value as PublicationPeriod)}>
+                  <SelectTrigger className="w-44" aria-label="Período">
+                    <SelectValue placeholder="Período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PERIOD_LABELS) as PublicationPeriod[]).map((key) => (
+                      <SelectItem key={key} value={key}>{PERIOD_LABELS[key]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={lawyer} onValueChange={setLawyer}>
+                  <SelectTrigger className="w-48" aria-label="Responsável">
+                    <SelectValue placeholder="Responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os responsáveis</SelectItem>
+                    {lawyers.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" className="gap-2 no-print" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4" /> Imprimir
+                </Button>
                 {!isIntimations && (
                   <Select value={communicationType} onValueChange={setCommunicationType}>
                     <SelectTrigger className="w-52">

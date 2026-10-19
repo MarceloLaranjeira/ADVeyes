@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/utils";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { exportFinanceiroPDF } from "@/lib/pdf-export";
 import { googleCalendar } from "@/lib/google-calendar";
+import { financeService } from "@/services/finance";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Legend, PieChart, Pie, Cell, AreaChart, Area,
@@ -30,7 +31,9 @@ const categoriaDespesas = ["operacional", "pessoal", "infraestrutura", "marketin
 
 const Financeiro = () => {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const tenantId = currentTenant?.tenantId ?? null;
   const [activeTab, setActiveTab] = useState("Resumo");
   const [registros, setRegistros] = useState<Record<string, any>[]>([]);
   const [despesasEscritorio, setDespesasEscritorio] = useState<Record<string, any>[]>([]);
@@ -58,19 +61,20 @@ const Financeiro = () => {
     meta_receita: "", meta_novos_clientes: "", meta_horas: "",
   });
 
-  const fetchData = async () => {
-    const [finRes, despRes, metaRes] = await Promise.all([
-      supabase.from("financeiro").select("*").order("created_at", { ascending: false }),
-      (supabase.from as any)("despesas_escritorio").select("*").order("data_competencia", { ascending: false }),
-      (supabase.from as any)("metas_financeiras").select("*").order("ano", { ascending: false }).order("mes", { ascending: false }),
-    ]);
-    if (finRes.data) setRegistros(finRes.data);
-    if (despRes.data) setDespesasEscritorio(despRes.data);
-    if (metaRes.data) setMetas(metaRes.data);
-  };
+  const fetchData = useCallback(async () => {
+    if (!tenantId) { setRegistros([]); setDespesasEscritorio([]); setMetas([]); return; }
+    try {
+      const data = await financeService.list(tenantId);
+      setRegistros(data.financial);
+      setDespesasEscritorio(data.expenses);
+      setMetas(data.goals);
+    } catch (error) {
+      toast({ title: "Não foi possível carregar o financeiro", description: error instanceof Error ? error.message : undefined, variant: "destructive" });
+    }
+  }, [tenantId, toast]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
     void googleCalendar.getStatus()
       .then((status) => {
         setGcalConnected(
@@ -78,7 +82,7 @@ const Financeiro = () => {
         );
       })
       .catch(() => setGcalConnected(false));
-  }, []);
+  }, [fetchData]);
 
   const filtered = registros.filter((r) => {
     const matchTipo = filterTipo === "Todos" || r.tipo === filterTipo;
@@ -150,16 +154,12 @@ const Financeiro = () => {
       toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
       return;
     }
+    if (!user || !tenantId) return;
     setLoading(true);
-    const payload = { ...form, valor: parseFloat(form.valor), user_id: user!.id, data_vencimento: form.data_vencimento || null };
-    const { error } = editItem
-      ? await supabase.from("financeiro").update(payload).eq("id", editItem.id)
-      : await (async () => {
-          const { error } = await supabase.from("financeiro").insert(payload);
-          return { error };
-        })();
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-    else {
+    const payload = { ...form, valor: parseFloat(form.valor), data_vencimento: form.data_vencimento || null };
+    try {
+      if (editItem) await financeService.updateEntry(tenantId, editItem.id, payload);
+      else await financeService.createEntry(tenantId, user.id, payload);
       if (gcalConnected && form.data_vencimento) {
         googleCalendar.requestSync();
       }
@@ -167,50 +167,42 @@ const Financeiro = () => {
       setForm({ tipo: "honorario", descricao: "", valor: "", data_vencimento: "", status: "pendente" });
       setShowForm(false);
       setEditItem(null);
-      fetchData();
-    }
+      void fetchData();
+    } catch (error) { toast({ title: "Erro", description: error instanceof Error ? error.message : undefined, variant: "destructive" }); }
     setLoading(false);
   };
 
   const handleDespesaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!despesaForm.descricao || !despesaForm.valor) { toast({ title: "Preencha os campos obrigatórios", variant: "destructive" }); return; }
+    if (!user || !tenantId) return;
     setLoading(true);
-    const { error } = await (supabase.from as any)("despesas_escritorio").insert({
-      ...despesaForm, valor: parseFloat(despesaForm.valor),
-      data_pagamento: despesaForm.data_pagamento || null, user_id: user!.id,
-    });
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-    else { toast({ title: "Despesa registrada!" }); setDespesaForm({ descricao: "", categoria: "operacional", valor: "", data_competencia: new Date().toISOString().slice(0, 10), data_pagamento: "", status: "pendente", recorrente: false }); setShowDespesaForm(false); fetchData(); }
+    try {
+      await financeService.createExpense(tenantId, user.id, { ...despesaForm, valor: parseFloat(despesaForm.valor), data_pagamento: despesaForm.data_pagamento || null });
+      toast({ title: "Despesa registrada!" }); setDespesaForm({ descricao: "", categoria: "operacional", valor: "", data_competencia: new Date().toISOString().slice(0, 10), data_pagamento: "", status: "pendente", recorrente: false }); setShowDespesaForm(false); void fetchData();
+    } catch (error) { toast({ title: "Erro", description: error instanceof Error ? error.message : undefined, variant: "destructive" }); }
     setLoading(false);
   };
 
   const handleMetaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user || !tenantId) return;
     setLoading(true);
-    const { error } = await (supabase.from as any)("metas_financeiras").upsert({
-      mes: metaForm.mes, ano: metaForm.ano,
-      meta_receita: parseFloat(metaForm.meta_receita) || 0,
-      meta_novos_clientes: parseInt(metaForm.meta_novos_clientes) || 0,
-      meta_horas: parseInt(metaForm.meta_horas) || 0,
-      user_id: user!.id,
-    }, { onConflict: "user_id,mes,ano" });
-    if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); }
-    else { toast({ title: "Meta salva!" }); setShowMetaForm(false); fetchData(); }
+    try {
+      await financeService.upsertGoal(tenantId, user.id, { mes: metaForm.mes, ano: metaForm.ano, meta_receita: parseFloat(metaForm.meta_receita) || 0, meta_novos_clientes: parseInt(metaForm.meta_novos_clientes) || 0, meta_horas: parseInt(metaForm.meta_horas) || 0 });
+      toast({ title: "Meta salva!" }); setShowMetaForm(false); void fetchData();
+    } catch (error) { toast({ title: "Erro", description: error instanceof Error ? error.message : undefined, variant: "destructive" }); }
     setLoading(false);
   };
 
   const marcarPago = async (id: string) => {
-    await supabase.from("financeiro").update({ status: "pago" }).eq("id", id);
-    toast({ title: "Marcado como pago!" });
-    fetchData();
+    if (!tenantId) return;
+    try { await financeService.markEntryPaid(tenantId, id); toast({ title: "Marcado como pago!" }); void fetchData(); } catch (error) { toast({ title: "Erro", description: error instanceof Error ? error.message : undefined, variant: "destructive" }); }
   };
 
   const deleteItem = async (id: string) => {
-    if (!confirm("Excluir este lançamento?")) return;
-    await supabase.from("financeiro").delete().eq("id", id);
-    if (gcalConnected) googleCalendar.requestSync();
-    fetchData();
+    if (!tenantId || !confirm("Excluir este lançamento?")) return;
+    try { await financeService.removeEntry(tenantId, id); if (gcalConnected) googleCalendar.requestSync(); void fetchData(); } catch (error) { toast({ title: "Erro", description: error instanceof Error ? error.message : undefined, variant: "destructive" }); }
   };
 
   const formatPct = (v: number) => `${v}%`;

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withTimeout } from "@/lib/async-timeout";
+import { readEdgeFunctionError } from "@/lib/edge-function-error";
 import type {
   TenantBranding,
   TenantMembership,
@@ -92,7 +93,10 @@ async function invokePlatformAdmin<T>(body: Record<string, unknown>) {
   const { data, error } = await withTimeout(
     supabase.functions.invoke("platform-admin", { body }),
   );
-  if (error) throw error;
+  if (error) {
+    const failure = await readEdgeFunctionError(error);
+    throw new Error(failure.message);
+  }
   if (!data || typeof data !== "object") {
     throw new Error("Resposta inválida da conta geral.");
   }
@@ -185,6 +189,13 @@ export const platformAdmin = {
     return invokePlatformAdmin<{ revoked: true }>({
       action: "revoke_platform_token",
       tokenId,
+    });
+  },
+
+  async promotePartner(tenantId: string) {
+    return invokePlatformAdmin<{ success: boolean; plan: string }>({
+      action: "promote_partner",
+      tenantId,
     });
   },
 };

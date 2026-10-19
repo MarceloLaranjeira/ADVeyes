@@ -23,6 +23,9 @@ import Financeiro from "./pages/Financeiro";
 import Tarefas from "./pages/Tarefas";
 import Publicacoes from "./pages/Publicacoes";
 import Relatorios from "./pages/Relatorios";
+import Conta from "./pages/Conta";
+import Parceiros from "./pages/Parceiros";
+import Modelos from "./pages/Modelos";
 import IAJuridica from "./pages/IAJuridica";
 import PortalCliente from "./pages/PortalCliente";
 import Configuracoes from "./pages/Configuracoes";
@@ -133,6 +136,9 @@ const App = () => (
                       <Route path="/intimacoes" element={<Publicacoes mode="intimacoes" />} />
                       <Route path="/publicacoes" element={<Publicacoes />} />
                       <Route path="/relatorios" element={<Relatorios />} />
+                      <Route path="/conta" element={<Conta />} />
+                      <Route path="/parceiros" element={<Parceiros />} />
+                      <Route path="/modelos" element={<Modelos />} />
                       <Route path="/ia-juridica" element={<IAJuridica />} />
                       <Route path="/whatsapp" element={<WhatsApp />} />
                       <Route path="/portal-cliente" element={<PortalCliente />} />

@@ -18,13 +18,18 @@ interface ClienteFormProps {
   editData?: Partial<Cliente>;
 }
 
+const EMPTY_FORM = {
+  nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "",
+  data_nascimento: "", profissao: "", origem: "",
+};
+
+const ORIGIN_SUGGESTIONS = ["Indicação", "Site", "Redes sociais", "WhatsApp", "Balcão", "Outra"];
+
 export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: ClienteFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
   useEffect(() => {
     if (editData) {
@@ -35,11 +40,22 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: Cliente
         email: editData.email || "",
         endereco: editData.endereco || "",
         observacoes: editData.observacoes || "",
+        data_nascimento: editData.data_nascimento || "",
+        profissao: editData.profissao || "",
+        origem: editData.origem || "",
       });
     } else {
-      setForm({ nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "" });
+      setForm(EMPTY_FORM);
     }
   }, [editData, open]);
+
+  // Campos opcionais vazios viram null: o banco rejeita texto vazio e data inválida.
+  const payload = () => ({
+    ...form,
+    data_nascimento: form.data_nascimento || null,
+    profissao: form.profissao.trim() || null,
+    origem: form.origem.trim() || null,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +66,7 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: Cliente
     setLoading(true);
 
     if (editData) {
-      const { error } = await supabase.from("clientes").update(form).eq("id", editData.id);
+      const { error } = await supabase.from("clientes").update(payload()).eq("id", editData.id);
       if (error) {
         toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
       } else {
@@ -59,12 +75,12 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: Cliente
         onSuccess();
       }
     } else {
-      const { error } = await supabase.from("clientes").insert({ ...form, user_id: user!.id });
+      const { error } = await supabase.from("clientes").insert({ ...payload(), user_id: user!.id });
       if (error) {
         toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
       } else {
         toast({ title: "Cliente cadastrado com sucesso!" });
-        setForm({ nome: "", cpf: "", telefone: "", email: "", endereco: "", observacoes: "" });
+        setForm(EMPTY_FORM);
         onOpenChange(false);
         onSuccess();
       }
@@ -97,6 +113,23 @@ export const ClienteForm = ({ open, onOpenChange, onSuccess, editData }: Cliente
             <div className="space-y-2">
               <Label>E-mail</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="cliente@email.com" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Nascimento</Label>
+              <Input type="date" value={form.data_nascimento} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, data_nascimento: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Profissão</Label>
+              <Input value={form.profissao} maxLength={120} onChange={(e) => setForm({ ...form, profissao: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Origem</Label>
+              <Input value={form.origem} maxLength={120} list="origens-contato" onChange={(e) => setForm({ ...form, origem: e.target.value })} placeholder="Indicação, site..." />
+              <datalist id="origens-contato">
+                {ORIGIN_SUGGESTIONS.map((origin) => <option key={origin} value={origin} />)}
+              </datalist>
             </div>
           </div>
           <div className="space-y-2">

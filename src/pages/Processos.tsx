@@ -3,6 +3,7 @@ import { Download, FilterX, Loader2, Plus, RefreshCw, Search, Sparkles } from "l
 import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { CorrectionDialog, IntelligenceCentral, IntelligenceList, IntelligenceMetricCards, IntelligencePipeline } from "@/components/processos/ProcessIntelligenceWorkspace";
+import { PortfolioPanel } from "@/components/processos/PortfolioPanel";
 import { ProcessoForm } from "@/components/processos/ProcessoForm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,7 @@ export default function Processos() {
           <OfficialProcessSearch embedded initialQuery={filters.search} initialTribunal={searchParams.get("tribunal") ?? undefined} />
         </Suspense>
       ) : <>
+        {currentTenant ? <PortfolioPanel tenantId={currentTenant.tenantId} processes={intelligence.items} /> : null}
         <IntelligenceMetricCards {...metrics} />
 
         <div className="rounded-xl border bg-card p-3 sm:p-4"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-7">
