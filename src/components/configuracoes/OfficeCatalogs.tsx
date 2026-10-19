@@ -8,6 +8,10 @@ const SECTIONS: Array<{ tipo: CatalogKind; title: string; description: string; v
   { tipo: "etapa", title: "Etapas", description: "Fases do processo no fluxo do escritório." },
   { tipo: "meta", title: "Metas", description: "Metas do escritório, como pontos por mês.", valueLabel: "Valor da meta" },
   { tipo: "origem_pessoa", title: "Origem de pessoas", description: "De onde vêm contatos e clientes." },
+  { tipo: "categoria_financeira", title: "Categorias financeiras", description: "Classificam receitas e despesas, inclusive as lançadas pela API." },
+  { tipo: "centro_custo", title: "Centros de custo", description: "Agrupam os lançamentos financeiros por área do escritório." },
+  { tipo: "conta_bancaria", title: "Contas e bancos", description: "Contas usadas como conta de débito nos lançamentos." },
+  { tipo: "departamento", title: "Departamentos", description: "Setores do escritório." },
 ];
 
 export function OfficeCatalogs({ tenantId, canManage }: { tenantId: string; canManage: boolean }) {

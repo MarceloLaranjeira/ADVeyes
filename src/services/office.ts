@@ -2,7 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type CatalogKind =
-  | "grupo_acao" | "tipo_acao" | "etapa" | "origem_pessoa" | "termo_monitorado" | "meta";
+  | "grupo_acao" | "tipo_acao" | "etapa" | "origem_pessoa" | "termo_monitorado" | "meta"
+  | "categoria_financeira" | "centro_custo" | "conta_bancaria" | "departamento";
 
 export type CatalogItem = Tables<"catalogo_escritorio">;
 export type Partner = Tables<"parceiros">;
