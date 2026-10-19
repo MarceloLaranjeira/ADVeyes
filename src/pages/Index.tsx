@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { formatHearingMoment } from "@/lib/display-zone";
 import {
   AlertCircle,
   ArrowRight,
@@ -170,7 +171,7 @@ const Index = () => {
                         >
                           <span className="block truncate text-sm font-semibold">{hearing.tipo}</span>
                           <span className="mt-1 block text-xs text-muted-foreground">
-                            {new Date(hearing.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                            {formatHearingMoment(hearing.data_hora, { eventTimezone: hearing.event_timezone, endsAt: hearing.ends_at, imported: true })}
                             {(hearing.vara ?? hearing.local) ? ` · ${hearing.vara ?? hearing.local}` : ""}
                           </span>
                         </button>

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { formatHearingMoment } from "@/lib/display-zone";
 
 export type GlobalSearchKind = "contact" | "process" | "task" | "hearing";
 
@@ -56,7 +57,7 @@ export async function searchGlobal(
       .limit(perKind),
     supabase
       .from("audiencias")
-      .select("id,tipo,processo_numero,cliente_nome,vara,data_hora,status")
+      .select("id,tipo,processo_numero,cliente_nome,vara,data_hora,event_timezone,ends_at,status")
       .eq("tenant_id", tenantId)
       .or(orTerm(["tipo", "processo_numero", "cliente_nome", "vara", "status"], query))
       .order("data_hora", { ascending: true })
@@ -96,7 +97,7 @@ export async function searchGlobal(
       id: item.id,
       kind: "hearing" as const,
       title: item.tipo,
-      subtitle: [item.processo_numero, item.cliente_nome, new Date(item.data_hora).toLocaleString("pt-BR")].filter(Boolean).join(" · "),
+      subtitle: [item.processo_numero, item.cliente_nome, formatHearingMoment(item.data_hora, { eventTimezone: item.event_timezone, endsAt: item.ends_at, imported: true })].filter(Boolean).join(" · "),
       href: `/audiencias?focus=${encodeURIComponent(item.id)}`,
     })),
   ];

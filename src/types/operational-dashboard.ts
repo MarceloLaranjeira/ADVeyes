@@ -9,7 +9,7 @@ export type DashboardProcess = Pick<
 
 export type DashboardHearing = Pick<
   Tables["audiencias"]["Row"],
-  "id" | "tipo" | "data_hora" | "vara" | "local" | "processo_id" | "processo_numero" | "cliente_nome"
+  "id" | "tipo" | "data_hora" | "event_timezone" | "ends_at" | "vara" | "local" | "processo_id" | "processo_numero" | "cliente_nome"
 >;
 
 export type DashboardNotification = Pick<

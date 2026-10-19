@@ -1,3 +1,4 @@
+import { calendarItemClock } from "@/lib/display-zone";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -151,7 +152,7 @@ export function CompactWorkspaceCalendar({ tenantId }: CompactWorkspaceCalendarP
                         <span className="block truncate text-xs font-semibold">{item.title}</span>
                         <span className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          {item.sourceType === "task" ? "Sem horário" : format(new Date(item.date), "HH:mm")}
+                          {item.sourceType === "task" ? "Sem horário" : calendarItemClock(item)}
                           <span aria-hidden="true">•</span>
                           {operationalSourceLabel[item.sourceType]}
                         </span>
