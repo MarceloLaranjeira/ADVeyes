@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { LegalPortalCredentials, LegalPortalSnapshot } from "./legal-portal-adapter.ts";
 import { LegalPortalError } from "./legal-portal-adapter.ts";
+import { hearingNotes } from "./legal-hearing-notes.ts";
 import { ProjudiTjamClient } from "./projudi-tjam-client.ts";
 
 export interface PortalConnectionRow {
@@ -155,8 +156,9 @@ export async function persistPortalSnapshot(
       data_hora: item.startsAt,
       ends_at: item.endsAt,
       vara: item.courtBody ?? process?.vara ?? null,
+      juiz: item.judge ?? null,
       local: item.location,
-      observacoes: "Audiência importada da agenda autenticada do Projudi/TJAM.",
+      observacoes: hearingNotes(item),
       status: statusLabel(item.status),
       source_provider: snapshot.provider,
       external_id: item.externalId,
