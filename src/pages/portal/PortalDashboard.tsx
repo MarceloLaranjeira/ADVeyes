@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { formatHearingMoment } from "@/lib/display-zone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Scale, FileText, Gavel, LogOut, FolderOpen } from "lucide-react";
@@ -135,7 +136,7 @@ const PortalDashboard = () => {
                   <tbody className="divide-y">
                     {audiencias.map((a) => (
                       <tr key={a.id}>
-                        <td className="p-3 text-sm">{new Date(a.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</td>
+                        <td className="p-3 text-sm">{formatHearingMoment(a.data_hora, { eventTimezone: a.event_timezone, endsAt: a.ends_at, imported: true })}</td>
                         <td className="p-3 text-sm">{a.tipo}</td>
                         <td className="p-3 text-sm text-muted-foreground">{a.local || a.vara || "—"}</td>
                         <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded-full ${a.status === "Realizada" ? "bg-[hsl(var(--success))]/10 text-[hsl(var(--success))]" : "bg-primary/10 text-primary"}`}>{a.status}</span></td>

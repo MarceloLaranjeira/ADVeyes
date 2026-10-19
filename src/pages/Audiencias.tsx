@@ -23,19 +23,7 @@ import { isLegalPortalConnected, legalPortalMessage, legalPortalService, type Le
 import { defaultHearingFilters, filterHearings, paginateHearings, type HearingFilters } from "@/lib/hearing-filters";
 import { hearingFacts } from "@/lib/hearing-facts";
 import { BRAZIL_ZONES, DEFAULT_ZONE, formatInZone, inputToIso, isKnownZone, isoToInput, zoneName } from "@/lib/timezone";
-
-const VIEW_ZONE_KEY = "adveyes.hearingViewZone";
-/** "auto" mostra cada audiência no fuso do seu tribunal. */
-type ViewZone = "auto" | string;
-
-function readViewZone(): ViewZone {
-  try {
-    const stored = window.localStorage.getItem(VIEW_ZONE_KEY);
-    return stored === "auto" || isKnownZone(stored) ? (stored as ViewZone) : DEFAULT_ZONE;
-  } catch {
-    return DEFAULT_ZONE;
-  }
-}
+import { readViewZone, writeViewZone, type ViewZone } from "@/lib/display-zone";
 
 interface Audiencia {
   id: string;
@@ -242,7 +230,7 @@ const Audiencias = () => {
 
   const updateViewZone = (value: ViewZone) => {
     setViewZone(value);
-    try { window.localStorage.setItem(VIEW_ZONE_KEY, value); } catch { /* preferência só deste navegador */ }
+    writeViewZone(value);
   };
 
   // Fuso em que o horário de uma audiência é mostrado e editado.

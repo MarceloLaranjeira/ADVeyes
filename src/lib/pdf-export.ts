@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatHearingMoment } from "@/lib/display-zone";
 
 /**
  * O plugin `jspdf-autotable` acrescenta estas propriedades ao documento em
@@ -35,6 +36,8 @@ interface FinanceiroRecord {
 interface Audiencia {
   tipo: string;
   data_hora: string;
+  event_timezone?: string | null;
+  ends_at?: string | null;
   processo_numero?: string;
   cliente_nome?: string;
   vara?: string;
@@ -367,7 +370,7 @@ export const exportAudienciasPDF = (audiencias: Audiencia[]) => {
     head: [["Tipo", "Data/Hora", "Processo", "Cliente", "Vara", "Magistrado", "Status"]],
     body: audiencias.map((a) => [
       a.tipo,
-      new Date(a.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }),
+      formatHearingMoment(a.data_hora, { eventTimezone: a.event_timezone, endsAt: a.ends_at, imported: true }),
       a.processo_numero || "—",
       a.cliente_nome || "—",
       a.vara || "—",

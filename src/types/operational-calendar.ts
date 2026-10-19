@@ -60,6 +60,8 @@ export interface OperationalCalendarItem {
   priority: string | null;
   location: string | null;
   googleEventId: string | null;
+  /** Fuso do tribunal, só nas audiências; as demais entradas seguem o fuso do navegador. */
+  timezone?: string | null;
 }
 
 export interface OperationalCalendarData {

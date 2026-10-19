@@ -256,7 +256,7 @@ export async function loadOperationalDashboard(
     supabase.from("tarefas").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).neq("status", "concluída").eq("data_limite", today),
     supabase.from("tarefas").select("pontos, concluida_em").eq("tenant_id", tenantId).eq("status", "concluída").gte("concluida_em", monthStartIso),
     supabase.from("tarefas").select("id, titulo, data_limite, prioridade, processo_id").eq("tenant_id", tenantId).neq("status", "concluída").not("data_limite", "is", null).lte("data_limite", inSevenDays).order("data_limite").limit(10),
-    supabase.from("audiencias").select("id, tipo, data_hora, vara, local, processo_id, processo_numero, cliente_nome").eq("tenant_id", tenantId).gte("data_hora", now.toISOString()).lte("data_hora", sevenDaysIso).order("data_hora").limit(8),
+    supabase.from("audiencias").select("id, tipo, data_hora, event_timezone, ends_at, vara, local, processo_id, processo_numero, cliente_nome").eq("tenant_id", tenantId).gte("data_hora", now.toISOString()).lte("data_hora", sevenDaysIso).order("data_hora").limit(8),
     supabase.from("notificacoes").select("id, titulo, mensagem, tipo, created_at, processo_numero").eq("tenant_id", tenantId).eq("lida", false).order("created_at", { ascending: false }).limit(5),
     supabase.from("financeiro").select("id, descricao, tipo, status, valor, data_pagamento, data_vencimento, created_at").eq("tenant_id", tenantId),
     supabase.from("time_entries").select("horas").eq("tenant_id", tenantId).gte("data", monthStartDate),

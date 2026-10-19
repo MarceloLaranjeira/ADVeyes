@@ -70,7 +70,7 @@ export async function fetchTabPage(tab: ControladoriaTab, raw: TabQuery): Promis
       if (params.status) query = params.status === "sem_ciencia" ? query.is("ciencia_em", null) : query.eq("review_status", params.status);
       break;
     case "audiencias":
-      query = supabase.from("audiencias").select("id, tipo, data_hora, status, processo_id, processo_numero, cliente_nome, local", { count: "exact" }).eq("tenant_id", params.tenantId) as unknown as FilterableQuery;
+      query = supabase.from("audiencias").select("id, tipo, data_hora, event_timezone, status, processo_id, processo_numero, cliente_nome, local", { count: "exact" }).eq("tenant_id", params.tenantId) as unknown as FilterableQuery;
       dateColumn = "data_hora";
       if (params.status) query = query.eq("status", params.status);
       break;

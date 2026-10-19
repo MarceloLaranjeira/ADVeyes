@@ -67,6 +67,7 @@ export function normalizeOperationalCalendar(
       sourceId: hearing.id,
       date: hearing.data_hora,
       endDate: null,
+      timezone: hearing.event_timezone ?? null,
       title: hearing.tipo,
       description: hearing.observacoes,
       type: hearing.tipo,

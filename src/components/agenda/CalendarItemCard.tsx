@@ -1,3 +1,4 @@
+import { calendarItemClock } from "@/lib/display-zone";
 import { CalendarClock, CheckSquare2, Gavel, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,7 +33,7 @@ export function CalendarItemCard({
     >
       <div className="flex min-w-0 items-center gap-2">
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="text-xs font-semibold tabular-nums">{format(new Date(item.date), "HH:mm")}</span>
+        <span className="text-xs font-semibold tabular-nums">{calendarItemClock(item)}</span>
         <span className="truncate text-sm font-medium">{item.title}</span>
       </div>
       {!compact ? (
