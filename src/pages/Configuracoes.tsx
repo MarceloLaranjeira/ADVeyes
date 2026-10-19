@@ -300,7 +300,7 @@ const Configuracoes = () => {
             <TabsTrigger value="voz" className="gap-2 text-xs"><Bot className="w-3.5 h-3.5" /> IA & Prompt</TabsTrigger>
             <TabsTrigger value="tribunais" className="gap-2 text-xs"><Key className="w-3.5 h-3.5" /> OABs & Monitoramento</TabsTrigger>
             <TabsTrigger value="cadastros" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Cadastros</TabsTrigger>
-<TabsTrigger value="tarefas"className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
+<TabsTrigger value="tarefas" className="gap-2 text-xs"><SlidersHorizontal className="w-3.5 h-3.5" /> Tarefas & Workflows</TabsTrigger>
             <TabsTrigger value="integracoes" className="gap-2 text-xs">
               <Zap className="w-3.5 h-3.5" /> Integrações & API
               {planData?.status === "trial" && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 ml-0.5" />}
