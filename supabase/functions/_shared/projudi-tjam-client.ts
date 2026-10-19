@@ -793,7 +793,8 @@ export function parseProjudiTjamHearings(html: string, sourceUrl: string): Legal
       type: type === "Audiência" && /sessaoturma/i.test(sourceUrl) ? "Sessão de julgamento" : type,
       judge: parties?.judge ?? null,
       recourse: parties?.recourse ?? null,
-      detailUrl: detailUrl ? safeSourceUrl(detailUrl) : null,
+      // Só tira o jsessionid do caminho: os parâmetros (?id=...) identificam o processo.
+      detailUrl: detailUrl ? detailUrl.replace(/;jsessionid=[^/?#;]+/gi, "") : null,
       startsAt,
       endsAt: null,
       timezone: TIMEZONE,
@@ -816,6 +817,29 @@ const DAY_MS = 86_400_000;
 function movementTabUrl(html: string, pageUrl: string): string | null {
   const match = activeHtml(html).match(/setTab\(\s*['"]([^'"]*ovimenta[^'"]*)['"]/i);
   return match ? safePortalNavigation(decodeEntities(match[1]), pageUrl) : null;
+}
+
+/** Resumo estrutural de uma página que não trouxe os rótulos esperados (sem dados do processo). */
+function detailPageHints(html: string, pageUrl: string): Record<string, string | number> {
+  const active = activeHtml(html);
+  const frames = [...active.matchAll(/<(?:i?frame)\b[^>]*>/gi)]
+    .map(match => safePortalNavigation(attribute(match[0], "src"), pageUrl))
+    .filter((value): value is string => Boolean(value))
+    .map(diagnosticPath);
+  const relativePath = (value: string) => diagnosticPath(new URL(value, pageUrl).toString());
+  const tabs = [...active.matchAll(/setTab\(\s*['"]([^'"]{1,140})['"]/gi)].map(match => relativePath(match[1]));
+  const anchors = [...active.matchAll(/<a\b[^>]*>/gi)]
+    .map(match => attribute(match[0], "href"))
+    .filter((value): value is string => Boolean(value) && !/^(?:#|javascript:)/i.test(value as string))
+    .map(value => relativePath(value as string));
+  return {
+    detail_path: diagnosticPath(pageUrl),
+    detail_bytes: html.length,
+    detail_text: visibleText(active).slice(0, 260),
+    detail_frames: frames.slice(0, 6).join(",").slice(0, 400),
+    detail_tabs: tabs.slice(0, 8).join(",").slice(0, 500),
+    detail_links: anchors.slice(0, 10).join(",").slice(0, 600),
+  };
 }
 
 /**
@@ -849,6 +873,7 @@ async function enrichSessionHearings(
         }
       }
       if (detail.classLabel || detail.reporter || detail.judgingBody) stats.detail_labels = Number(stats.detail_labels) + 1;
+      else if (!stats.detail_path) Object.assign(stats, detailPageHints(page.html, page.url));
       hearing.judge = detail.reporter ?? hearing.judge ?? null;
       hearing.courtBody = detail.judgingBody ?? hearing.courtBody;
       hearing.classLabel = detail.classLabel;

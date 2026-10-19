@@ -49,7 +49,7 @@ describe("pauta das sessões de julgamento", () => {
     const [hearing] = parseProjudiTjamHearings(pauta, PAUTA_URL);
     expect(hearing.judge).toBe("Paulo Fernando de Britto Feitoza");
     expect(hearing.recourse).toBe("Apelação");
-    expect(hearing.detailUrl).toBe("https://projudi.tjam.jus.br/projudi/processo/recursal/processoRecursal.do");
+    expect(hearing.detailUrl).toBe("https://projudi.tjam.jus.br/projudi/processo/recursal/processoRecursal.do?id=123");
   });
 
   it("mantém o identificador da audiência já importada ao reclassificar o tipo", () => {
