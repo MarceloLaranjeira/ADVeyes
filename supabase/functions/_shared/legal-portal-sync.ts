@@ -66,14 +66,23 @@ export async function readPortalCredentials(
   }
 }
 
+const MAX_SECRET_LENGTH = 8000;
+
 export async function storePortalCredentials(
   admin: SupabaseClient,
   connectionId: string,
   credentials: LegalPortalCredentials,
 ): Promise<string> {
+  // legal_portal_store_secret recusa segredos acima de 8192 caracteres. Os
+  // cookies da sessão podem estourar esse limite; a sessão se refaz com um novo
+  // login, então ela é a parte descartável.
+  const full = JSON.stringify(credentials);
+  const payload = full.length <= MAX_SECRET_LENGTH
+    ? full
+    : JSON.stringify({ login: credentials.login, password: credentials.password });
   const { data, error } = await admin.rpc("legal_portal_store_secret", {
     p_connection_id: connectionId,
-    p_secret: JSON.stringify(credentials),
+    p_secret: payload,
   });
   if (error || typeof data !== "string") throw error ?? new Error("credential_store_failed");
   return data;

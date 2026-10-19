@@ -21,6 +21,20 @@ import { loadHearingsWorkspace, type HearingSignalRow } from "@/services/hearing
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isLegalPortalConnected, legalPortalMessage, legalPortalService, type LegalPortalOverview } from "@/services/legal-portal";
 import { defaultHearingFilters, filterHearings, paginateHearings, type HearingFilters } from "@/lib/hearing-filters";
+import { BRAZIL_ZONES, DEFAULT_ZONE, formatInZone, inputToIso, isKnownZone, isoToInput, zoneName } from "@/lib/timezone";
+
+const VIEW_ZONE_KEY = "adveyes.hearingViewZone";
+/** "auto" mostra cada audiência no fuso do seu tribunal. */
+type ViewZone = "auto" | string;
+
+function readViewZone(): ViewZone {
+  try {
+    const stored = window.localStorage.getItem(VIEW_ZONE_KEY);
+    return stored === "auto" || isKnownZone(stored) ? (stored as ViewZone) : DEFAULT_ZONE;
+  } catch {
+    return DEFAULT_ZONE;
+  }
+}
 
 interface Audiencia {
   id: string;
@@ -38,6 +52,7 @@ interface Audiencia {
   review_status?: string;
   event_status?: string;
   court_code?: string;
+  event_timezone?: string | null;
 }
 
 interface Processo {
@@ -71,6 +86,8 @@ const Audiencias = () => {
   const [editData, setEditData] = useState<Audiencia | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [viewZone, setViewZone] = useState<ViewZone>(readViewZone);
+  const [formZone, setFormZone] = useState(DEFAULT_ZONE);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -220,10 +237,33 @@ const Audiencias = () => {
     return () => window.clearTimeout(timer);
   }, [audiencias, focusedId]);
 
+  const updateViewZone = (value: ViewZone) => {
+    setViewZone(value);
+    try { window.localStorage.setItem(VIEW_ZONE_KEY, value); } catch { /* preferência só deste navegador */ }
+  };
+
+  // Fuso em que o horário de uma audiência é mostrado e editado.
+  const zoneOf = (a: Pick<Audiencia, "event_timezone">): string =>
+    viewZone === "auto" ? (isKnownZone(a.event_timezone) ? a.event_timezone : DEFAULT_ZONE) : viewZone;
+
+  const hearingLabel = (a: Audiencia) => {
+    const zone = zoneOf(a);
+    const label = formatInZone(a.data_hora, zone, Boolean(a.source_provider) && a.source_provider !== "manual");
+    return label.hasTime ? `${label.text} (${zoneName(zone)})` : `${label.text} · horário não informado`;
+  };
+
+  const changeFormZone = (zone: string) => {
+    const iso = inputToIso(form.data_hora, formZone);
+    setForm({ ...form, data_hora: iso ? isoToInput(iso, zone) : form.data_hora });
+    setFormZone(zone);
+  };
+
   const openEdit = (a: Audiencia) => {
     setEditData(a);
+    const zone = zoneOf(a);
+    setFormZone(zone);
     setForm({
-      tipo: a.tipo, data_hora: a.data_hora?.slice(0, 16) || "", vara: a.vara || "", juiz: a.juiz || "",
+      tipo: a.tipo, data_hora: a.data_hora ? isoToInput(a.data_hora, zone) : "", vara: a.vara || "", juiz: a.juiz || "",
       local: a.local || "", observacoes: a.observacoes || "", status: a.status,
       processo_id: a.processo_id || "", processo_numero: a.processo_numero || "", cliente_nome: a.cliente_nome || "",
     });
@@ -233,6 +273,7 @@ const Audiencias = () => {
   const openNew = () => {
     setEditData(null);
     setForm(emptyForm);
+    setFormZone(viewZone === "auto" ? DEFAULT_ZONE : viewZone);
     setShowForm(true);
   };
 
@@ -245,9 +286,14 @@ const Audiencias = () => {
     e.preventDefault();
     if (!form.data_hora) { toast({ title: "Informe a data/hora", variant: "destructive" }); return; }
     if (!tenantId || readOnly) return;
+    const instant = inputToIso(form.data_hora, formZone);
+    if (!instant) { toast({ title: "Data e hora inválidas", variant: "destructive" }); return; }
     setLoading(true);
     const payload = {
       ...form, user_id: user!.id,
+      // O horário digitado vale no fuso escolhido no formulário, não no do navegador.
+      data_hora: instant,
+      event_timezone: formZone,
       tenant_id: tenantId,
       processo_id: form.processo_id || null,
     };
@@ -272,10 +318,8 @@ const Audiencias = () => {
     setDeleteId(null);
   };
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("pt-BR") + " às " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  };
+  // Carimbos do sistema (sincronização, sessão) seguem o fuso escolhido, ou Manaus em "cada tribunal".
+  const formatDate = (iso: string) => formatInZone(iso, viewZone === "auto" ? DEFAULT_ZONE : viewZone).text;
 
   return (
     <AppLayout>
@@ -285,7 +329,14 @@ const Audiencias = () => {
             <h1 className="text-4xl font-bold font-serif tracking-tight">Audiências</h1>
             <p className="text-muted-foreground text-sm mt-1">Controle de audiências e sessões de julgamento</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Select value={viewZone} onValueChange={updateViewZone}>
+              <SelectTrigger className="w-56" aria-label="Exibir horários em"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {BRAZIL_ZONES.map((z) => <SelectItem key={z.id} value={z.id}>Horário de {z.name}</SelectItem>)}
+                <SelectItem value="auto">Fuso de cada tribunal</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={() => exportAudienciasPDF(filteredHearings)} className="gap-2"><Download className="w-4 h-4" /> PDF</Button>
             <Button variant="outline" onClick={() => void fetchData()} disabled={loadingData} className="gap-2"><RefreshCw className={cn("w-4 h-4", loadingData && "animate-spin")} /> Atualizar</Button>
             <Button onClick={openNew} disabled={readOnly} className="gap-2"><Plus className="w-4 h-4" /> Nova Audiência</Button>
@@ -365,7 +416,7 @@ const Audiencias = () => {
                     <h3 className="font-semibold">{a.tipo}</h3>
                     {a.processo_numero && <p className="text-sm text-muted-foreground font-mono mt-0.5">{a.processo_numero}</p>}
                     <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(a.data_hora)}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{hearingLabel(a)}</span>
                       {a.vara && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{a.vara}</span>}
                       {a.cliente_nome && <span className="flex items-center gap-1"><User className="w-3 h-3" />{a.cliente_nome}</span>}
                     </div>
@@ -394,7 +445,8 @@ const Audiencias = () => {
                   <Label>Tipo *</Label>
                   <Select value={form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{tiposAudiencia.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    {/* Audiências importadas trazem tipos fora da lista (ex.: "Audiência"). */}
+                    <SelectContent>{(tiposAudiencia.includes(form.tipo) || !form.tipo ? tiposAudiencia : [form.tipo, ...tiposAudiencia]).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -405,9 +457,20 @@ const Audiencias = () => {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Data e Hora *</Label>
-                <Input type="datetime-local" value={form.data_hora} onChange={(e) => setForm({ ...form, data_hora: e.target.value })} required />
+              <div className="grid grid-cols-[1fr_auto] gap-4">
+                <div className="space-y-2">
+                  <Label>Data e Hora *</Label>
+                  <Input type="datetime-local" value={form.data_hora} onChange={(e) => setForm({ ...form, data_hora: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fuso do horário</Label>
+                  <Select value={formZone} onValueChange={changeFormZone}>
+                    <SelectTrigger className="w-44" aria-label="Fuso do horário"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BRAZIL_ZONES.map((z) => <SelectItem key={z.id} value={z.id}>{z.name} · {z.detail}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Processo vinculado</Label>
