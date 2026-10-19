@@ -239,6 +239,11 @@ Deno.serve(async request => {
         return json({ ...(await statusPayload(auth.admin, body.tenantId, access, selectedCourt)), queued: true });
       } catch (error) {
         const code = error instanceof LegalPortalError ? error.code : "operation_failed";
+        if (!(error instanceof LegalPortalError)) {
+          // Só a mensagem técnica; credenciais nunca entram no erro.
+          const detail = error as { code?: string; message?: string };
+          console.error("legal-portal-admin: connect failed", detail.code ?? "", String(detail.message ?? error).slice(0, 300));
+        }
         await recordPortalFailure(
           auth.admin,
           connection,
